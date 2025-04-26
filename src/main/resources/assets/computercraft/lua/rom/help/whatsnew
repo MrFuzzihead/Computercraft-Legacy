@@ -1,0 +1,6 @@
+New Features in ComputerCraft 1.75:
+
+* Fixed monitors sometimes rendering without part of their text.
+* Fixed a regression in the "bit" API.
+
+Type "help changelog" to see the full version history.
