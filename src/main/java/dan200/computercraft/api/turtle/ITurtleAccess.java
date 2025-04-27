@@ -1,62 +1,64 @@
 package dan200.computercraft.api.turtle;
 
-import dan200.computercraft.api.lua.ILuaContext;
-import dan200.computercraft.api.lua.LuaException;
-import dan200.computercraft.api.peripheral.IPeripheral;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
+import dan200.computercraft.api.lua.ILuaContext;
+import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.peripheral.IPeripheral;
+
 public interface ITurtleAccess {
-   World getWorld();
 
-   ChunkCoordinates getPosition();
+    World getWorld();
 
-   boolean teleportTo(World var1, int var2, int var3, int var4);
+    ChunkCoordinates getPosition();
 
-   Vec3 getVisualPosition(float var1);
+    boolean teleportTo(World var1, int var2, int var3, int var4);
 
-   float getVisualYaw(float var1);
+    Vec3 getVisualPosition(float var1);
 
-   int getDirection();
+    float getVisualYaw(float var1);
 
-   void setDirection(int var1);
+    int getDirection();
 
-   int getSelectedSlot();
+    void setDirection(int var1);
 
-   void setSelectedSlot(int var1);
+    int getSelectedSlot();
 
-   void setDyeColour(int var1);
+    void setSelectedSlot(int var1);
 
-   int getDyeColour();
+    void setDyeColour(int var1);
 
-   IInventory getInventory();
+    int getDyeColour();
 
-   boolean isFuelNeeded();
+    IInventory getInventory();
 
-   int getFuelLevel();
+    boolean isFuelNeeded();
 
-   void setFuelLevel(int var1);
+    int getFuelLevel();
 
-   int getFuelLimit();
+    void setFuelLevel(int var1);
 
-   boolean consumeFuel(int var1);
+    int getFuelLimit();
 
-   void addFuel(int var1);
+    boolean consumeFuel(int var1);
 
-   Object[] executeCommand(ILuaContext var1, ITurtleCommand var2) throws LuaException, InterruptedException;
+    void addFuel(int var1);
 
-   void playAnimation(TurtleAnimation var1);
+    Object[] executeCommand(ILuaContext var1, ITurtleCommand var2) throws LuaException, InterruptedException;
 
-   ITurtleUpgrade getUpgrade(TurtleSide var1);
+    void playAnimation(TurtleAnimation var1);
 
-   void setUpgrade(TurtleSide var1, ITurtleUpgrade var2);
+    ITurtleUpgrade getUpgrade(TurtleSide var1);
 
-   IPeripheral getPeripheral(TurtleSide var1);
+    void setUpgrade(TurtleSide var1, ITurtleUpgrade var2);
 
-   NBTTagCompound getUpgradeNBTData(TurtleSide var1);
+    IPeripheral getPeripheral(TurtleSide var1);
 
-   void updateUpgradeNBTData(TurtleSide var1);
+    NBTTagCompound getUpgradeNBTData(TurtleSide var1);
+
+    void updateUpgradeNBTData(TurtleSide var1);
 }

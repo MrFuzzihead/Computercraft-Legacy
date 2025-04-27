@@ -6,64 +6,65 @@ import java.util.Map;
 import java.util.Random;
 
 public class ComputerRegistry<TComputer extends IComputer> {
-   private Map<Integer, TComputer> m_computers = new HashMap<>();
-   private int m_nextUnusedInstanceID;
-   private int m_sessionID;
 
-   protected ComputerRegistry() {
-      this.reset();
-   }
+    private Map<Integer, TComputer> m_computers = new HashMap<>();
+    private int m_nextUnusedInstanceID;
+    private int m_sessionID;
 
-   public int getSessionID() {
-      return this.m_sessionID;
-   }
+    protected ComputerRegistry() {
+        this.reset();
+    }
 
-   public int getUnusedInstanceID() {
-      return this.m_nextUnusedInstanceID++;
-   }
+    public int getSessionID() {
+        return this.m_sessionID;
+    }
 
-   public Collection<TComputer> getComputers() {
-      return this.m_computers.values();
-   }
+    public int getUnusedInstanceID() {
+        return this.m_nextUnusedInstanceID++;
+    }
 
-   public TComputer get(int instanceID) {
-      return instanceID >= 0 && this.m_computers.containsKey(instanceID) ? this.m_computers.get(instanceID) : null;
-   }
+    public Collection<TComputer> getComputers() {
+        return this.m_computers.values();
+    }
 
-   public TComputer lookup(int computerID) {
-      if (computerID >= 0) {
-         for (TComputer computer : this.getComputers()) {
-            if (computer.getID() == computerID) {
-               return computer;
+    public TComputer get(int instanceID) {
+        return instanceID >= 0 && this.m_computers.containsKey(instanceID) ? this.m_computers.get(instanceID) : null;
+    }
+
+    public TComputer lookup(int computerID) {
+        if (computerID >= 0) {
+            for (TComputer computer : this.getComputers()) {
+                if (computer.getID() == computerID) {
+                    return computer;
+                }
             }
-         }
-      }
+        }
 
-      return null;
-   }
+        return null;
+    }
 
-   public boolean contains(int instanceID) {
-      return this.m_computers.containsKey(instanceID);
-   }
+    public boolean contains(int instanceID) {
+        return this.m_computers.containsKey(instanceID);
+    }
 
-   public void add(int instanceID, TComputer computer) {
-      if (this.m_computers.containsKey(instanceID)) {
-         this.remove(instanceID);
-      }
+    public void add(int instanceID, TComputer computer) {
+        if (this.m_computers.containsKey(instanceID)) {
+            this.remove(instanceID);
+        }
 
-      this.m_computers.put(instanceID, computer);
-      this.m_nextUnusedInstanceID = Math.max(this.m_nextUnusedInstanceID, instanceID + 1);
-   }
+        this.m_computers.put(instanceID, computer);
+        this.m_nextUnusedInstanceID = Math.max(this.m_nextUnusedInstanceID, instanceID + 1);
+    }
 
-   public void remove(int instanceID) {
-      if (this.m_computers.containsKey(instanceID)) {
-         this.m_computers.remove(instanceID);
-      }
-   }
+    public void remove(int instanceID) {
+        if (this.m_computers.containsKey(instanceID)) {
+            this.m_computers.remove(instanceID);
+        }
+    }
 
-   public void reset() {
-      this.m_computers.clear();
-      this.m_nextUnusedInstanceID = 0;
-      this.m_sessionID = new Random().nextInt();
-   }
+    public void reset() {
+        this.m_computers.clear();
+        this.m_nextUnusedInstanceID = 0;
+        this.m_sessionID = new Random().nextInt();
+    }
 }

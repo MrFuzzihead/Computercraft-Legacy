@@ -35,4 +35,5 @@
  */
 dependencies {
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.4-GTNH:dev")
+    implementation(rfg.deobf(project.files("libs/luaj-jse-2.0.3.jar")))
 }
