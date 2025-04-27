@@ -5,13 +5,14 @@ import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.IComputer;
 
 public interface IComputerTile extends ITerminalTile {
-   void setComputerID(int var1);
 
-   void setLabel(String var1);
+    void setComputerID(int var1);
 
-   IComputer getComputer();
+    void setLabel(String var1);
 
-   IComputer createComputer();
+    IComputer getComputer();
 
-   ComputerFamily getFamily();
+    IComputer createComputer();
+
+    ComputerFamily getFamily();
 }

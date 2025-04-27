@@ -4,15 +4,17 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 
 public interface IPeripheral {
-   String getType();
 
-   String[] getMethodNames();
+    String getType();
 
-   Object[] callMethod(IComputerAccess var1, ILuaContext var2, int var3, Object[] var4) throws LuaException, InterruptedException;
+    String[] getMethodNames();
 
-   void attach(IComputerAccess var1);
+    Object[] callMethod(IComputerAccess var1, ILuaContext var2, int var3, Object[] var4)
+        throws LuaException, InterruptedException;
 
-   void detach(IComputerAccess var1);
+    void attach(IComputerAccess var1);
 
-   boolean equals(IPeripheral var1);
+    void detach(IComputerAccess var1);
+
+    boolean equals(IPeripheral var1);
 }

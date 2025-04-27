@@ -5,9 +5,10 @@ import dan200.computercraft.shared.common.IDirectionalTile;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 
 public interface IPeripheralTile extends IDirectionalTile {
-   PeripheralType getPeripheralType();
 
-   IPeripheral getPeripheral(int var1);
+    PeripheralType getPeripheralType();
 
-   String getLabel();
+    IPeripheral getPeripheral(int var1);
+
+    String getLabel();
 }

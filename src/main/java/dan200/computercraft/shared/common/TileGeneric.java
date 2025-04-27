@@ -1,8 +1,7 @@
 package dan200.computercraft.shared.common;
 
-import dan200.computercraft.ComputerCraft;
-import dan200.computercraft.shared.network.ComputerCraftPacket;
 import java.util.List;
+
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -16,141 +15,138 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.util.IIcon;
 
+import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.shared.network.ComputerCraftPacket;
+
 public abstract class TileGeneric extends TileEntity {
-   public void requestTileEntityUpdate() {
-      if (this.getWorldObj().isRemote) {
-         ComputerCraftPacket packet = new ComputerCraftPacket();
-         packet.m_packetType = 9;
-         packet.m_dataInt = new int[]{this.xCoord, this.yCoord, this.zCoord};
-         ComputerCraft.sendToServer(packet);
-      }
-   }
 
-   public void destroy() {
-   }
+    public void requestTileEntityUpdate() {
+        if (this.worldObj.isRemote) {
+            ComputerCraftPacket packet = new ComputerCraftPacket();
+            packet.m_packetType = 9;
+            packet.m_dataInt = new int[] { this.xCoord, this.yCoord, this.zCoord };
+            ComputerCraft.sendToServer(packet);
+        }
+    }
 
-   public ChunkCoordinates getCoords() {
-      return new ChunkCoordinates(this.xCoord, this.yCoord, this.zCoord);
-   }
+    public void destroy() {}
 
-   public BlockGeneric getBlock() {
-      Block block = this.getWorldObj().getBlock(this.xCoord, this.yCoord, this.zCoord);
-      return block != null && block instanceof BlockGeneric ? (BlockGeneric)block : null;
-   }
+    public ChunkCoordinates getCoords() {
+        return new ChunkCoordinates(this.xCoord, this.yCoord, this.zCoord);
+    }
 
-   protected final int getMetadata() {
-      return this.getWorldObj().getBlockMetadata(this.xCoord, this.yCoord, this.zCoord);
-   }
+    public BlockGeneric getBlock() {
+        Block block = this.worldObj.getBlock(this.xCoord, this.yCoord, this.zCoord);
+        return block != null && block instanceof BlockGeneric ? (BlockGeneric) block : null;
+    }
 
-   public final void updateBlock() {
-      this.getWorldObj().markBlockForUpdate(this.xCoord, this.yCoord, this.zCoord);
-      this.getWorldObj().notifyBlockChange(this.xCoord, this.yCoord, this.zCoord, this);
-   }
+    protected final int getMetadata() {
+        return this.worldObj.getBlockMetadata(this.xCoord, this.yCoord, this.zCoord);
+    }
 
-   protected final void setMetadata(int metadata) {
-      this.getWorldObj().setBlockMetadataWithNotify(this.xCoord, this.yCoord, this.zCoord, metadata, 3);
-   }
+    public final void updateBlock() {
+        this.worldObj.markBlockForUpdate(this.xCoord, this.yCoord, this.zCoord);
+        this.worldObj.markTileEntityChunkModified(this.xCoord, this.yCoord, this.zCoord, this);
+    }
 
-   public void getDroppedItems(List<ItemStack> drops, int fortune, boolean creative, boolean silkTouch) {
-   }
+    protected final void setMetadata(int metadata) {
+        this.worldObj.setBlockMetadataWithNotify(this.xCoord, this.yCoord, this.zCoord, metadata, 3);
+    }
 
-   public ItemStack getPickedItem() {
-      return null;
-   }
+    public void getDroppedItems(List<ItemStack> drops, int fortune, boolean creative, boolean silkTouch) {}
 
-   public boolean onActivate(EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
-      return false;
-   }
+    public ItemStack getPickedItem() {
+        return null;
+    }
 
-   public void onNeighbourChange() {
-   }
+    public boolean onActivate(EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+        return false;
+    }
 
-   public boolean isSolidOnSide(int side) {
-      return true;
-   }
+    public void onNeighbourChange() {}
 
-   public boolean isImmuneToExplosion(Entity exploder) {
-      return false;
-   }
+    public boolean isSolidOnSide(int side) {
+        return true;
+    }
 
-   public AxisAlignedBB getBounds() {
-      return AxisAlignedBB.getBoundingBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
-   }
+    public boolean isImmuneToExplosion(Entity exploder) {
+        return false;
+    }
 
-   public void getCollisionBounds(List<AxisAlignedBB> bounds) {
-      bounds.add(this.getBounds());
-   }
+    public AxisAlignedBB getBounds() {
+        return AxisAlignedBB.getBoundingBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
+    }
 
-   public boolean getRedstoneConnectivity(int side) {
-      return false;
-   }
+    public void getCollisionBounds(List<AxisAlignedBB> bounds) {
+        bounds.add(this.getBounds());
+    }
 
-   public int getRedstoneOutput(int side) {
-      return 0;
-   }
+    public boolean getRedstoneConnectivity(int side) {
+        return false;
+    }
 
-   public boolean getBundledRedstoneConnectivity(int side) {
-      return false;
-   }
+    public int getRedstoneOutput(int side) {
+        return 0;
+    }
 
-   public int getBundledRedstoneOutput(int side) {
-      return 0;
-   }
+    public boolean getBundledRedstoneConnectivity(int side) {
+        return false;
+    }
 
-   public abstract IIcon getTexture(int var1);
+    public int getBundledRedstoneOutput(int side) {
+        return 0;
+    }
 
-   protected double getInteractRange(EntityPlayer player) {
-      return 8.0;
-   }
+    public abstract IIcon getTexture(int var1);
 
-   public boolean isUsable(EntityPlayer player, boolean ignoreRange) {
-      if (player == null || !player.isEntityAlive() || this.getWorldObj().getTileEntity(this.xCoord, this.yCoord, this.zCoord) != this) {
-         return false;
-      } else if (ignoreRange) {
-         return true;
-      } else {
-         double range = this.getInteractRange(player);
-         return player.getEntityWorld() == this.getWorldObj()
-            && player.getDistanceSq(this.xCoord + 0.5, this.yCoord + 0.5, this.zCoord + 0.5) <= range * range;
-      }
-   }
+    protected double getInteractRange(EntityPlayer player) {
+        return 8.0;
+    }
 
-   protected void writeDescription(NBTTagCompound nbttagcompound) {
-   }
+    public boolean isUsable(EntityPlayer player, boolean ignoreRange) {
+        if (player == null || !player.isEntityAlive()
+            || this.worldObj.getTileEntity(this.xCoord, this.yCoord, this.zCoord) != this) {
+            return false;
+        } else if (ignoreRange) {
+            return true;
+        } else {
+            double range = this.getInteractRange(player);
+            return player.getEntityWorld() == this.worldObj
+                && player.getDistanceSq(this.xCoord + 0.5, this.yCoord + 0.5, this.zCoord + 0.5) <= range * range;
+        }
+    }
 
-   protected void readDescription(NBTTagCompound nbttagcompound) {
-   }
+    protected void writeDescription(NBTTagCompound nbttagcompound) {}
 
-   public final void sendBlockEvent(int eventID) {
-      this.sendBlockEvent(eventID, 0);
-   }
+    protected void readDescription(NBTTagCompound nbttagcompound) {}
 
-   public final void sendBlockEvent(int eventID, int eventParameter) {
-      this.getWorldObj()
-         .addBlockEvent(
+    public final void sendBlockEvent(int eventID) {
+        this.sendBlockEvent(eventID, 0);
+    }
+
+    public final void sendBlockEvent(int eventID, int eventParameter) {
+        this.worldObj.addBlockEvent(
             this.xCoord,
             this.yCoord,
             this.zCoord,
-            this.getWorldObj().getBlock(this.xCoord, this.yCoord, this.zCoord),
+            this.worldObj.getBlock(this.xCoord, this.yCoord, this.zCoord),
             eventID,
-            eventParameter
-         );
-   }
+            eventParameter);
+    }
 
-   public void onBlockEvent(int eventID, int eventParameter) {
-   }
+    public void onBlockEvent(int eventID, int eventParameter) {}
 
-   public final Packet getUpdatePacket() {
-      NBTTagCompound nbttagcompound = new NBTTagCompound();
-      this.writeDescription(nbttagcompound);
-      return new S35PacketUpdateTileEntity(this.xCoord, this.yCoord, this.zCoord, 0, nbttagcompound);
-   }
+    public final Packet getDescriptionPacket() {
+        NBTTagCompound nbttagcompound = new NBTTagCompound();
+        this.writeDescription(nbttagcompound);
+        return new S35PacketUpdateTileEntity(this.xCoord, this.yCoord, this.zCoord, 0, nbttagcompound);
+    }
 
-   public final void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity packet) {
-      switch (packet.func_148853_f()) {
-         case 0:
-            NBTTagCompound nbttagcompound = packet.func_148857_g();
-            this.readDescription(nbttagcompound);
-      }
-   }
+    public final void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity packet) {
+        switch (packet.func_148853_f()) {
+            case 0:
+                NBTTagCompound nbttagcompound = packet.func_148857_g();
+                this.readDescription(nbttagcompound);
+        }
+    }
 }

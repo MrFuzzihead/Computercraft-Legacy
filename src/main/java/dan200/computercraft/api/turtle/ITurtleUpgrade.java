@@ -1,23 +1,25 @@
 package dan200.computercraft.api.turtle;
 
-import dan200.computercraft.api.peripheral.IPeripheral;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.IIcon;
 
+import dan200.computercraft.api.peripheral.IPeripheral;
+
 public interface ITurtleUpgrade {
-   int getUpgradeID();
 
-   String getUnlocalisedAdjective();
+    int getUpgradeID();
 
-   TurtleUpgradeType getType();
+    String getUnlocalisedAdjective();
 
-   ItemStack getCraftingItem();
+    TurtleUpgradeType getType();
 
-   IPeripheral createPeripheral(ITurtleAccess var1, TurtleSide var2);
+    ItemStack getCraftingItem();
 
-   TurtleCommandResult useTool(ITurtleAccess var1, TurtleSide var2, TurtleVerb var3, int var4);
+    IPeripheral createPeripheral(ITurtleAccess var1, TurtleSide var2);
 
-   IIcon getIcon(ITurtleAccess var1, TurtleSide var2);
+    TurtleCommandResult useTool(ITurtleAccess var1, TurtleSide var2, TurtleVerb var3, int var4);
 
-   void update(ITurtleAccess var1, TurtleSide var2);
+    IIcon getIcon(ITurtleAccess var1, TurtleSide var2);
+
+    void update(ITurtleAccess var1, TurtleSide var2);
 }

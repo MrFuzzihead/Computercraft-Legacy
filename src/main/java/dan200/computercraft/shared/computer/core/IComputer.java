@@ -3,23 +3,24 @@ package dan200.computercraft.shared.computer.core;
 import dan200.computercraft.shared.common.ITerminal;
 
 public interface IComputer extends ITerminal {
-   int getInstanceID();
 
-   int getID();
+    int getInstanceID();
 
-   String getLabel();
+    int getID();
 
-   boolean isOn();
+    String getLabel();
 
-   boolean isCursorDisplayed();
+    boolean isOn();
 
-   void turnOn();
+    boolean isCursorDisplayed();
 
-   void shutdown();
+    void turnOn();
 
-   void reboot();
+    void shutdown();
 
-   void queueEvent(String var1);
+    void reboot();
 
-   void queueEvent(String var1, Object[] var2);
+    void queueEvent(String var1);
+
+    void queueEvent(String var1, Object[] var2);
 }
