@@ -41,7 +41,7 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
     private static IIcon s_icon;
     private static IIcon s_iconAdvanced;
     public static final int INVENTORY_SIZE = 16;
-    private ItemStack[] m_inventory = new ItemStack[16];
+    private ItemStack[] m_inventory = new ItemStack[INVENTORY_SIZE];
     private ItemStack[] m_previousInventory = new ItemStack[this.getSizeInventory()];
     private boolean m_inventoryChanged = false;
     private TurtleBrain m_brain = this.createBrain();
@@ -226,7 +226,7 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
     public void readFromNBT(NBTTagCompound nbttagcompound) {
         super.readFromNBT(nbttagcompound);
         NBTTagList nbttaglist = nbttagcompound.getTagList("Items", 10);
-        this.m_inventory = new ItemStack[16];
+        this.m_inventory = new ItemStack[INVENTORY_SIZE];
         this.m_previousInventory = new ItemStack[this.getSizeInventory()];
 
         for (int i = 0; i < nbttaglist.tagCount(); i++) {
@@ -246,7 +246,7 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
         super.writeToNBT(nbttagcompound);
         NBTTagList nbttaglist = new NBTTagList();
 
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < INVENTORY_SIZE; i++) {
             if (this.m_inventory[i] != null) {
                 NBTTagCompound itemtag = new NBTTagCompound();
                 itemtag.setByte("Slot", (byte) i);
@@ -321,11 +321,11 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
     }
 
     public int getSizeInventory() {
-        return 16;
+        return INVENTORY_SIZE;
     }
 
     public ItemStack getStackInSlot(int slot) {
-        if (slot >= 0 && slot < 16) {
+        if (slot >= 0 && slot < INVENTORY_SIZE) {
             synchronized (this.m_inventory) {
                 return this.m_inventory[slot];
             }
@@ -363,7 +363,7 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
     }
 
     public void setInventorySlotContents(int i, ItemStack stack) {
-        if (i >= 0 && i < 16) {
+        if (i >= 0 && i < INVENTORY_SIZE) {
             synchronized (this.m_inventory) {
                 if (!InventoryUtil.areItemsEqual(stack, this.m_inventory[i])) {
                     this.m_inventory[i] = stack;
