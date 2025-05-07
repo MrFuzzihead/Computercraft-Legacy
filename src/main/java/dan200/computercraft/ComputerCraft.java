@@ -80,8 +80,11 @@ import dan200.computercraft.shared.util.IEntityDropConsumer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-@Mod(modid = "ComputerCraft", name = "ComputerCraft", version = "1.75")
+@Mod(modid = ComputerCraft.MODID, name = ComputerCraft.NAME, version = Tags.VERSION)
 public class ComputerCraft {
+
+    public static final String MODID = "computercraft";
+    public static final String NAME = "Computercraft";
 
     public static final int diskDriveGUIID = 100;
     public static final int computerGUIID = 101;

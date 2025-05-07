@@ -1,18 +1,19 @@
 [
     {
-        "modid" : "ComputerCraft",
-        "name" : "ComputerCraft",
-        "version" : "1.75",
-        "mcversion" : "1.7.10",
-        "url" : "http://www.computercraft.info",
-        "credits" : "Created by Daniel Ratcliffe (@DanTwoHundred)",
+        "modid" : "${modId}",
+        "name" : "${modName}",
+        "version" : "${modVersion}",
+        "mcversion" : "${minecraftVersion}",
+        "url" : "https://github.com/MrFuzzihead/Computercraft-Legacy",
+        "credits" : "Created by Daniel Ratcliffe (@DanTwoHundred), SquidDev",
         "authors" : [
+            "MrFuzzihead",
             "Daniel Ratcliffe",
             "Aaron Mills"
         ],
         "description" : "ComputerCraft adds Computers, Programming and Robotics to Minecraft.",
         "logoFile" : "pack.png",
-        "updateUrl" : "http://www.computercraft.info",
+        "updateUrl" : "https://github.com/MrFuzzihead/Computercraft-Legacy/releases/latest",
         "parent" : "",
         "screenshots": [
         ]

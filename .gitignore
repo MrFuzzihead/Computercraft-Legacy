@@ -1,6 +1,6 @@
 .gradle
 .settings
-/libs/
+#/libs/
 /.idea/
 /.vscode/
 /run/
