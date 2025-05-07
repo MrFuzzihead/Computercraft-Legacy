@@ -122,7 +122,7 @@ public class ComputerCraft {
     private static List<IBundledRedstoneProvider> bundledRedstoneProviders = new ArrayList<>();
     private static List<IMediaProvider> mediaProviders = new ArrayList<>();
     private static List<ITurtlePermissionProvider> permissionProviders = new ArrayList<>();
-    @Instance("ComputerCraft")
+    @Instance( value = ComputerCraft.MODID)
     public static ComputerCraft instance;
     @SidedProxy(
         clientSide = "dan200.computercraft.client.proxy.ComputerCraftProxyClient",

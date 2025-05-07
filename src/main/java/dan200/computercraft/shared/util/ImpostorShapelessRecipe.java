@@ -10,8 +10,8 @@ import net.minecraft.world.World;
 
 public class ImpostorShapelessRecipe extends ShapelessRecipes {
 
-    public ImpostorShapelessRecipe(ItemStack result, Object[] ingredients) {
-        super(result, new ArrayList(Arrays.asList(ingredients)));
+    public ImpostorShapelessRecipe(ItemStack result, ArrayList<ItemStack> ingredients) {
+        super(result, ingredients);
     }
 
     public boolean matches(InventoryCrafting inv, World world) {
