@@ -1,8 +1,6 @@
 package dan200.computercraft.shared.proxy;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
 
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
@@ -260,7 +258,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         ItemStack paper = new ItemStack(Items.paper, 1);
         ItemStack redstone = new ItemStack(Items.redstone, 1);
         ItemStack basicDisk = ItemDiskLegacy.createFromIDAndColour(-1, null, Colour.Blue.getHex());
-        GameRegistry.addRecipe(new ImpostorShapelessRecipe(basicDisk, new ArrayList<>(Arrays.asList(redstone, paper))));
+        GameRegistry.addRecipe(new ImpostorShapelessRecipe(basicDisk, new Object[] { redstone, paper }));
 
         for (int colour = 0; colour < 16; colour++) {
             ItemStack disk = ItemDiskLegacy.createFromIDAndColour(-1, null, Colour.values()[colour].getHex());
@@ -270,11 +268,11 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 if (colour != otherColour) {
                     ItemStack otherDisk = ItemDiskLegacy
                         .createFromIDAndColour(-1, null, Colour.values()[colour].getHex());
-                    GameRegistry.addRecipe(new ImpostorShapelessRecipe(disk, new ArrayList<>(Arrays.asList(otherDisk, dye))));
+                    GameRegistry.addRecipe(new ImpostorShapelessRecipe(disk, new Object[] { otherDisk, dye }));
                 }
             }
 
-            GameRegistry.addRecipe(new ImpostorShapelessRecipe(disk, new ArrayList<>(Arrays.asList(redstone, paper, dye))));
+            GameRegistry.addRecipe(new ImpostorShapelessRecipe(disk, new Object[] { redstone, paper, dye }));
         }
 
         GameRegistry.addRecipe(new PrintoutRecipe());
@@ -283,10 +281,10 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         ItemStack bookPrintout = ItemPrintout.createBookFromTitleAndText(null, null, null);
         ItemStack string = new ItemStack(Items.string, 1, 0);
         GameRegistry.addRecipe(
-            new ImpostorShapelessRecipe(multiplePrintout, new ArrayList<>(Arrays.asList(singlePrintout, singlePrintout, string))));
+            new ImpostorShapelessRecipe(multiplePrintout, new Object[] { singlePrintout, singlePrintout, string }));
         ItemStack leather = new ItemStack(Items.leather, 1, 0);
         GameRegistry
-            .addRecipe(new ImpostorShapelessRecipe(bookPrintout, new ArrayList<>(Arrays.asList(leather, singlePrintout, string))));
+            .addRecipe(new ImpostorShapelessRecipe(bookPrintout, new Object[] { leather, singlePrintout, string }));
         ItemStack pocketComputer = PocketComputerItemFactory.create(-1, null, ComputerFamily.Normal, false);
         GameRegistry.addRecipe(
             pocketComputer,
