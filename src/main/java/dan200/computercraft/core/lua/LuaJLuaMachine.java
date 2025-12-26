@@ -5,9 +5,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaTable;
@@ -75,6 +78,35 @@ public class LuaJLuaMachine implements ILuaMachine {
                     }
                 }, LuaValue.NIL, LuaValue.valueOf(100000) });
                 return thread;
+            }
+        });
+        // Add coroutine.abandon(thread) so Lua can request abandoning a coroutine.
+        // Returns true on success, or false + error message on failure (mirrors the commented-out implementation).
+        coroutine.set("abandon", new VarArgFunction() {
+
+            @Override
+            public Varargs invoke(Varargs args) {
+                try {
+                    LuaThread luaThread = args.arg1()
+                        .checkthread();
+                    String status = luaThread.getStatus();
+                    if (Objects.equals(status, "running") || Objects.equals(status, "normal")
+                        || Objects.equals(status, "dead")) {
+                        return LuaValue.varargsOf(
+                            new LuaValue[] { LuaValue.FALSE,
+                                LuaValue.valueOf("cannot abandon " + status + " coroutine") });
+                    } else {
+                        try {
+                            abandonLuaThread(luaThread);
+                            return LuaValue.varargsOf(new LuaValue[] { LuaValue.TRUE });
+                        } catch (Throwable t) {
+                            return LuaValue
+                                .varargsOf(new LuaValue[] { LuaValue.FALSE, LuaValue.valueOf(t.getMessage()) });
+                        }
+                    }
+                } catch (LuaError err) {
+                    return LuaValue.varargsOf(new LuaValue[] { LuaValue.FALSE, LuaValue.valueOf(err.getMessage()) });
+                }
             }
         });
         this.m_coroutine_create = coroutine.get("create");
@@ -145,8 +177,15 @@ public class LuaJLuaMachine implements ILuaMachine {
                 this.m_mainRoutine = this.m_coroutine_create.call(program);
             } catch (LuaError var7) {
                 if (this.m_mainRoutine != null) {
-                    ((LuaThread) this.m_mainRoutine).abandon();
-                    this.m_mainRoutine = null;
+                    try {
+                        abandonLuaThread((LuaThread) this.m_mainRoutine);
+                        this.m_mainRoutine = null;
+                    } catch (LuaError ignored) {
+                        if (this.m_mainRoutine != null) {
+                            abandonLuaThread((LuaThread) this.m_mainRoutine);
+                            this.m_mainRoutine = null;
+                        }
+                    }
                 }
             }
         }
@@ -195,7 +234,7 @@ public class LuaJLuaMachine implements ILuaMachine {
                         this.m_mainRoutine = null;
                     }
                 } catch (LuaError var9) {
-                    ((LuaThread) this.m_mainRoutine).abandon();
+                    abandonLuaThread((LuaThread) this.m_mainRoutine);
                     this.m_mainRoutine = null;
                 } finally {
                     this.m_softAbortMessage = null;
@@ -235,7 +274,7 @@ public class LuaJLuaMachine implements ILuaMachine {
     public void unload() {
         if (this.m_mainRoutine != null) {
             LuaThread mainThread = (LuaThread) this.m_mainRoutine;
-            mainThread.abandon();
+            abandonLuaThread(mainThread);
             this.m_mainRoutine = null;
         }
     }
@@ -515,5 +554,57 @@ public class LuaJLuaMachine implements ILuaMachine {
         }
 
         return objects;
+    }
+
+    /**
+     * Reflection-based implementation to abandon a LuaThread.
+     * Mirrors LuaJ's internal abandonment logic (state.lua_abandon and recursive children handling).
+     */
+    private void abandonLuaThread(LuaThread luaThread) {
+        if (luaThread == null) return;
+        try {
+            Class<?> luaThreadClass = luaThread.getClass();
+
+            // Call luaThread.state.lua_abandon(luaThread)
+            try {
+                Field stateField = luaThreadClass.getDeclaredField("state");
+                stateField.setAccessible(true);
+                Object state = stateField.get(luaThread);
+                if (state != null) {
+                    for (Method m : state.getClass()
+                        .getDeclaredMethods()) {
+                        if (m.getName()
+                            .equals("lua_abandon") && m.getParameterCount() == 1) {
+                            m.setAccessible(true);
+                            m.invoke(state, luaThread);
+                            break;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            // Abandon children stored in a 'children' field (usually a Vector of WeakReference)
+            try {
+                Field childrenField = luaThreadClass.getDeclaredField("children");
+                childrenField.setAccessible(true);
+                Object childrenObj = childrenField.get(luaThread);
+                if (childrenObj instanceof java.util.Vector) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Vector<java.lang.ref.WeakReference<?>> vec = (java.util.Vector<java.lang.ref.WeakReference<?>>) childrenObj;
+                    for (Object elem : vec) {
+                        if (elem instanceof java.lang.ref.WeakReference) {
+                            Object maybeThread = ((java.lang.ref.WeakReference<?>) elem).get();
+                            if (maybeThread instanceof LuaThread) {
+                                LuaThread child = (LuaThread) maybeThread;
+                                if (!"dead".equals(child.getStatus())) {
+                                    abandonLuaThread(child);
+                                }
+                            }
+                        }
+                    }
+                    vec.removeAllElements();
+                }
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
     }
 }

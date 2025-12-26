@@ -243,27 +243,33 @@ public class ComputerCraft {
     }
 
     public static void openDiskDriveGUI(EntityPlayer player, TileDiskDrive drive) {
-        player.openGui(instance, 100, player.getEntityWorld(), drive.xCoord, drive.yCoord, drive.zCoord);
+        player.openGui(instance, diskDriveGUIID, player.getEntityWorld(), drive.xCoord, drive.yCoord, drive.zCoord);
     }
 
     public static void openComputerGUI(EntityPlayer player, TileComputer computer) {
-        player.openGui(instance, 101, player.getEntityWorld(), computer.xCoord, computer.yCoord, computer.zCoord);
+        player.openGui(
+            instance,
+            computerGUIID,
+            player.getEntityWorld(),
+            computer.xCoord,
+            computer.yCoord,
+            computer.zCoord);
     }
 
     public static void openPrinterGUI(EntityPlayer player, TilePrinter printer) {
-        player.openGui(instance, 102, player.getEntityWorld(), printer.xCoord, printer.yCoord, printer.zCoord);
+        player.openGui(instance, printerGUIID, player.getEntityWorld(), printer.xCoord, printer.yCoord, printer.zCoord);
     }
 
     public static void openTurtleGUI(EntityPlayer player, TileTurtle turtle) {
-        player.openGui(instance, 103, player.getEntityWorld(), turtle.xCoord, turtle.yCoord, turtle.zCoord);
+        player.openGui(instance, turtleGUIID, player.getEntityWorld(), turtle.xCoord, turtle.yCoord, turtle.zCoord);
     }
 
     public static void openPrintoutGUI(EntityPlayer player) {
-        player.openGui(instance, 105, player.getEntityWorld(), 0, 0, 0);
+        player.openGui(instance, printoutGUIID, player.getEntityWorld(), 0, 0, 0);
     }
 
     public static void openPocketComputerGUI(EntityPlayer player) {
-        player.openGui(instance, 106, player.getEntityWorld(), 0, 0, 0);
+        player.openGui(instance, pocketComputerGUIID, player.getEntityWorld(), 0, 0, 0);
     }
 
     public static File getBaseDir() {
