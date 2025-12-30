@@ -31,23 +31,19 @@ public class HTTPAPI implements ILuaAPI {
     public void startup() {}
 
     @Override
-    public void advance(double _dt) {
-        synchronized (this.m_httpRequests) {
-            Iterator<HTTPRequest> it = this.m_httpRequests.iterator();
-
+    public void advance(double dt) {
+        synchronized (m_httpRequests) {
+            Iterator<HTTPRequest> it = m_httpRequests.iterator();
             while (it.hasNext()) {
                 HTTPRequest h = it.next();
                 if (h.isComplete()) {
                     String url = h.getURL();
                     if (h.wasSuccessful()) {
-                        BufferedReader contents = h.getContents();
-                        int responseCode = h.getResponseCode();
-                        Object result = wrapBufferedReader(contents, responseCode);
-                        this.m_apiEnvironment.queueEvent("http_success", new Object[] { url, result });
+                        m_apiEnvironment.queueEvent("http_success", new Object[] { url, h.asResponse() });
                     } else {
-                        this.m_apiEnvironment.queueEvent("http_failure", new Object[] { url, "Could not connect" });
+                        m_apiEnvironment
+                            .queueEvent("http_failure", new Object[] { url, "Could not connect", h.asResponse() });
                     }
-
                     it.remove();
                 }
             }
@@ -122,59 +118,59 @@ public class HTTPAPI implements ILuaAPI {
 
     @Override
     public String[] getMethodNames() {
-        return new String[] { "request", "checkURL" };
+        return new String[] { "request", "fetch", "checkURL" };
     }
 
     @Override
     public Object[] callMethod(ILuaContext context, int method, Object[] args) throws LuaException {
         switch (method) {
-            case 0:
-                if (args.length >= 1 && args[0] instanceof String) {
-                    String urlString = args[0].toString();
-                    String postString = null;
-                    if (args.length >= 2 && args[1] instanceof String) {
-                        postString = args[1].toString();
-                    }
-
-                    Map<String, String> headers = null;
-                    if (args.length >= 3 && args[2] instanceof Map) {
-                        Map table = (Map) args[2];
-                        headers = new HashMap<>(table.size());
-
-                        for (Object key : table.keySet()) {
-                            Object value = table.get(key);
-                            if (key instanceof String && value instanceof String) {
-                                headers.put((String) key, (String) value);
-                            }
-                        }
-                    }
-
-                    try {
-                        HTTPRequest request = new HTTPRequest(urlString, postString, headers);
-                        synchronized (this.m_httpRequests) {
-                            this.m_httpRequests.add(request);
-                        }
-
-                        return new Object[] { true };
-                    } catch (HTTPRequestException var14) {
-                        return new Object[] { false, var14.getMessage() };
-                    }
-                } else {
+            case 0: // request
+            case 1: {
+                if (args.length < 1 || !(args[0] instanceof String)) {
                     throw new LuaException("Expected string");
                 }
-            case 1:
-                if (args.length >= 1 && args[0] instanceof String) {
-                    String urlString = args[0].toString();
 
-                    try {
-                        HTTPRequest.checkURL(urlString);
-                        return new Object[] { true };
-                    } catch (HTTPRequestException var12) {
-                        return new Object[] { false, var12.getMessage() };
+                String urlString = args[0].toString();
+                String data = args.length > 1 && args[1] instanceof String ? (String) args[1] : null;
+                String verb = args.length > 3 && args[3] instanceof String ? (String) args[3] : null;
+
+                HashMap<String, String> headers = null;
+                if (args.length >= 3 && args[2] instanceof Map) {
+                    Map<?, ?> argHeader = (Map<?, ?>) args[2];
+                    headers = new HashMap<String, String>(argHeader.size());
+
+                    for (Object key : argHeader.keySet()) {
+                        Object value = argHeader.get(key);
+                        if (key instanceof String && value instanceof String) {
+                            headers.put((String) key, (String) value);
+                        }
                     }
                 }
 
-                throw new LuaException("Expected string");
+                try {
+                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb);
+                    synchronized (this.m_httpRequests) {
+                        this.m_httpRequests.add(request);
+                    }
+
+                    return new Object[] { Boolean.valueOf(true) };
+                } catch (LuaException e) {
+                    return new Object[] { Boolean.valueOf(false), e.getMessage() };
+                }
+            }
+            case 2: { // Check URL
+                if (args.length < 1 || !(args[0] instanceof String)) {
+                    throw new LuaException("Expected string");
+                }
+                String urlString = args[0].toString();
+
+                try {
+                    HTTPRequest.checkURL(urlString);
+                    return new Object[] { Boolean.valueOf(true) };
+                } catch (LuaException e) {
+                    return new Object[] { Boolean.valueOf(false), e.getMessage() };
+                }
+            }
             default:
                 return null;
         }
