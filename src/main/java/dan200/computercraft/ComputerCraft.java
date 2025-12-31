@@ -100,6 +100,8 @@ public class ComputerCraft {
     public static int advancedTurtleFuelLimit = 100000;
     public static boolean turtlesObeyBlockProtection = true;
     public static boolean turtlesCanPush = true;
+    public static int monitorLightLevel = 7;
+    public static int advancedMonitorLightLevel = 10;
     public static final int terminalWidth_computer = 51;
     public static final int terminalHeight_computer = 19;
     public static final int terminalWidth_turtle = 39;
@@ -184,6 +186,12 @@ public class ComputerCraft {
         prop = config.get("general", "turtlesCanPush", turtlesCanPush);
         prop.comment = "If set to true, Turtles will push entities out of the way instead of stopping if there is space to do so";
         turtlesCanPush = prop.getBoolean(turtlesCanPush);
+        prop = config.get("general", "monitorLightLevel", monitorLightLevel);
+        prop.comment = "The light level emitted by normal monitors";
+        monitorLightLevel = prop.getInt(monitorLightLevel);
+        prop = config.get("general", "advancedMonitorLightLevel", advancedMonitorLightLevel);
+        prop.comment = "The light level emitted by advanced monitors";
+        advancedMonitorLightLevel = prop.getInt(advancedMonitorLightLevel);
         config.save();
         networkEventChannel = NetworkRegistry.INSTANCE.newEventDrivenChannel("CC");
         networkEventChannel.register(new PacketHandler());
