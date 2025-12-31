@@ -74,6 +74,7 @@ public class TileEntityTurtleRenderer extends TileEntitySpecialRenderer {
 
             GL11.glTranslatef(0.5F, 0.5F, 0.5F);
             GL11.glRotatef(turtle.getRenderYaw(f), 0.0F, -1.0F, 0.0F);
+            this.applyCustomNames(label);
             GL11.glTranslatef(-0.5F, -0.5F, -0.5F);
             this.renderTurtle(
                 turtle,
