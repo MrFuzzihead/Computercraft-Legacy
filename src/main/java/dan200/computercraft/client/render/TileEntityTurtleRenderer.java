@@ -92,6 +92,7 @@ public class TileEntityTurtleRenderer extends TileEntitySpecialRenderer {
     public void renderInventoryTurtle(ItemStack stack) {
         if (stack.getItem() instanceof ITurtleItem) {
             ITurtleItem item = (ITurtleItem) stack.getItem();
+            applyCustomNames(item.getLabel(stack), true);
             this.renderTurtle(
                 null,
                 item.getFamily(stack),
@@ -103,6 +104,26 @@ public class TileEntityTurtleRenderer extends TileEntitySpecialRenderer {
                 item.getOverlay(stack),
                 item.getHatOverlay(stack));
         }
+    }
+
+    /**
+     * Apply custom names to this turtle
+     *
+     * @param label The turtle's label
+     * @param shift If we should undo a previous shift (such as for items)
+     */
+    protected void applyCustomNames(String label, boolean shift) {
+        if (ComputerCraft.funNames && label != null) {
+            if (label.equals("Dinnerbone") || label.equals("Grumm")) {
+                if (shift) GL11.glTranslatef(0.5f, 0.5f, 0.5f);
+                GL11.glRotatef(180.0f, 0.0f, 0.0f, 1.0f);
+                if (shift) GL11.glTranslatef(-0.5f, -0.5f, -0.5f);
+            }
+        }
+    }
+
+    protected void applyCustomNames(String label) {
+        applyCustomNames(label, false);
     }
 
     private void renderTurtle(ITurtleTile turtle, ComputerFamily family, Colour colour, ITurtleUpgrade leftUpgrade,
