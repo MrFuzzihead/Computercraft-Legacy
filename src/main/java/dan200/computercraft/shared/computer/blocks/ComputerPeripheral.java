@@ -1,13 +1,14 @@
 package dan200.computercraft.shared.computer.blocks;
 
+import net.minecraft.util.ChunkCoordinates;
+import net.minecraft.world.World;
+
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.api.peripheral.IPeripheralTargeted;
 import dan200.computercraft.shared.computer.core.ServerComputer;
-import net.minecraft.util.ChunkCoordinates;
-import net.minecraft.world.World;
 
 public class ComputerPeripheral implements IPeripheralTargeted {
 

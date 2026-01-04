@@ -15,4 +15,3 @@ public interface IPeripheralTargeted extends IPeripheral {
      */
     Object getTarget();
 }
-
