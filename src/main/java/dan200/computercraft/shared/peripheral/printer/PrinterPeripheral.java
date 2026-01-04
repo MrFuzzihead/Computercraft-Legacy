@@ -4,9 +4,10 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.peripheral.IPeripheralTargeted;
 import dan200.computercraft.core.terminal.Terminal;
 
-public class PrinterPeripheral implements IPeripheral {
+public class PrinterPeripheral implements IPeripheralTargeted {
 
     private final TilePrinter m_printer;
 
@@ -17,6 +18,11 @@ public class PrinterPeripheral implements IPeripheral {
     @Override
     public String getType() {
         return "printer";
+    }
+
+    @Override
+    public Object getTarget() {
+        return m_printer;
     }
 
     @Override

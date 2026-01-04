@@ -4,12 +4,17 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.peripheral.IPeripheralTargeted;
 import dan200.computercraft.shared.computer.core.ServerComputer;
+import net.minecraft.util.ChunkCoordinates;
+import net.minecraft.world.World;
 
-public class ComputerPeripheral implements IPeripheral {
+public class ComputerPeripheral implements IPeripheralTargeted {
 
     private final String m_type;
     private final ServerComputer m_computer;
+    private World m_world;
+    private ChunkCoordinates m_position;
 
     public ComputerPeripheral(String type, ServerComputer computer) {
         this.m_type = type;
@@ -19,6 +24,13 @@ public class ComputerPeripheral implements IPeripheral {
     @Override
     public String getType() {
         return this.m_type;
+    }
+
+    @Override
+    public Object getTarget() {
+        return m_position != null && m_world != null
+            ? m_world.getTileEntity(m_position.posX, m_position.posY, m_position.posZ)
+            : null;
     }
 
     @Override
