@@ -15,9 +15,12 @@ import dan200.computercraft.shared.proxy.CCTurtleProxyCommon;
 import dan200.computercraft.shared.util.InventoryUtil;
 import dan200.computercraft.shared.util.WorldUtil;
 
+import java.util.Arrays;
+
 public class TurtleEquipCommand implements ITurtleCommand {
 
     private final TurtleSide m_side;
+    private final String COMMANDNAME = "equip";
 
     public TurtleEquipCommand(TurtleSide side) {
         this.m_side = side;
@@ -25,6 +28,10 @@ public class TurtleEquipCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         IInventory inventory = turtle.getInventory();
         ItemStack selectedStack = inventory.getStackInSlot(turtle.getSelectedSlot());
         ITurtleUpgrade newUpgrade;

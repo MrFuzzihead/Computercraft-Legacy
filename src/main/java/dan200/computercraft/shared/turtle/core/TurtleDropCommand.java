@@ -1,5 +1,6 @@
 package dan200.computercraft.shared.turtle.core;
 
+import dan200.computercraft.ComputerCraft;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChunkCoordinates;
@@ -13,10 +14,13 @@ import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.shared.util.InventoryUtil;
 import dan200.computercraft.shared.util.WorldUtil;
 
+import java.util.Arrays;
+
 public class TurtleDropCommand implements ITurtleCommand {
 
     private final InteractDirection m_direction;
     private final int m_quantity;
+    private final String COMMANDNAME = "drop";
 
     public TurtleDropCommand(InteractDirection direction, int quantity) {
         this.m_direction = direction;
@@ -25,6 +29,10 @@ public class TurtleDropCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         if (this.m_quantity == 0) {
             turtle.playAnimation(TurtleAnimation.Wait);
             return TurtleCommandResult.success();

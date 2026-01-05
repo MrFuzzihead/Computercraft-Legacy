@@ -1,14 +1,18 @@
 package dan200.computercraft.shared.turtle.core;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.shared.util.DirectionUtil;
 
+import java.util.Arrays;
+
 public class TurtleTurnCommand implements ITurtleCommand {
 
     private final TurnDirection m_direction;
+    private final String COMMANDNAME = "turn";
 
     public TurtleTurnCommand(TurnDirection direction) {
         this.m_direction = direction;
@@ -16,6 +20,10 @@ public class TurtleTurnCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         switch (this.m_direction) {
             case Left:
                 turtle.setDirection(DirectionUtil.rotateLeft(turtle.getDirection()));

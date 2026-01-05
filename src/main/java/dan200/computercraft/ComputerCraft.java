@@ -103,6 +103,7 @@ public class ComputerCraft {
     public static int monitorLightLevel = 7;
     public static int advancedMonitorLightLevel = 10;
     public static boolean funNames = true;
+    public static String[] turtleDisabledActions = new String[0];
     public static final int terminalWidth_computer = 51;
     public static final int terminalHeight_computer = 19;
     public static final int terminalWidth_turtle = 39;
@@ -196,6 +197,9 @@ public class ComputerCraft {
         prop = config.get("general", "funNames", funNames);
         prop.comment = "Fun actions for turtle names";
         funNames = prop.getBoolean(funNames);
+        prop = config.get("general", "turtleDisabledActions", turtleDisabledActions);
+        prop.comment = "Disabled turtle actions: (compare, compareTo, craft, detect, dig, drop, equip, inspect, move, place, refuel, select, suck, tool, turn).";
+        turtleDisabledActions = prop.getStringList();
         config.save();
         networkEventChannel = NetworkRegistry.INSTANCE.newEventDrivenChannel("CC");
         networkEventChannel.register(new PacketHandler());

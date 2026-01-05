@@ -1,5 +1,6 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
 import java.util.List;
 
 import net.minecraft.block.Block;
@@ -19,6 +20,7 @@ import dan200.computercraft.shared.util.WorldUtil;
 public class TurtleMoveCommand implements ITurtleCommand {
 
     private final MoveDirection m_direction;
+    private final String COMMANDNAME = "move";
 
     public TurtleMoveCommand(MoveDirection direction) {
         this.m_direction = direction;
@@ -26,6 +28,10 @@ public class TurtleMoveCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         int direction = this.m_direction.toWorldDir(turtle);
         World oldWorld = turtle.getWorld();
         ChunkCoordinates oldPosition = turtle.getPosition();

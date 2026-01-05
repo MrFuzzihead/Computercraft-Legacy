@@ -1,7 +1,9 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
 import java.util.List;
 
+import dan200.computercraft.ComputerCraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.init.Blocks;
@@ -23,6 +25,7 @@ public class TurtleSuckCommand implements ITurtleCommand {
 
     private final InteractDirection m_direction;
     private final int m_quantity;
+    private final String COMMANDNAME = "suck";
 
     public TurtleSuckCommand(InteractDirection direction, int quantity) {
         this.m_direction = direction;
@@ -31,6 +34,10 @@ public class TurtleSuckCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         if (this.m_quantity == 0) {
             turtle.playAnimation(TurtleAnimation.Wait);
             return TurtleCommandResult.success();

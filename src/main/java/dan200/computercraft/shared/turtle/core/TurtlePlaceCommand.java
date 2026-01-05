@@ -29,10 +29,13 @@ import dan200.computercraft.shared.util.IEntityDropConsumer;
 import dan200.computercraft.shared.util.InventoryUtil;
 import dan200.computercraft.shared.util.WorldUtil;
 
+import java.util.Arrays;
+
 public class TurtlePlaceCommand implements ITurtleCommand {
 
     private final InteractDirection m_direction;
     private final Object[] m_extraArguments;
+    private final String COMMANDNAME = "place";
 
     public TurtlePlaceCommand(InteractDirection direction, Object[] arguments) {
         this.m_direction = direction;
@@ -41,6 +44,10 @@ public class TurtlePlaceCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         ItemStack stack = turtle.getInventory()
             .getStackInSlot(turtle.getSelectedSlot());
         if (stack == null) {

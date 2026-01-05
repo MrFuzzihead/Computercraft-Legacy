@@ -1,5 +1,6 @@
 package dan200.computercraft.shared.turtle.core;
 
+import dan200.computercraft.ComputerCraft;
 import net.minecraft.item.ItemStack;
 
 import dan200.computercraft.api.turtle.ITurtleAccess;
@@ -8,10 +9,13 @@ import dan200.computercraft.api.turtle.TurtleAnimation;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.shared.util.InventoryUtil;
 
+import java.util.Arrays;
+
 public class TurtleTransferToCommand implements ITurtleCommand {
 
     private final int m_slot;
     private final int m_quantity;
+    private final String COMMANDNAME = "transferTo";
 
     public TurtleTransferToCommand(int slot, int limit) {
         this.m_slot = slot;
@@ -20,6 +24,10 @@ public class TurtleTransferToCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         ItemStack stack = InventoryUtil
             .takeItems(this.m_quantity, turtle.getInventory(), turtle.getSelectedSlot(), 1, turtle.getSelectedSlot());
         if (stack == null) {

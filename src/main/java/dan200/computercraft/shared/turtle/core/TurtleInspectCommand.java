@@ -1,8 +1,10 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import dan200.computercraft.ComputerCraft;
 import net.minecraft.block.Block;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
@@ -16,6 +18,7 @@ public class TurtleInspectCommand implements ITurtleCommand {
 
     private final InteractDirection m_direction;
     private final boolean m_failOnAir;
+    private final String COMMANDNAME = "inspect";
 
     public TurtleInspectCommand(InteractDirection direction, boolean failOnAir) {
         this.m_direction = direction;
@@ -24,6 +27,10 @@ public class TurtleInspectCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         int direction = this.m_direction.toWorldDir(turtle);
         World world = turtle.getWorld();
         ChunkCoordinates oldPosition = turtle.getPosition();
