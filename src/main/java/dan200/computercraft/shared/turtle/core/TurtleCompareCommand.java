@@ -4,7 +4,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import dan200.computercraft.ComputerCraft;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -12,6 +11,7 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
 
 import cpw.mods.fml.relauncher.ReflectionHelper;
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
@@ -28,7 +28,8 @@ public class TurtleCompareCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
-        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 

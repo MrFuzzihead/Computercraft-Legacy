@@ -28,7 +28,8 @@ public class TurtleMoveCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
-        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 

@@ -3,7 +3,6 @@ package dan200.computercraft.shared.turtle.core;
 import java.util.Arrays;
 import java.util.List;
 
-import dan200.computercraft.ComputerCraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.init.Blocks;
@@ -14,6 +13,7 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.util.Facing;
 import net.minecraft.world.World;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
@@ -34,7 +34,8 @@ public class TurtleSuckCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
-        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 

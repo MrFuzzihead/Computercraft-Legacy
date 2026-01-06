@@ -4,11 +4,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import dan200.computercraft.ComputerCraft;
 import net.minecraft.block.Block;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
@@ -27,7 +27,8 @@ public class TurtleInspectCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
-        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 

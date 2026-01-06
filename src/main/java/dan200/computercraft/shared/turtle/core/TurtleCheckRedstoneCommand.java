@@ -1,12 +1,12 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
+
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.core.apis.IAPIEnvironment;
-
-import java.util.Arrays;
 
 public class TurtleCheckRedstoneCommand implements ITurtleCommand {
 
@@ -21,7 +21,8 @@ public class TurtleCheckRedstoneCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
-        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 

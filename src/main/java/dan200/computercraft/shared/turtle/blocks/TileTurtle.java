@@ -2,7 +2,6 @@ package dan200.computercraft.shared.turtle.blocks;
 
 import java.util.List;
 
-import dan200.computercraft.api.turtle.*;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -21,6 +20,11 @@ import net.minecraft.util.Vec3;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.api.turtle.IExtendedTurtleUpgrade;
+import dan200.computercraft.api.turtle.ITurtleAccess;
+import dan200.computercraft.api.turtle.ITurtleUpgrade;
+import dan200.computercraft.api.turtle.TurtleSide;
+import dan200.computercraft.api.turtle.TurtleUpgradeType;
 import dan200.computercraft.shared.computer.blocks.TileComputerBase;
 import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.IComputer;
@@ -464,8 +468,7 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
         }
 
         return upgrade != null && (upgrade.getType() == TurtleUpgradeType.Peripheral
-            || (upgrade instanceof IExtendedTurtleUpgrade
-                && ((IExtendedTurtleUpgrade) upgrade).alsoPeripheral()));
+            || (upgrade instanceof IExtendedTurtleUpgrade && ((IExtendedTurtleUpgrade) upgrade).alsoPeripheral()));
     }
 
     public void transferStateFrom(TileTurtle copy) {

@@ -1,14 +1,14 @@
 package dan200.computercraft.shared.turtle.core;
 
-import dan200.computercraft.ComputerCraft;
+import java.util.Arrays;
+
 import net.minecraft.item.ItemStack;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.shared.util.InventoryUtil;
-
-import java.util.Arrays;
 
 public class TurtleCompareToCommand implements ITurtleCommand {
 
@@ -21,7 +21,8 @@ public class TurtleCompareToCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
-        if (Arrays.asList(ComputerCraft.turtleDisabledActions).contains(COMMANDNAME)) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 
