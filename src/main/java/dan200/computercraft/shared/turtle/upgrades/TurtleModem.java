@@ -21,7 +21,7 @@ import dan200.computercraft.shared.peripheral.modem.WirelessModemPeripheral;
 
 public class TurtleModem implements ITurtleUpgrade {
 
-    private int m_id;
+    private final int m_id;
 
     public TurtleModem(int id) {
         this.m_id = id;
@@ -74,8 +74,7 @@ public class TurtleModem implements ITurtleUpgrade {
     public void update(ITurtleAccess turtle, TurtleSide side) {
         if (!turtle.getWorld().isRemote) {
             IPeripheral peripheral = turtle.getPeripheral(side);
-            if (peripheral != null && peripheral instanceof TurtleModem.Peripheral) {
-                TurtleModem.Peripheral modemPeripheral = (TurtleModem.Peripheral) peripheral;
+            if (peripheral instanceof TurtleModem.Peripheral modemPeripheral) {
                 if (modemPeripheral.pollChanged()) {
                     turtle.getUpgradeNBTData(side)
                         .setBoolean("active", modemPeripheral.isActive());
@@ -106,8 +105,7 @@ public class TurtleModem implements ITurtleUpgrade {
 
         @Override
         public boolean equals(IPeripheral other) {
-            if (other instanceof TurtleModem.Peripheral) {
-                TurtleModem.Peripheral otherModem = (TurtleModem.Peripheral) other;
+            if (other instanceof TurtleModem.Peripheral otherModem) {
                 return otherModem.m_turtle == this.m_turtle;
             } else {
                 return false;

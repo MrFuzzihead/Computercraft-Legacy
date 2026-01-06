@@ -3,6 +3,7 @@ package dan200.computercraft.client.proxy;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
@@ -71,8 +72,7 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
             .getClient();
         this.m_fixedWidthFontRenderer = new FixedWidthFontRenderer(mc.renderEngine);
         IResourceManager resourceManager = mc.getResourceManager();
-        if (resourceManager instanceof IReloadableResourceManager) {
-            IReloadableResourceManager reloadableResourceManager = (IReloadableResourceManager) resourceManager;
+        if (resourceManager instanceof IReloadableResourceManager reloadableResourceManager) {
             reloadableResourceManager.registerReloadListener(this.m_fixedWidthFontRenderer);
         }
 
@@ -101,11 +101,10 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
 
     @Override
     public String getRecordInfo(ItemStack recordStack) {
-        List info = new ArrayList(1);
-        recordStack.getItem()
+        List<String> info = new ArrayList<>(1);
+        Objects.requireNonNull(recordStack.getItem())
             .addInformation(recordStack, null, info, false);
-        return info.size() > 0 ? info.get(0)
-            .toString() : super.getRecordInfo(recordStack);
+        return !info.isEmpty() ? info.get(0) : super.getRecordInfo(recordStack);
     }
 
     @Override
@@ -319,7 +318,7 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
 
     private class ComputerBlockRenderingHandler implements ISimpleBlockRenderingHandler {
 
-        private int m_renderID;
+        private final int m_renderID;
 
         public ComputerBlockRenderingHandler(int renderID) {
             this.m_renderID = renderID;

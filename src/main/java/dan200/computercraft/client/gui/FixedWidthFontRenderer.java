@@ -22,12 +22,14 @@ import dan200.computercraft.shared.util.Colour;
 
 public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
 
-    private static ResourceLocation font = new ResourceLocation("minecraft", "textures/font/ascii.png");
-    private static ResourceLocation background = new ResourceLocation("computercraft", "textures/gui/termwhite.png");
+    private static final ResourceLocation font = new ResourceLocation("minecraft", "textures/font/ascii.png");
+    private static final ResourceLocation background = new ResourceLocation(
+        "computercraft",
+        "textures/gui/termwhite.png");
     public static int FONT_HEIGHT = 9;
     public static int FONT_WIDTH = 6;
-    private TextureManager m_textureManager;
-    private IntBuffer m_drawBuffer;
+    private final TextureManager m_textureManager;
+    private final IntBuffer m_drawBuffer;
     private int m_firstDisplayList;
 
     public FixedWidthFontRenderer(TextureManager textureManager) {
@@ -129,7 +131,7 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
             GL11.glEndList();
         }
 
-        GL11.glNewList(this.m_firstDisplayList + 256 + 16 + 0, 4864);
+        GL11.glNewList(this.m_firstDisplayList + 256 + 16, 4864);
         tessellator.startDrawingQuads();
         tessellator.addVertexWithUV(0.0, FONT_HEIGHT, 0.0, 0.0, 1.0);
         tessellator.addVertexWithUV(FONT_WIDTH, FONT_HEIGHT, 0.0, 1.0, 1.0);
@@ -138,13 +140,13 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
         tessellator.draw();
         GL11.glTranslatef(FONT_WIDTH, 0.0F, 0.0F);
         GL11.glEndList();
-        GL11.glNewList(this.m_firstDisplayList + 256 + 16 + 1, 4864);
+        GL11.glNewList(this.m_firstDisplayList + 256 + 17, 4864);
         GL11.glTranslatef(FONT_WIDTH, 0.0F, 0.0F);
         GL11.glEndList();
     }
 
     private boolean isGreyScale(int colour) {
-        return colour == 0 || colour == 15 || colour == 7 || colour == 8;
+        return !(colour != 0 && colour != 15 && colour != 7 && colour != 8);
     }
 
     public void drawString(TextBuffer s, int x, int y, TextBuffer textColour, TextBuffer backgroundColour,
@@ -242,15 +244,7 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
                 }
 
                 char ch = s.charAt(i);
-                String defaultChars = "ÀÁÂÈÊËÍÓÔÕÚßãõğİıŒœŞşŴŵžȇ\u0000\u0000\u0000\u0000\u0000\u0000\u0000 !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u0000ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞∅∈∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u0000";
-                int index = defaultChars.indexOf(ch);
-                if (index < 0) {
-                    if (ch != '\t' && ch != '\r' && ch != '\n') {
-                        index = defaultChars.indexOf(63);
-                    } else {
-                        index = defaultChars.indexOf(32);
-                    }
-                }
+                int index = getIndex(ch);
 
                 this.m_drawBuffer.put(this.m_firstDisplayList + index);
                 if (this.m_drawBuffer.remaining() == 0) {
@@ -264,6 +258,19 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
             GL11.glCallLists(this.m_drawBuffer);
             GL11.glPopMatrix();
         }
+    }
+
+    private static int getIndex(char ch) {
+        String defaultChars = "ÀÁÂÈÊËÍÓÔÕÚßãõğİıŒœŞşŴŵžȇ\u0000\u0000\u0000\u0000\u0000\u0000\u0000 !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u0000ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞∅∈∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u0000";
+        int index = defaultChars.indexOf(ch);
+        if (index < 0) {
+            if (ch != '\t' && ch != '\r' && ch != '\n') {
+                index = defaultChars.indexOf(63);
+            } else {
+                index = defaultChars.indexOf(32);
+            }
+        }
+        return index;
     }
 
     public int getStringWidth(String s) {
