@@ -18,6 +18,9 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.Mod.EventHandler;
@@ -84,6 +87,7 @@ import io.netty.buffer.Unpooled;
 public class ComputerCraft {
 
     public static final String MODID = "ComputerCraft";
+    public static final Logger logger = LogManager.getLogger(MODID);
 
     public static final int diskDriveGUIID = 100;
     public static final int computerGUIID = 101;
@@ -104,6 +108,13 @@ public class ComputerCraft {
     public static int advancedMonitorLightLevel = 10;
     public static boolean funNames = true;
     public static String[] turtleDisabledActions = new String[0];
+    public static int computerThreadTimeout = 7000;
+    public static String biosPath = "/assets/computercraft/lua/bios.lua";
+    public static final String BIOS_PATH = "/assets/computercraft/lua/bios.lua";
+    public static boolean cobalt = false;
+    public static boolean bigInteger = false;
+    public static boolean bitop = false;
+    public static int maxFilesHandles = 1024;
     public static final int terminalWidth_computer = 51;
     public static final int terminalHeight_computer = 19;
     public static final int terminalWidth_turtle = 39;
@@ -200,6 +211,24 @@ public class ComputerCraft {
         prop = config.get("general", "turtleDisabledActions", turtleDisabledActions);
         prop.comment = "Disabled turtle actions: (compare, compareTo, craft, detect, dig, drop, equip, inspect, move, place, refuel, select, suck, tool, turn).";
         turtleDisabledActions = prop.getStringList();
+        prop = config.get("general", "computerThreadTimeout", computerThreadTimeout);
+        prop.comment = "The maximum time (in milliseconds) a computer thread is allowed to run before being considered crashed";
+        computerThreadTimeout = prop.getInt();
+        prop = config.get("general", "biosPath", biosPath);
+        prop.comment = "The path to the bios file loaded into computers and turtles";
+        biosPath = prop.getString();
+        prop = config.get("general", "cobalt", cobalt);
+        prop.comment = "Use the Cobalt Lua engine instead of LuaJ. Cobalt is more standards compliant and fixes many bugs present in LuaJ, but may also introduce new bugs.";
+        cobalt = prop.getBoolean();
+        prop = config.get("general", "bigInteger", bigInteger);
+        prop.comment = "Enable the BigInteger API in Lua. Requires Cobalt to be enabled.";
+        bigInteger = prop.getBoolean();
+        prop = config.get("general", "bitop", bitop);
+        prop.comment = "Enable the BitOp API in Lua. Requires Cobalt to be enabled.";
+        bitop = prop.getBoolean();
+        prop = config.get("general", "maxFilesHandles", maxFilesHandles);
+        prop.comment = "Maximum number of file handles a single computer can have open";
+        maxFilesHandles = prop.getInt();
         config.save();
         networkEventChannel = NetworkRegistry.INSTANCE.newEventDrivenChannel("CC");
         networkEventChannel.register(new PacketHandler());

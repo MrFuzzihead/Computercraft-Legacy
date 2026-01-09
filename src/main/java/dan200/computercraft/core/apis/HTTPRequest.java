@@ -173,7 +173,7 @@ public class HTTPRequest {
                         result = null;
                     }
                 } catch (Exception e) {
-                    // Logger.error("Unknown exception fetching " + url, e);
+                    ComputerCraft.logger.error("Unknown exception fetching {}", url, e);
                     synchronized (lock) {
                         complete = true;
                         success = false;

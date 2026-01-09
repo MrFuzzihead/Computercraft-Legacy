@@ -12,6 +12,7 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import dan200.computercraft.api.lua.IExtendedLuaObject;
 import org.luaj.vm2.LuaError;
 import org.luaj.vm2.LuaTable;
 import org.luaj.vm2.LuaThread;
@@ -420,6 +421,14 @@ public class LuaJLuaMachine implements ILuaMachine {
                 });
             }
         }
+
+        // Handle additional data for extended Lua objects
+         if (object instanceof IExtendedLuaObject) {
+            Map<?, ?> additionalData = ((IExtendedLuaObject) object).getAdditionalData();
+            for (Map.Entry<?, ?> entry : additionalData.entrySet()) {
+                table.set(this.toValue(entry.getKey()), this.toValue(entry.getValue()));
+            }
+         }
 
         return table;
     }
