@@ -115,6 +115,8 @@ public class ComputerCraft {
     public static boolean bigInteger = false;
     public static boolean bitop = false;
     public static int maxFilesHandles = 1024;
+    public static boolean timeoutError = false;
+    public static boolean debug = false;
     public static final int terminalWidth_computer = 51;
     public static final int terminalHeight_computer = 19;
     public static final int terminalWidth_turtle = 39;
@@ -229,6 +231,12 @@ public class ComputerCraft {
         prop = config.get("general", "maxFilesHandles", maxFilesHandles);
         prop.comment = "Maximum number of file handles a single computer can have open";
         maxFilesHandles = prop.getInt();
+        prop = config.get("general", "timeoutError", timeoutError);
+        prop.comment = "Error much earlier on a timeout. Note: This only applies to the Cobalt VM.";
+        timeoutError = prop.getBoolean();
+        prop = config.get("general", "debug", debug);
+        prop.comment = "Enable the debug API. This is NOT recommended for servers, use at your own risk. It should be safe on servers if using Cobalt though.";
+        debug = prop.getBoolean();
         config.save();
         networkEventChannel = NetworkRegistry.INSTANCE.newEventDrivenChannel("CC");
         networkEventChannel.register(new PacketHandler());

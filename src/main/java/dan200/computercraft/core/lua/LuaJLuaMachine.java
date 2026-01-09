@@ -123,7 +123,9 @@ public class LuaJLuaMachine implements ILuaMachine {
         this.m_globals.set("os", LuaValue.NIL);
         this.m_globals.set("print", LuaValue.NIL);
         this.m_globals.set("luajava", LuaValue.NIL);
-        this.m_globals.set("debug", LuaValue.NIL);
+        if (!ComputerCraft.debug) {
+            this.m_globals.set("debug", LuaValue.NIL);
+        }
         this.m_globals.set("newproxy", LuaValue.NIL);
         this.m_globals.set("_VERSION", "Lua 5.1");
         this.m_globals.set("_LUAJ_VERSION", "2.0.3");

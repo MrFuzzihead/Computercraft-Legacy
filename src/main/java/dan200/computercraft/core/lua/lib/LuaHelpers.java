@@ -9,6 +9,7 @@ import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.lua.ILuaMachine;
 import dan200.computercraft.core.lua.LuaJLuaMachine;
+import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
 
 /**
  * Various classes for helping with Lua conversion
@@ -52,8 +53,7 @@ public class LuaHelpers {
 
     public static ILuaMachine createMachine(Computer computer) {
         if (ComputerCraft.cobalt) {
-            // return new CobaltMachine(computer);
-            return null;
+            return new CobaltMachine(computer);
         } else {
             LuaJLuaMachine machine = new LuaJLuaMachine(computer);
             LuaTable env = null;

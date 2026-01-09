@@ -35,6 +35,8 @@
  */
 dependencies {
     shadowImplementation("org.luaj:luaj-jse:2.0.3")
+    //shadowImplementation("org.squiddev:Cobalt:0.5.0-SNAPSHOT")
+    shadowImplementation(project.files("libs/Cobalt-0.2.jar"))
 
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.4-GTNH:dev")
     implementation("com.github.GTNewHorizons:ForgeMultipart:1.7.2:dev")
