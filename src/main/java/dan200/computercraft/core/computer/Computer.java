@@ -23,7 +23,6 @@ import dan200.computercraft.core.apis.TermAPI;
 import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.lua.ILuaMachine;
-import dan200.computercraft.core.lua.LuaJLuaMachine;
 import dan200.computercraft.core.terminal.Terminal;
 
 public class Computer {
@@ -339,11 +338,11 @@ public class Computer {
 
         InputStream biosStream;
         try {
-             if (!ComputerCraft.biosPath.startsWith("/") || ComputerCraft.biosPath.isEmpty()) {
+            if (!ComputerCraft.biosPath.startsWith("/") || ComputerCraft.biosPath.isEmpty()) {
                 biosStream = Computer.class.getResourceAsStream(ComputerCraft.BIOS_PATH);
-             } else {
+            } else {
                 biosStream = Computer.class.getResourceAsStream(ComputerCraft.biosPath);
-             }
+            }
         } catch (Exception var6) {
             biosStream = null;
         }
