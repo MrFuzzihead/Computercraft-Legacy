@@ -33,6 +33,7 @@ import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.ITask;
 import dan200.computercraft.core.computer.MainThread;
+import dan200.computercraft.core.lua.lib.LuaHelpers;
 
 public class LuaJLuaMachine implements ILuaMachine {
 
@@ -307,7 +308,7 @@ public class LuaJLuaMachine implements ILuaMachine {
                         Object[] results = null;
 
                         try {
-                            results = object.callMethod(new ILuaContext() {
+                            results = LuaHelpers.delegateLuaObject(object, new ILuaContext() {
 
                                 @Override
                                 public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
@@ -409,7 +410,7 @@ public class LuaJLuaMachine implements ILuaMachine {
                                         throw new LuaException();
                                     }
                                 }
-                            }, finalI, arguments);
+                            }, finalI, _args);
                         } catch (InterruptedException var5) {
                             throw new OrphanedThread();
                         } catch (LuaException var6) {
@@ -444,6 +445,8 @@ public class LuaJLuaMachine implements ILuaMachine {
         } else if (object instanceof Boolean) {
             boolean b = (Boolean) object;
             return LuaValue.valueOf(b);
+        } else if (object instanceof byte[]) {
+            return LuaValue.valueOf((byte[]) object);
         } else if (object instanceof String) {
             String s = object.toString();
             return LuaValue.valueOf(s);

@@ -3,18 +3,24 @@ package dan200.computercraft.core.lua.lib;
 import java.lang.reflect.Field;
 
 import org.luaj.vm2.LuaTable;
+import org.luaj.vm2.Varargs;
 
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.api.lua.ArgumentDelegator;
+import dan200.computercraft.api.lua.ILuaContext;
+import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.lua.ILuaMachine;
 import dan200.computercraft.core.lua.LuaJLuaMachine;
 import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
+import dan200.computercraft.core.lua.lib.luaj.LuaJArguments;
 
 /**
  * Various classes for helping with Lua conversion
  */
 public class LuaHelpers {
+
     /**
      * Simple method which creates varargs and delegates to the delegator. (I know how stupid that sounds).
      *
@@ -22,12 +28,10 @@ public class LuaHelpers {
      *
      * @see org.squiddev.cctweaks.lua.asm.binary.BinaryMachine#patchWrappedObject(ClassVisitor)
      */
-    /*
-     * public static Object[] delegateLuaObject(ILuaObject object, ILuaContext context, int method, Varargs arguments)
-     * throws LuaException, InterruptedException {
-     * return ArgumentDelegator.delegateLuaObject(object, context, method, new LuaJArguments(arguments));
-     * }
-     */
+    public static Object[] delegateLuaObject(ILuaObject object, ILuaContext context, int method, Varargs arguments)
+        throws LuaException, InterruptedException {
+        return ArgumentDelegator.delegateLuaObject(object, context, method, new LuaJArguments(arguments));
+    }
 
     /**
      * Wraps an exception, defaulting to another string on an empty message

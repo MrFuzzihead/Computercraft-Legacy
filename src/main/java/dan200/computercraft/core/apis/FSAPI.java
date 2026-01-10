@@ -11,6 +11,8 @@ import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.filesystem.IMountedFileBinary;
 import dan200.computercraft.core.filesystem.IMountedFileNormal;
+import dan200.computercraft.core.lua.binfs.ReaderObject;
+import dan200.computercraft.core.lua.binfs.WriterObject;
 
 public class FSAPI implements ILuaAPI {
 
@@ -307,118 +309,11 @@ public class FSAPI implements ILuaAPI {
     }
 
     private static Object[] wrapBufferedReader(final IMountedFileNormal reader) {
-        return new Object[] { new ILuaObject() {
-
-            @Override
-            public String[] getMethodNames() {
-                return new String[] { "readLine", "readAll", "close" };
-            }
-
-            @Override
-            public Object[] callMethod(ILuaContext context, int method, Object[] args) throws LuaException {
-                switch (method) {
-                    case 0:
-                        try {
-                            String line = reader.readLine();
-                            if (line != null) {
-                                return new Object[] { line };
-                            }
-
-                            return null;
-                        } catch (IOException var8) {
-                            return null;
-                        }
-                    case 1:
-                        try {
-                            StringBuilder result = new StringBuilder("");
-                            String line = reader.readLine();
-
-                            while (line != null) {
-                                result.append(line);
-                                line = reader.readLine();
-                                if (line != null) {
-                                    result.append("\n");
-                                }
-                            }
-
-                            return new Object[] { result.toString() };
-                        } catch (IOException var7) {
-                            return null;
-                        }
-                    case 2:
-                        try {
-                            reader.close();
-                            return null;
-                        } catch (IOException var6) {
-                            return null;
-                        }
-                    default:
-                        return null;
-                }
-            }
-        } };
+        return new Object[] { new ReaderObject(reader) };
     }
 
     private static Object[] wrapBufferedWriter(final IMountedFileNormal writer) {
-        return new Object[] { new ILuaObject() {
-
-            @Override
-            public String[] getMethodNames() {
-                return new String[] { "write", "writeLine", "close", "flush" };
-            }
-
-            @Override
-            public Object[] callMethod(ILuaContext context, int method, Object[] args) throws LuaException {
-                switch (method) {
-                    case 0:
-                        String text;
-                        if (args.length > 0 && args[0] != null) {
-                            text = args[0].toString();
-                        } else {
-                            text = "";
-                        }
-
-                        try {
-                            writer.write(text, 0, text.length(), false);
-                            return null;
-                        } catch (IOException var9) {
-                            throw new LuaException(var9.getMessage());
-                        }
-                    case 1:
-                        String text1;
-                        if (args.length > 0 && args[0] != null) {
-                            text1 = args[0].toString();
-                        } else {
-                            text1 = "";
-                        }
-
-                        try {
-                            writer.write(text1, 0, text1.length(), true);
-                            return null;
-                        } catch (IOException var8) {
-                            throw new LuaException(var8.getMessage());
-                        }
-                    case 2:
-                        try {
-                            writer.close();
-                            return null;
-                        } catch (IOException var7) {
-                            return null;
-                        }
-                    case 3:
-                        try {
-                            writer.flush();
-                            return null;
-                        } catch (IOException var6) {
-                            return null;
-                        }
-                    default:
-                        assert false;
-
-                        return null;
-                }
-            }
-        } };
+        return new Object[] { new WriterObject(writer) };
     }
 
     private static Object[] wrapInputStream(final IMountedFileBinary reader) {

@@ -1,12 +1,12 @@
 package dan200.computercraft.core.filesystem;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -18,13 +18,16 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.regex.Pattern;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
+import dan200.computercraft.core.lua.binfs.LuaExceptionStub;
 
 public class FileSystem {
 
     private Map<String, FileSystem.MountWrapper> m_mounts = new HashMap<>();
     private Set<IMountedFile> m_openFiles = new HashSet<>();
+    private int openFilesCount;
 
     public FileSystem(String rootLabel, IMount rootMount) throws FileSystemException {
         this.mount(rootLabel, "", rootMount);
@@ -294,28 +297,58 @@ public class FileSystem {
 
     public synchronized IMountedFileNormal openForRead(String path) throws FileSystemException {
         path = sanitizePath(path);
-        FileSystem.MountWrapper mount = this.getMount(path);
+        MountWrapper mount = getMount(path);
         InputStream stream = mount.openForRead(path);
         if (stream != null) {
-            final BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
+            final BufferedInputStream reader = new BufferedInputStream(stream);
             IMountedFileNormal file = new IMountedFileNormal() {
 
                 @Override
-                public String readLine() throws IOException {
-                    return reader.readLine();
+                public byte[] readLine() throws IOException {
+                    // FIXME: Is this the most efficient way?
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+                    int val;
+                    while ((val = reader.read()) != -1) {
+                        if (val == '\r') {
+                            // Peek one character ahead
+                            reader.mark(1);
+                            int newVal = reader.read();
+                            reader.reset();
+
+                            // Consume '\n' as well
+                            if (newVal == '\n') reader.read();
+                            return buffer.toByteArray();
+                        } else if (val == '\n') {
+                            return buffer.toByteArray();
+                        } else {
+                            buffer.write(val);
+                        }
+                    }
+
+                    // We never hit a new line, so we've reached the end of the stream
+                    return buffer.size() > 0 ? buffer.toByteArray() : null;
                 }
 
                 @Override
-                public void write(String s, int off, int len, boolean newLine) throws IOException {
+                public byte[] readAll() throws IOException {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
+                    int nRead;
+                    byte[] data = new byte[1024];
+                    while ((nRead = reader.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, nRead);
+                    }
+
+                    return buffer.toByteArray();
+                }
+
+                @Override
+                public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
                     throw new UnsupportedOperationException();
                 }
 
                 @Override
                 public void close() throws IOException {
-                    synchronized (FileSystem.this.m_openFiles) {
-                        FileSystem.this.m_openFiles.remove(this);
-                        reader.close();
-                    }
+                    removeFile(this, reader);
                 }
 
                 @Override
@@ -323,42 +356,39 @@ public class FileSystem {
                     throw new UnsupportedOperationException();
                 }
             };
-            synchronized (this.m_openFiles) {
-                this.m_openFiles.add(file);
-                return file;
-            }
-        } else {
-            return null;
+            addFile(file);
+            return file;
         }
+        return null;
     }
 
     public synchronized IMountedFileNormal openForWrite(String path, boolean append) throws FileSystemException {
         path = sanitizePath(path);
-        FileSystem.MountWrapper mount = this.getMount(path);
+        MountWrapper mount = getMount(path);
         OutputStream stream = append ? mount.openForAppend(path) : mount.openForWrite(path);
         if (stream != null) {
-            final BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream));
+            final BufferedOutputStream writer = new BufferedOutputStream(stream);
             IMountedFileNormal file = new IMountedFileNormal() {
 
                 @Override
-                public String readLine() throws IOException {
+                public byte[] readLine() throws IOException {
                     throw new UnsupportedOperationException();
                 }
 
                 @Override
-                public void write(String s, int off, int len, boolean newLine) throws IOException {
-                    writer.write(s, off, len);
-                    if (newLine) {
-                        writer.newLine();
-                    }
+                public byte[] readAll() throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
+                    writer.write(data, start, length);
+                    if (newLine) writer.write('\n');
                 }
 
                 @Override
                 public void close() throws IOException {
-                    synchronized (FileSystem.this.m_openFiles) {
-                        FileSystem.this.m_openFiles.remove(this);
-                        writer.close();
-                    }
+                    removeFile(this, writer);
                 }
 
                 @Override
@@ -366,49 +396,37 @@ public class FileSystem {
                     writer.flush();
                 }
             };
-            synchronized (this.m_openFiles) {
-                this.m_openFiles.add(file);
-                return file;
-            }
-        } else {
-            return null;
+            addFile(file);
+            return file;
         }
+        return null;
     }
 
     public synchronized IMountedFileBinary openForBinaryRead(String path) throws FileSystemException {
         path = sanitizePath(path);
-        FileSystem.MountWrapper mount = this.getMount(path);
+        MountWrapper mount = this.getMount(path);
         final InputStream stream = mount.openForRead(path);
         if (stream != null) {
             IMountedFileBinary file = new IMountedFileBinary() {
 
-                @Override
                 public int read() throws IOException {
                     return stream.read();
                 }
 
-                @Override
                 public void write(int i) throws IOException {
                     throw new UnsupportedOperationException();
                 }
 
-                @Override
                 public void close() throws IOException {
-                    synchronized (FileSystem.this.m_openFiles) {
-                        FileSystem.this.m_openFiles.remove(this);
-                        stream.close();
-                    }
+                    removeFile(this, stream);
                 }
 
-                @Override
                 public void flush() throws IOException {
                     throw new UnsupportedOperationException();
                 }
             };
-            synchronized (this.m_openFiles) {
-                this.m_openFiles.add(file);
-                return file;
-            }
+            addFile(file);
+            return file;
         } else {
             return null;
         }
@@ -416,38 +434,29 @@ public class FileSystem {
 
     public synchronized IMountedFileBinary openForBinaryWrite(String path, boolean append) throws FileSystemException {
         path = sanitizePath(path);
-        FileSystem.MountWrapper mount = this.getMount(path);
+        MountWrapper mount = this.getMount(path);
         final OutputStream stream = append ? mount.openForAppend(path) : mount.openForWrite(path);
         if (stream != null) {
             IMountedFileBinary file = new IMountedFileBinary() {
 
-                @Override
                 public int read() throws IOException {
                     throw new UnsupportedOperationException();
                 }
 
-                @Override
                 public void write(int i) throws IOException {
                     stream.write(i);
                 }
 
-                @Override
                 public void close() throws IOException {
-                    synchronized (FileSystem.this.m_openFiles) {
-                        FileSystem.this.m_openFiles.remove(this);
-                        stream.close();
-                    }
+                    removeFile(this, stream);
                 }
 
-                @Override
                 public void flush() throws IOException {
                     stream.flush();
                 }
             };
-            synchronized (this.m_openFiles) {
-                this.m_openFiles.add(file);
-                return file;
-            }
+            addFile(file);
+            return file;
         } else {
             return null;
         }
@@ -561,6 +570,31 @@ public class FileSystem {
 
         String local = path.substring(location.length());
         return local.startsWith("/") ? local.substring(1) : local;
+    }
+
+    public void addFile(IMountedFile file) {
+        synchronized (m_openFiles) {
+            m_openFiles.add(file);
+            if (++openFilesCount > ComputerCraft.maxFilesHandles) {
+                // Ensure that we aren't over the open file limit
+                // We throw Lua exceptions as FileSystemExceptions won't be handled by fs.open
+                try {
+                    file.close();
+                } catch (IOException e) {
+                    throw new LuaExceptionStub("Too many file handles: " + e.getMessage());
+                }
+                throw new LuaExceptionStub("Too many file handles");
+            }
+        }
+    }
+
+    public void removeFile(IMountedFile file, Closeable stream) throws IOException {
+        synchronized (m_openFiles) {
+            m_openFiles.remove(file);
+            openFilesCount--;
+
+            stream.close();
+        }
     }
 
     private class MountWrapper {

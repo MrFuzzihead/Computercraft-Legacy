@@ -9,7 +9,10 @@ import java.util.Set;
 
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
+import dan200.computercraft.api.lua.ArgumentDelegator;
+import dan200.computercraft.api.lua.IArguments;
 import dan200.computercraft.api.lua.ILuaContext;
+import dan200.computercraft.api.lua.ILuaObjectWithArguments;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
@@ -19,7 +22,7 @@ import dan200.computercraft.core.computer.ITask;
 import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.filesystem.FileSystemException;
 
-public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChangeListener {
+public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChangeListener, ILuaObjectWithArguments {
 
     private IAPIEnvironment m_environment;
     private FileSystem m_fileSystem;
@@ -219,6 +222,29 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
         }
     }
 
+    public Object[] callMethod(ILuaContext context, int method, IArguments args)
+        throws LuaException, InterruptedException {
+        if (method == 3) {
+            if (args.size() >= 2 && args.getArgument(1) != null && args.getArgument(1) instanceof String) {
+                String methodName = args.getString(1);
+                int side = parseSide(args);
+                if (side >= 0) {
+                    PeripheralWrapper p;
+                    synchronized (m_peripherals) {
+                        p = m_peripherals[side];
+                    }
+                    if (p != null) {
+                        return p.call(context, methodName, args.subArgs(2));
+                    }
+                }
+                throw new LuaException("No peripheral attached");
+            }
+            throw new LuaException("Expected string, string");
+        }
+        // Fallback to original argument handling
+        return callMethod(context, method, args.asArguments());
+    }
+
     private Object[] trimArray(Object[] array, int skip) {
         return Arrays.copyOfRange(array, skip, array.length);
     }
@@ -237,6 +263,14 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
         } else {
             throw new LuaException("Expected string");
         }
+    }
+
+    private int parseSide(IArguments arguments) throws LuaException {
+        String side = arguments.getString(0);
+        for (int n = 0; n < Computer.s_sideNames.length; n++) {
+            if (side.equals(Computer.s_sideNames[n])) return n;
+        }
+        return -1;
     }
 
     private String findFreeLocation(String desiredLoc) {
@@ -328,6 +362,20 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
             } else {
                 throw new LuaException("No such method " + methodName);
             }
+        }
+
+        public Object[] call(ILuaContext context, String methodName, IArguments arguments)
+            throws LuaException, InterruptedException {
+            int method = -1;
+            synchronized (this) {
+                if (this.m_methodMap.containsKey(methodName)) {
+                    method = this.m_methodMap.get(methodName);
+                }
+            }
+            if (method >= 0) {
+                return ArgumentDelegator.delegatePeripheral(m_peripheral, this, context, method, arguments);
+            }
+            throw new LuaException("No such method " + methodName);
         }
 
         @Override
