@@ -1,8 +1,11 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
+
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntityFurnace;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
@@ -12,6 +15,7 @@ import dan200.computercraft.shared.util.InventoryUtil;
 public class TurtleRefuelCommand implements ITurtleCommand {
 
     private final int m_limit;
+    private final String COMMANDNAME = "refuel";
 
     public TurtleRefuelCommand(int limit) {
         this.m_limit = limit;
@@ -19,6 +23,11 @@ public class TurtleRefuelCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         if (this.m_limit == 0) {
             ItemStack dummyStack = turtle.getInventory()
                 .getStackInSlot(turtle.getSelectedSlot());

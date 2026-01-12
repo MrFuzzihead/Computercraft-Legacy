@@ -23,7 +23,6 @@ import dan200.computercraft.core.apis.TermAPI;
 import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.lua.ILuaMachine;
-import dan200.computercraft.core.lua.LuaJLuaMachine;
 import dan200.computercraft.core.terminal.Terminal;
 
 public class Computer {
@@ -317,6 +316,7 @@ public class Computer {
     }
 
     private void createAPIs() {
+        dan200.computercraft.core.lua.lib.LuaEnvironment.inject(this);
         this.m_apis.add(new TermAPI(this.m_apiEnvironment));
         this.m_apis.add(new RedstoneAPI(this.m_apiEnvironment));
         this.m_apis.add(new FSAPI(this.m_apiEnvironment));
@@ -329,7 +329,7 @@ public class Computer {
     }
 
     private void initLua() {
-        ILuaMachine machine = new LuaJLuaMachine(this);
+        ILuaMachine machine = dan200.computercraft.core.lua.lib.LuaHelpers.createMachine(this);
 
         for (ILuaAPI api : this.m_apis) {
             machine.addAPI(api);
@@ -338,7 +338,11 @@ public class Computer {
 
         InputStream biosStream;
         try {
-            biosStream = Computer.class.getResourceAsStream("/assets/computercraft/lua/bios.lua");
+            if (!ComputerCraft.biosPath.startsWith("/") || ComputerCraft.biosPath.isEmpty()) {
+                biosStream = Computer.class.getResourceAsStream(ComputerCraft.BIOS_PATH);
+            } else {
+                biosStream = Computer.class.getResourceAsStream(ComputerCraft.biosPath);
+            }
         } catch (Exception var6) {
             biosStream = null;
         }

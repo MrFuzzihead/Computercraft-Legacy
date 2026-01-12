@@ -26,6 +26,7 @@ import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.turtle.IExtendedTurtleUpgrade;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
@@ -636,27 +637,30 @@ public class TurtleBrain implements ITurtleAccess {
 
     @Override
     public void setUpgrade(TurtleSide side, ITurtleUpgrade upgrade) {
-        if (this.m_upgrades.containsKey(side)) {
-            if (this.m_upgrades.get(side) == upgrade) {
-                return;
-            }
-
-            this.m_upgrades.remove(side);
-        } else if (upgrade == null) {
+        ITurtleUpgrade oldUpgrade = m_upgrades.get(side);
+        if (oldUpgrade == upgrade) {
             return;
+        } else if (oldUpgrade != null) {
+            m_upgrades.remove(side);
         }
 
-        if (this.m_upgradeNBTData.containsKey(side)) {
-            this.m_upgradeNBTData.remove(side);
+        if (m_upgradeNBTData.containsKey(side)) {
+            m_upgradeNBTData.remove(side);
         }
 
-        if (upgrade != null) {
-            this.m_upgrades.put(side, upgrade);
-        }
+        if (upgrade != null) m_upgrades.put(side, upgrade);
 
-        if (this.m_owner.getWorldObj() != null) {
-            this.updatePeripherals(this.m_owner.createServerComputer());
-            this.m_owner.updateBlock();
+        if (m_owner.getWorldObj() != null) {
+            updatePeripherals(m_owner.createServerComputer());
+            m_owner.updateBlock();
+
+            if (!m_owner.getWorldObj().isRemote) {
+                TurtleSide otherSide = side == TurtleSide.Left ? TurtleSide.Right : TurtleSide.Left;
+                ITurtleUpgrade other = getUpgrade(otherSide);
+                if (other != null && other instanceof IExtendedTurtleUpgrade) {
+                    ((IExtendedTurtleUpgrade) other).upgradeChanged(this, otherSide, oldUpgrade, upgrade);
+                }
+            }
         }
     }
 
@@ -736,7 +740,9 @@ public class TurtleBrain implements ITurtleAccess {
             for (TurtleSide side : TurtleSide.values()) {
                 ITurtleUpgrade upgrade = this.getUpgrade(side);
                 IPeripheral peripheral = null;
-                if (upgrade != null && upgrade.getType() == TurtleUpgradeType.Peripheral) {
+                if (upgrade != null
+                    && (upgrade.getType() == TurtleUpgradeType.Peripheral || (upgrade instanceof IExtendedTurtleUpgrade
+                        && ((IExtendedTurtleUpgrade) upgrade).alsoPeripheral()))) {
                     peripheral = upgrade.createPeripheral(this, side);
                 }
 

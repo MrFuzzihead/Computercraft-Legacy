@@ -1,8 +1,11 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
+
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChunkCoordinates;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
@@ -14,6 +17,7 @@ import dan200.computercraft.shared.util.WorldUtil;
 public class TurtleCraftCommand implements ITurtleCommand {
 
     private final int m_limit;
+    private final String COMMANDNAME = "craft";
 
     public TurtleCraftCommand(int limit) {
         this.m_limit = limit;
@@ -21,6 +25,11 @@ public class TurtleCraftCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         TurtleInventoryCrafting crafting = new TurtleInventoryCrafting(turtle);
         ItemStack stack = crafting.doCrafting(turtle.getWorld(), this.m_limit);
         if (stack != null) {

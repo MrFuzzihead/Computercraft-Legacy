@@ -8,9 +8,10 @@ import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.media.IMedia;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.peripheral.IPeripheralTargeted;
 import dan200.computercraft.shared.media.items.ItemDiskLegacy;
 
-public class DiskDrivePeripheral implements IPeripheral {
+public class DiskDrivePeripheral implements IPeripheralTargeted {
 
     private final TileDiskDrive m_diskDrive;
 
@@ -21,6 +22,11 @@ public class DiskDrivePeripheral implements IPeripheral {
     @Override
     public String getType() {
         return "drive";
+    }
+
+    @Override
+    public Object getTarget() {
+        return m_diskDrive;
     }
 
     @Override

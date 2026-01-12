@@ -1,5 +1,6 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
 import java.util.List;
 
 import net.minecraft.entity.Entity;
@@ -12,6 +13,7 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.util.Facing;
 import net.minecraft.world.World;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
@@ -23,6 +25,7 @@ public class TurtleSuckCommand implements ITurtleCommand {
 
     private final InteractDirection m_direction;
     private final int m_quantity;
+    private final String COMMANDNAME = "suck";
 
     public TurtleSuckCommand(InteractDirection direction, int quantity) {
         this.m_direction = direction;
@@ -31,6 +34,11 @@ public class TurtleSuckCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         if (this.m_quantity == 0) {
             turtle.playAnimation(TurtleAnimation.Wait);
             return TurtleCommandResult.success();

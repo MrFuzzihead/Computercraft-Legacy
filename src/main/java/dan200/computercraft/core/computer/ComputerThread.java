@@ -5,6 +5,8 @@ import java.util.Iterator;
 import java.util.WeakHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import dan200.computercraft.ComputerCraft;
+
 public class ComputerThread {
 
     private static Object m_lock = new Object();
@@ -69,7 +71,7 @@ public class ComputerThread {
                                             }
                                         });
                                         worker.start();
-                                        worker.join(7000L);
+                                        worker.join(ComputerCraft.computerThreadTimeout);
                                         if (worker.isAlive()) {
                                             Computer computer = task.getOwner();
                                             if (computer != null) {

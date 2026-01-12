@@ -44,7 +44,7 @@ public final class ComputerCraftAPI {
     }
 
     public static String getAPIVersion() {
-        return "1.75";
+        return "2.0";
     }
 
     public static int createUniqueNumberedSaveDir(World world, String parentSubPath) {

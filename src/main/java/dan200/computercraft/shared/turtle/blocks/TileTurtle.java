@@ -20,6 +20,7 @@ import net.minecraft.util.Vec3;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.api.turtle.IExtendedTurtleUpgrade;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
 import dan200.computercraft.api.turtle.TurtleSide;
@@ -466,7 +467,8 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
                 return false;
         }
 
-        return upgrade != null && upgrade.getType() == TurtleUpgradeType.Peripheral;
+        return upgrade != null && (upgrade.getType() == TurtleUpgradeType.Peripheral
+            || (upgrade instanceof IExtendedTurtleUpgrade && ((IExtendedTurtleUpgrade) upgrade).alsoPeripheral()));
     }
 
     public void transferStateFrom(TileTurtle copy) {

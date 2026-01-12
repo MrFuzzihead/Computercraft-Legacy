@@ -2,6 +2,7 @@ package dan200.computercraft.shared.turtle.core;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
@@ -10,6 +11,7 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
 
 import cpw.mods.fml.relauncher.ReflectionHelper;
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
@@ -18,6 +20,7 @@ import dan200.computercraft.shared.util.WorldUtil;
 public class TurtleCompareCommand implements ITurtleCommand {
 
     private final InteractDirection m_direction;
+    private final String COMMANDNAME = "compare";
 
     public TurtleCompareCommand(InteractDirection direction) {
         this.m_direction = direction;
@@ -25,6 +28,11 @@ public class TurtleCompareCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         int direction = this.m_direction.toWorldDir(turtle);
         ItemStack selectedStack = turtle.getInventory()
             .getStackInSlot(turtle.getSelectedSlot());

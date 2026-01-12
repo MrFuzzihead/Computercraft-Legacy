@@ -4,12 +4,14 @@ import java.io.IOException;
 
 public interface IMountedFileNormal extends IMountedFile {
 
-    String readLine() throws IOException;
+    byte[] readLine() throws IOException;
 
-    void write(String var1, int var2, int var3, boolean var4) throws IOException;
+    void write(byte[] data, int start, int length, boolean newLine) throws IOException;
 
     @Override
     void close() throws IOException;
 
     void flush() throws IOException;
+
+    byte[] readAll() throws IOException;
 }

@@ -1,7 +1,10 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
+
 import com.google.common.base.Optional;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
@@ -16,15 +19,23 @@ public class TurtleToolCommand implements ITurtleCommand {
     private final TurtleVerb m_verb;
     private final InteractDirection m_direction;
     private final Optional<TurtleSide> m_side;
+    private final String commandname;
 
     public TurtleToolCommand(TurtleVerb verb, InteractDirection direction, Optional<TurtleSide> side) {
         this.m_verb = verb;
         this.m_direction = direction;
         this.m_side = side;
+        this.commandname = this.m_verb.toString()
+            .toLowerCase();
     }
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(commandname)) {
+            return TurtleCommandResult.failure("Turtle action \"" + commandname + "\" is disabled");
+        }
+
         TurtleCommandResult firstFailure = null;
 
         for (TurtleSide side : TurtleSide.values()) {

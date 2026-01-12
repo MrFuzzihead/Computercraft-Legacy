@@ -24,6 +24,7 @@ import org.luaj.vm2.lib.ZeroArgFunction;
 import org.luaj.vm2.lib.jse.JsePlatform;
 
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.api.lua.IExtendedLuaObject;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.ILuaTask;
@@ -32,6 +33,7 @@ import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.ITask;
 import dan200.computercraft.core.computer.MainThread;
+import dan200.computercraft.core.lua.lib.LuaHelpers;
 
 public class LuaJLuaMachine implements ILuaMachine {
 
@@ -122,7 +124,9 @@ public class LuaJLuaMachine implements ILuaMachine {
         this.m_globals.set("os", LuaValue.NIL);
         this.m_globals.set("print", LuaValue.NIL);
         this.m_globals.set("luajava", LuaValue.NIL);
-        this.m_globals.set("debug", LuaValue.NIL);
+        if (!ComputerCraft.debug) {
+            this.m_globals.set("debug", LuaValue.NIL);
+        }
         this.m_globals.set("newproxy", LuaValue.NIL);
         this.m_globals.set("_VERSION", "Lua 5.1");
         this.m_globals.set("_LUAJ_VERSION", "2.0.3");
@@ -304,7 +308,7 @@ public class LuaJLuaMachine implements ILuaMachine {
                         Object[] results = null;
 
                         try {
-                            results = object.callMethod(new ILuaContext() {
+                            results = LuaHelpers.delegateLuaObject(object, new ILuaContext() {
 
                                 @Override
                                 public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
@@ -406,7 +410,7 @@ public class LuaJLuaMachine implements ILuaMachine {
                                         throw new LuaException();
                                     }
                                 }
-                            }, finalI, arguments);
+                            }, finalI, _args);
                         } catch (InterruptedException var5) {
                             throw new OrphanedThread();
                         } catch (LuaException var6) {
@@ -418,6 +422,14 @@ public class LuaJLuaMachine implements ILuaMachine {
                         return LuaValue.varargsOf(LuaJLuaMachine.this.toValues(results, 0));
                     }
                 });
+            }
+        }
+
+        // Handle additional data for extended Lua objects
+        if (object instanceof IExtendedLuaObject) {
+            Map<?, ?> additionalData = ((IExtendedLuaObject) object).getAdditionalData();
+            for (Map.Entry<?, ?> entry : additionalData.entrySet()) {
+                table.set(this.toValue(entry.getKey()), this.toValue(entry.getValue()));
             }
         }
 
@@ -433,6 +445,8 @@ public class LuaJLuaMachine implements ILuaMachine {
         } else if (object instanceof Boolean) {
             boolean b = (Boolean) object;
             return LuaValue.valueOf(b);
+        } else if (object instanceof byte[]) {
+            return LuaValue.valueOf((byte[]) object);
         } else if (object instanceof String) {
             String s = object.toString();
             return LuaValue.valueOf(s);

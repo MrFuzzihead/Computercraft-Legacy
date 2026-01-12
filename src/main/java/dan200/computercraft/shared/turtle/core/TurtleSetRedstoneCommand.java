@@ -1,5 +1,8 @@
 package dan200.computercraft.shared.turtle.core;
 
+import java.util.Arrays;
+
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
@@ -11,6 +14,7 @@ public class TurtleSetRedstoneCommand implements ITurtleCommand {
     private final IAPIEnvironment m_environment;
     private final InteractDirection m_direction;
     private final int m_value;
+    private final String COMMANDNAME = "setRedstone";
 
     public TurtleSetRedstoneCommand(IAPIEnvironment environment, InteractDirection direction, int value) {
         this.m_environment = environment;
@@ -20,6 +24,11 @@ public class TurtleSetRedstoneCommand implements ITurtleCommand {
 
     @Override
     public TurtleCommandResult execute(ITurtleAccess turtle) {
+        if (Arrays.asList(ComputerCraft.turtleDisabledActions)
+            .contains(COMMANDNAME)) {
+            return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
+        }
+
         int redstoneSide;
         switch (this.m_direction) {
             case Forward:

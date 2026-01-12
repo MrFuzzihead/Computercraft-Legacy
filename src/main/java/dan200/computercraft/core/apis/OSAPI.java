@@ -223,8 +223,8 @@ public class OSAPI implements ILuaAPI {
         }
     }
 
-    private void queueLuaEvent(String event, Object[] args) {
-        this.m_apiEnvironment.queueEvent(event, args);
+    private void queueLuaEvent(Object event, Object[] args) {
+        this.m_apiEnvironment.queueEvent(event.toString(), args);
     }
 
     private Object[] trimArray(Object[] array, int skip) {

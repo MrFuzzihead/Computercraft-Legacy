@@ -1,11 +1,13 @@
 package dan200.computercraft.shared.peripheral.common;
 
+import net.minecraft.block.Block;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.Facing;
 import net.minecraft.util.IIcon;
+import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 
 import cpw.mods.fml.relauncher.Side;
@@ -26,6 +28,17 @@ public final class BlockPeripheral extends BlockPeripheralBase {
         this.setHardness(2.0F);
         this.setBlockName("computercraft:peripheral");
         this.setCreativeTab(ComputerCraft.mainCreativeTab);
+    }
+
+    @Override
+    public int getLightValue(IBlockAccess world, int x, int y, int z) {
+        Block block = world.getBlock(x, y, z);
+        if (block != this) return block.getLightValue(world, x, y, z);
+
+        PeripheralType type = getPeripheralType(world, x, y, z);
+        if (type == PeripheralType.Monitor) return ComputerCraft.monitorLightLevel;
+        if (type == PeripheralType.AdvancedMonitor) return ComputerCraft.advancedMonitorLightLevel;
+        return 0;
     }
 
     @Override
