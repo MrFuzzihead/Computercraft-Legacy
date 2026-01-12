@@ -700,7 +700,7 @@ public class TileCable extends TileModemBase implements INetwork {
         void visit(TileCable var1, int var2);
     }
 
-    private class Packet {
+    public class Packet {
 
         public int channel;
         public int replyChannel;
