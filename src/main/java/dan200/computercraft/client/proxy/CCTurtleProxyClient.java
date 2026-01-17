@@ -87,7 +87,6 @@ public class CCTurtleProxyClient extends CCTurtleProxyCommon {
     }
 
     private void registerForgeHandlers() {
-        if (!ComputerCraft.enableTurtles) return;
         CCTurtleProxyClient.ForgeHandlers handlers = new CCTurtleProxyClient.ForgeHandlers();
         FMLCommonHandler.instance()
             .bus()
