@@ -266,6 +266,7 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
     }
 
     private void registerItems() {
+        if (!ComputerCraft.enableTurtles) return;
         ComputerCraft.Blocks.turtle = BlockTurtle.createTurtleBlock();
         GameRegistry.registerBlock(ComputerCraft.Blocks.turtle, ItemTurtleLegacy.class, "CC-Turtle");
         ComputerCraft.Blocks.turtleExpanded = BlockTurtle.createTurtleBlock();
@@ -339,6 +340,7 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
     }
 
     private void registerTileEntities() {
+        if (!ComputerCraft.enableTurtles) return;
         GameRegistry.registerTileEntity(TileTurtle.class, "turtle");
         GameRegistry.registerTileEntity(TileTurtleExpanded.class, "turtleex");
         GameRegistry.registerTileEntity(TileTurtleAdvanced.class, "turtleadv");
