@@ -60,6 +60,7 @@ public class CCTurtleProxyClient extends CCTurtleProxyCommon {
     @Override
     public void init() {
         super.init();
+        if (!ComputerCraft.enableTurtles) return;
         ComputerCraft.Blocks.turtle.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
         m_turtleRenderer = new TileEntityTurtleRenderer();
         ClientRegistry.bindTileEntitySpecialRenderer(TileTurtle.class, m_turtleRenderer);
