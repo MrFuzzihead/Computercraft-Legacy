@@ -111,7 +111,6 @@ public class ComputerCraft {
     public static int computerThreadTimeout = 7000;
     public static String biosPath = "/assets/computercraft/lua/bios.lua";
     public static final String BIOS_PATH = "/assets/computercraft/lua/bios.lua";
-    public static boolean cobalt = false;
     public static boolean bigInteger = false;
     public static boolean bitop = false;
     public static int maxFilesHandles = 1024;
@@ -220,14 +219,16 @@ public class ComputerCraft {
         prop = config.get("general", "biosPath", biosPath);
         prop.comment = "The path to the bios file loaded into computers and turtles";
         biosPath = prop.getString();
-        prop = config.get("general", "cobalt", cobalt);
-        prop.comment = "Use the Cobalt Lua engine instead of LuaJ. Cobalt is more standards compliant and fixes many bugs present in LuaJ, but may also introduce new bugs.";
-        cobalt = prop.getBoolean();
         prop = config.get("general", "bigInteger", bigInteger);
-        prop.comment = "Enable the BigInteger API in Lua. Requires Cobalt to be enabled.";
+        prop.comment = "Enable the BigInteger API in Lua.";
         bigInteger = prop.getBoolean();
+        if (config.hasKey("general", "cobalt")) {
+            logger.warn(
+                "The 'cobalt' config key in ComputerCraft.cfg is no longer recognised. "
+                    + "Cobalt is now always the active Lua engine. You can safely remove this key.");
+        }
         prop = config.get("general", "bitop", bitop);
-        prop.comment = "Enable the BitOp API in Lua. Requires Cobalt to be enabled.";
+        prop.comment = "Enable the BitOp API in Lua.";
         bitop = prop.getBoolean();
         prop = config.get("general", "maxFilesHandles", maxFilesHandles);
         prop.comment = "Maximum number of file handles a single computer can have open";
@@ -276,7 +277,7 @@ public class ComputerCraft {
     }
 
     public static String getVersion() {
-        return "1.75";
+        return Tags.VERSION;
     }
 
     public static boolean isClient() {

@@ -1,5 +1,6 @@
 package dan200.computercraft.core.lua.lib.cobalt;
 
+import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaValue;
 import org.squiddev.cobalt.Varargs;
@@ -69,22 +70,38 @@ public class CobaltArguments implements IArguments {
 
     @Override
     public Object getArgumentBinary(int index) {
-        return CobaltConverter.toObject(args.arg(index + 1), true);
+        try {
+            return CobaltConverter.toObject(args.arg(index + 1), true);
+        } catch (LuaError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public Object getArgument(int index) {
-        return CobaltConverter.toObject(args.arg(index + 1), false);
+        try {
+            return CobaltConverter.toObject(args.arg(index + 1), false);
+        } catch (LuaError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public Object[] asArguments() {
-        return CobaltConverter.toObjects(args, 1, false);
+        try {
+            return CobaltConverter.toObjects(args, 1, false);
+        } catch (LuaError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public Object[] asBinary() {
-        return CobaltConverter.toObjects(args, 1, true);
+        try {
+            return CobaltConverter.toObjects(args, 1, true);
+        } catch (LuaError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

@@ -6,24 +6,24 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
 import org.squiddev.cobalt.LuaValue;
 import org.squiddev.cobalt.Varargs;
 
 /**
- * Duplicate of {@link LuaJConverter} but for cobalt
+ * Converts between Cobalt {@link LuaValue} types and Java objects.
  */
 public class CobaltConverter {
 
-    public static Object toObject(LuaValue value, boolean binary) {
+    public static Object toObject(LuaValue value, boolean binary) throws LuaError {
         return toObject(value, null, binary);
     }
 
-    private static Object toObject(LuaValue value, Map<LuaValue, Object> tables, boolean binary) {
+    private static Object toObject(LuaValue value, Map<LuaValue, Object> tables, boolean binary) throws LuaError {
         switch (value.type()) {
             case TNUMBER:
-            case TINT:
                 return value.toDouble();
             case TBOOLEAN:
                 return value.toBoolean();
@@ -43,13 +43,13 @@ public class CobaltConverter {
             }
             case TTABLE: {
                 if (tables == null) {
-                    tables = new IdentityHashMap<LuaValue, Object>();
+                    tables = new IdentityHashMap<>();
                 } else {
                     Object object = tables.get(value);
                     if (object != null) return object;
                 }
 
-                Map<Object, Object> table = new HashMap<Object, Object>();
+                Map<Object, Object> table = new HashMap<>();
                 LuaTable luaValue = value.checkTable();
                 tables.put(value, table);
 
@@ -73,7 +73,7 @@ public class CobaltConverter {
         }
     }
 
-    public static Object[] toObjects(Varargs values, int start, boolean binary) {
+    public static Object[] toObjects(Varargs values, int start, boolean binary) throws LuaError {
         int count = values.count();
         Object[] objects = new Object[count - start + 1];
         for (int n = start; n <= count; n++) {

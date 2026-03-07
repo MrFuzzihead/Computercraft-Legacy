@@ -22,7 +22,7 @@ public final class BigIntegerValue extends LuaValue {
     private static final String NAME = "biginteger";
 
     private final BigInteger number;
-    private LuaTable metatable;
+    private final LuaTable metatable;
 
     private BigIntegerValue(BigInteger number, LuaTable metatable) {
         super(TUSERDATA);
@@ -56,62 +56,62 @@ public final class BigIntegerValue extends LuaValue {
     }
 
     @Override
-    public double optDouble(double def) {
+    public double optDouble(double def) throws LuaError {
         return number.doubleValue();
     }
 
     @Override
-    public int optInteger(int def) {
+    public int optInteger(int def) throws LuaError {
         return number.intValue();
     }
 
     @Override
-    public LuaInteger optLuaInteger(LuaInteger def) {
+    public LuaInteger optLuaInteger(LuaInteger def) throws LuaError {
         return valueOf(number.intValue());
     }
 
     @Override
-    public long optLong(long def) {
+    public long optLong(long def) throws LuaError {
         return number.longValue();
     }
 
     @Override
-    public LuaNumber optNumber(LuaNumber def) {
+    public LuaNumber optNumber(LuaNumber def) throws LuaError {
         return valueOf(number.doubleValue());
     }
 
     @Override
-    public int checkInteger() {
+    public int checkInteger() throws LuaError {
         return number.intValue();
     }
 
     @Override
-    public LuaInteger checkLuaInteger() {
+    public LuaInteger checkLuaInteger() throws LuaError {
         return valueOf(number.intValue());
     }
 
     @Override
-    public long checkLong() {
+    public long checkLong() throws LuaError {
         return number.longValue();
     }
 
     @Override
-    public LuaNumber checkNumber() {
+    public LuaNumber checkNumber() throws LuaError {
         return valueOf(number.doubleValue());
     }
 
     @Override
-    public LuaNumber checkNumber(String s) {
+    public LuaNumber checkNumber(String s) throws LuaError {
         return valueOf(number.doubleValue());
     }
 
     @Override
-    public String checkString() {
+    public String checkString() throws LuaError {
         return number.toString();
     }
 
     @Override
-    public LuaString checkLuaString() {
+    public LuaString checkLuaString() throws LuaError {
         return valueOf(number.toString());
     }
 
@@ -129,7 +129,7 @@ public final class BigIntegerValue extends LuaValue {
         env.rawset(NAME, BigIntegerFunction.makeTable(env));
     }
 
-    private static BigInteger getValue(LuaValue value) {
+    private static BigInteger getValue(LuaValue value) throws LuaError {
         if (value instanceof BigIntegerValue) {
             return ((BigIntegerValue) value).number;
         } else if (value.type() == TSTRING) {
@@ -151,16 +151,14 @@ public final class BigIntegerValue extends LuaValue {
         private static final String[] MAIN_NAMES = new String[] { "new", "modinv", "gcd", "modpow", "abs", "min", "max",
             "isProbPrime", "nextProbPrime", "newProbPrime" };
 
-        private static final int CREATE_INDEX = 19;
-
-        private LuaTable metatable;
+        private final LuaTable metatable;
 
         private BigIntegerFunction(LuaTable metatable) {
             this.metatable = metatable;
         }
 
         @Override
-        public LuaValue call(LuaState state, LuaValue left, LuaValue right, LuaValue third) {
+        public LuaValue call(LuaState state, LuaValue left, LuaValue right, LuaValue third) throws LuaError {
             try {
                 switch (opcode) {
                     case 0: { // unm
