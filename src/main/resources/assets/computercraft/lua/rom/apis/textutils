@@ -5,11 +5,11 @@ function slowWrite( sText, nRate )
         error( "Rate must be positive", 2 )
     end
     local nSleep = 1 / nRate
-        
+
     sText = tostring( sText )
     local x,y = term.getCursorPos(x,y)
     local len = string.len( sText )
-    
+
     for n=1,len do
         term.setCursorPos( x, y )
         sleep( nSleep )
@@ -52,7 +52,7 @@ local function makePagedScroll( _term, _nFreeLines )
     return function( _n )
         for n=1,_n do
             nativeScroll( 1 )
-            
+
             if nFreeLines <= 0 then
                 local w,h = _term.getSize()
                 _term.setCursorPos( 1, h )
@@ -95,7 +95,7 @@ end
 
 local function tabulateCommon( bPaged, ... )
     local tAll = { ... }
-    
+
     local w,h = term.getSize()
     local nMaxLen = w / 8
     for n, t in ipairs( tAll ) do
@@ -115,7 +115,7 @@ local function tabulateCommon( bPaged, ... )
         end
         nLines = nLines + 1
     end
-    
+
     local function drawCols( _t )
         local nCol = 1
         for n, s in ipairs( _t ) do
@@ -129,7 +129,7 @@ local function tabulateCommon( bPaged, ... )
             term.setCursorPos( cx, cy )
             term.write( s )
 
-            nCol = nCol + 1      
+            nCol = nCol + 1
         end
         print()
     end
@@ -141,7 +141,7 @@ local function tabulateCommon( bPaged, ... )
         elseif type(t) == "number" then
             term.setTextColor( t )
         end
-    end    
+    end
 end
 
 function tabulate( ... )
@@ -210,16 +210,16 @@ local function serializeImpl( t, tTracking, sIndent )
             sResult = sResult .. sIndent .. "}"
             return sResult
         end
-        
+
     elseif sType == "string" then
         return string.format( "%q", t )
-    
+
     elseif sType == "number" or sType == "boolean" or sType == "nil" then
         return tostring(t)
-        
+
     else
         error( "Cannot serialize type "..sType, 0 )
-        
+
     end
 end
 
@@ -275,7 +275,7 @@ local function serializeJSONImpl( t, tTracking )
         end
 
     elseif sType == "string" then
-        return string.format( "%q", t )
+        return serializeJSONString( t )
 
     elseif sType == "number" or sType == "boolean" then
         return tostring(t)
@@ -303,28 +303,28 @@ function unserialize( s )
 end
 
 function serializeJSON( t )
-    local tTracking = {}
+        return string.format( "%q", t )
     return serializeJSONImpl( t, tTracking )
 end
 
-function urlEncode( str )
-    if str then
-        str = string.gsub(str, "\n", "\r\n")
-        str = string.gsub(str, "([^%w ])", function(c)
-            return string.format("%%%02X", string.byte(c))
-        end )
-        str = string.gsub(str, " ", "+")
-    end
-    return str    
-end
+local function parseJSON( sText, nullValue )
+    local nPos = 1
+    local nLen = #sText
 
-local tEmpty = {}
-function complete( sSearchText, tSearchTable )
-    local nStart = 1
-    local nDot = string.find( sSearchText, ".", nStart, true )
-    local tTable = tSearchTable or _ENV
-    while nDot do
-        local sPart = string.sub( sSearchText, nStart, nDot - 1 )
+    local function skipWhitespace()
+        local _, nEnd = sText:find( "^[ \t\n\r]+", nPos )
+        if nEnd then nPos = nEnd + 1 end
+    end
+
+    local parseValue  -- forward declaration for mutual recursion
+
+    local function parseString()
+        nPos = nPos + 1  -- skip opening '"'
+        local tParts = {}
+        local nStart = nPos
+        while nPos <= nLen do
+            local c = sText:sub( nPos, nPos )
+            if c == '"' then
         local value = tTable[ sPart ]
         if type( value ) == "table" then
             tTable = value
@@ -373,3 +373,4 @@ end
 serialise = serialize
 unserialise = unserialize
 serialiseJSON = serializeJSON
+unserialiseJSON = unserializeJSON
