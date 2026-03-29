@@ -24,11 +24,11 @@ import dan200.computercraft.core.filesystem.IMountedFileNormal;
  * so that CR+LF pairs are consumed as a single line terminator (matching the
  * behaviour of standard Lua's {@code io} library on Windows). These tests cover:
  * <ul>
- *   <li>Unix LF-only line endings</li>
- *   <li>Windows CR+LF line endings</li>
- *   <li>Lone CR line endings (classic Mac)</li>
- *   <li>Mixed line endings in the same file</li>
- *   <li>Edge cases: empty file, trailing newlines, consecutive empty lines</li>
+ * <li>Unix LF-only line endings</li>
+ * <li>Windows CR+LF line endings</li>
+ * <li>Lone CR line endings (classic Mac)</li>
+ * <li>Mixed line endings in the same file</li>
+ * <li>Edge cases: empty file, trailing newlines, consecutive empty lines</li>
  * </ul>
  */
 class FileSystemReadLineTest {
@@ -216,4 +216,3 @@ class FileSystemReadLineTest {
         reader.close();
     }
 }
-

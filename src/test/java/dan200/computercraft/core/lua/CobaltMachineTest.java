@@ -8,7 +8,6 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
-import org.squiddev.cobalt.LuaBaseString;
 import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaRope;
 import org.squiddev.cobalt.LuaState;
@@ -464,7 +463,7 @@ class CobaltMachineTest {
 
     /**
      * Cobalt 0.6.0 uses {@code LuaRope} for string concatenation results whose
-     * combined length exceeds {@code SMALL_STRING} (32 chars).  {@code LuaRope}
+     * combined length exceeds {@code SMALL_STRING} (32 chars). {@code LuaRope}
      * extends {@code LuaBaseString} but is NOT a {@code LuaString}, so a direct
      * {@code (LuaString) value} cast used to throw {@code ClassCastException}.
      * These tests guard against that regression.
@@ -516,9 +515,7 @@ class CobaltMachineTest {
         byte[] bytes = args.getStringBytes(0);
         assertNotNull(bytes);
         assertEquals(36, bytes.length);
-        assertArrayEquals(
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ".getBytes(StandardCharsets.ISO_8859_1),
-            bytes);
+        assertArrayEquals("abcdefghijklmnopqrstuvwxyzABCDEFGHIJ".getBytes(StandardCharsets.ISO_8859_1), bytes);
     }
 
     /**
