@@ -1,4 +1,3 @@
-
 function slowWrite( sText, nRate )
     nRate = nRate or 20
     if nRate < 0 then
@@ -223,7 +222,25 @@ local function serializeImpl( t, tTracking, sIndent )
     end
 end
 
+-- Escape a string into a valid JSON string literal (double-quoted).
+local function serializeJSONString( s )
+    -- Replace special characters with JSON escape sequences
+    s = string.gsub( s, '\\', '\\\\' )
+    s = string.gsub( s, '"',  '\\"'  )
+    s = string.gsub( s, '\b', '\\b'  )
+    s = string.gsub( s, '\f', '\\f'  )
+    s = string.gsub( s, '\n', '\\n'  )
+    s = string.gsub( s, '\r', '\\r'  )
+    s = string.gsub( s, '\t', '\\t'  )
+    -- Escape remaining control characters as \uXXXX
+    s = string.gsub( s, '([%z\1-\31])', function( c )
+        return string.format( '\\u%04x', string.byte( c ) )
+    end )
+    return '"' .. s .. '"'
+end
+
 empty_json_array = {}
+json_null = {}
 
 local function serializeJSONImpl( t, tTracking )
     local sType = type(t)
@@ -303,10 +320,12 @@ function unserialize( s )
 end
 
 function serializeJSON( t )
-        return string.format( "%q", t )
+    local tTracking = {}
     return serializeJSONImpl( t, tTracking )
 end
 
+-- Parse a JSON string and return the corresponding Lua value.
+-- nullValue (optional) is the Lua value to use for JSON null (defaults to nil).
 local function parseJSON( sText, nullValue )
     local nPos = 1
     local nLen = #sText
@@ -325,6 +344,204 @@ local function parseJSON( sText, nullValue )
         while nPos <= nLen do
             local c = sText:sub( nPos, nPos )
             if c == '"' then
+                -- End of string
+                table.insert( tParts, sText:sub( nStart, nPos - 1 ) )
+                nPos = nPos + 1
+                return table.concat( tParts )
+            elseif c == '\\' then
+                -- Escape sequence
+                table.insert( tParts, sText:sub( nStart, nPos - 1 ) )
+                nPos = nPos + 1
+                local e = sText:sub( nPos, nPos )
+                if e == '"' or e == '\\' or e == '/' then
+                    table.insert( tParts, e )
+                elseif e == 'b' then
+                    table.insert( tParts, '\b' )
+                elseif e == 'f' then
+                    table.insert( tParts, '\f' )
+                elseif e == 'n' then
+                    table.insert( tParts, '\n' )
+                elseif e == 'r' then
+                    table.insert( tParts, '\r' )
+                elseif e == 't' then
+                    table.insert( tParts, '\t' )
+                elseif e == 'u' then
+                    -- Unicode escape \uXXXX — encode as UTF-8
+                    local hex = sText:sub( nPos + 1, nPos + 4 )
+                    nPos = nPos + 4
+                    local n = tonumber( hex, 16 )
+                    if n then
+                        if n < 0x80 then
+                            table.insert( tParts, string.char( n ) )
+                        elseif n < 0x800 then
+                            -- 2-byte UTF-8
+                            table.insert( tParts, string.char(
+                                0xC0 + math.floor( n / 64 ),
+                                0x80 + ( n % 64 )
+                            ) )
+                        elseif n < 0x10000 then
+                            -- 3-byte UTF-8
+                            table.insert( tParts, string.char(
+                                0xE0 + math.floor( n / 4096 ),
+                                0x80 + math.floor( ( n % 4096 ) / 64 ),
+                                0x80 + ( n % 64 )
+                            ) )
+                        else
+                            table.insert( tParts, '?' )
+                        end
+                    end
+                else
+                    table.insert( tParts, e )
+                end
+                nPos = nPos + 1
+                nStart = nPos
+            else
+                nPos = nPos + 1
+            end
+        end
+        error( "Unterminated string in JSON", 0 )
+    end
+
+    local function parseNumber()
+        local _, nEnd, sNum = sText:find( "^(-?%d+%.?%d*[eE]?[+-]?%d*)", nPos )
+        if not sNum then
+            error( "Invalid number in JSON at position " .. nPos, 0 )
+        end
+        nPos = nEnd + 1
+        return tonumber( sNum )
+    end
+
+    local function parseArray()
+        nPos = nPos + 1  -- skip '['
+        local tResult = {}
+        skipWhitespace()
+        if sText:sub( nPos, nPos ) == ']' then
+            nPos = nPos + 1
+            return tResult
+        end
+        while true do
+            skipWhitespace()
+            table.insert( tResult, parseValue() )
+            skipWhitespace()
+            local c = sText:sub( nPos, nPos )
+            if c == ']' then
+                nPos = nPos + 1
+                return tResult
+            elseif c == ',' then
+                nPos = nPos + 1
+            else
+                error( "Expected ',' or ']' in JSON array at position " .. nPos, 0 )
+            end
+        end
+    end
+
+    local function parseObject()
+        nPos = nPos + 1  -- skip '{'
+        local tResult = {}
+        skipWhitespace()
+        if sText:sub( nPos, nPos ) == '}' then
+            nPos = nPos + 1
+            return tResult
+        end
+        while true do
+            skipWhitespace()
+            if sText:sub( nPos, nPos ) ~= '"' then
+                error( "Expected string key in JSON object at position " .. nPos, 0 )
+            end
+            local sKey = parseString()
+            skipWhitespace()
+            if sText:sub( nPos, nPos ) ~= ':' then
+                error( "Expected ':' in JSON object at position " .. nPos, 0 )
+            end
+            nPos = nPos + 1
+            skipWhitespace()
+            local value = parseValue()
+            tResult[ sKey ] = value
+            skipWhitespace()
+            local c = sText:sub( nPos, nPos )
+            if c == '}' then
+                nPos = nPos + 1
+                return tResult
+            elseif c == ',' then
+                nPos = nPos + 1
+            else
+                error( "Expected ',' or '}' in JSON object at position " .. nPos, 0 )
+            end
+        end
+    end
+
+    parseValue = function()
+        skipWhitespace()
+        local c = sText:sub( nPos, nPos )
+        if c == '"' then
+            return parseString()
+        elseif c == '{' then
+            return parseObject()
+        elseif c == '[' then
+            return parseArray()
+        elseif c == 't' then
+            if sText:sub( nPos, nPos + 3 ) == 'true' then
+                nPos = nPos + 4
+                return true
+            end
+            error( "Invalid token in JSON at position " .. nPos, 0 )
+        elseif c == 'f' then
+            if sText:sub( nPos, nPos + 4 ) == 'false' then
+                nPos = nPos + 5
+                return false
+            end
+            error( "Invalid token in JSON at position " .. nPos, 0 )
+        elseif c == 'n' then
+            if sText:sub( nPos, nPos + 3 ) == 'null' then
+                nPos = nPos + 4
+                return nullValue
+            end
+            error( "Invalid token in JSON at position " .. nPos, 0 )
+        elseif c == '-' or (c >= '0' and c <= '9') then
+            return parseNumber()
+        else
+            error( "Unexpected character '" .. c .. "' in JSON at position " .. nPos, 0 )
+        end
+    end
+
+    local ok, result = pcall( parseValue )
+    if ok then
+        skipWhitespace()
+        if nPos <= nLen then
+            return nil, "Unexpected trailing content at position " .. nPos
+        end
+        return result
+    else
+        return nil, result
+    end
+end
+
+function unserializeJSON( sText, tOptions )
+    local nullValue = nil
+    if type( tOptions ) == "table" then
+        nullValue = tOptions[ "null" ]
+    end
+    return parseJSON( sText, nullValue )
+end
+
+function urlEncode( str )
+    if str then
+        str = string.gsub(str, "\n", "\r\n")
+        str = string.gsub(str, "([^%w ])", function(c)
+            return string.format("%%%02X", string.byte(c))
+        end )
+        str = string.gsub(str, " ", "+")
+    end
+    return str
+end
+
+local tEmpty = {}
+function complete( sSearchText, tSearchTable )
+    local nStart = 1
+    local nDot = string.find( sSearchText, ".", nStart, true )
+    local tTable = tSearchTable or _ENV
+    while nDot do
+        local sPart = string.sub( sSearchText, nStart, nDot - 1 )
         local value = tTable[ sPart ]
         if type( value ) == "table" then
             tTable = value
