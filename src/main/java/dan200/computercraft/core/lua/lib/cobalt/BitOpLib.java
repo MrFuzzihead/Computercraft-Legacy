@@ -3,6 +3,7 @@ package dan200.computercraft.core.lua.lib.cobalt;
 import static org.squiddev.cobalt.Constants.NIL;
 import static org.squiddev.cobalt.ValueFactory.valueOf;
 
+import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaState;
 import org.squiddev.cobalt.LuaTable;
 import org.squiddev.cobalt.LuaValue;
@@ -13,8 +14,8 @@ import org.squiddev.cobalt.function.VarArgFunction;
 
 /**
  * Reimplementation of the bitop library
- *
- * http://bitop.luajit.org/api.html
+ * <p>
+ * <a href="http://bitop.luajit.org/api.html">...</a>
  */
 public class BitOpLib {
 
@@ -24,7 +25,7 @@ public class BitOpLib {
     private static class BitOneArg extends OneArgFunction {
 
         @Override
-        public LuaValue call(LuaState state, LuaValue luaValue) {
+        public LuaValue call(LuaState state, LuaValue luaValue) throws LuaError {
             switch (opcode) {
                 case 0: // tobit
                     return luaValue.checkLuaInteger();
@@ -59,7 +60,7 @@ public class BitOpLib {
     private static class BitTwoArg extends TwoArgFunction {
 
         @Override
-        public LuaValue call(LuaState state, LuaValue bitValue, LuaValue nValue) {
+        public LuaValue call(LuaState state, LuaValue bitValue, LuaValue nValue) throws LuaError {
             switch (opcode) {
                 case 0: // tohex
                 {
@@ -118,7 +119,7 @@ public class BitOpLib {
     private static class BitVarArg extends VarArgFunction {
 
         @Override
-        public Varargs invoke(LuaState state, Varargs varargs) {
+        public Varargs invoke(LuaState state, Varargs varargs) throws LuaError {
             int value = varargs.first()
                 .checkInteger(), len = varargs.count();
             if (len == 1) return varargs.first();

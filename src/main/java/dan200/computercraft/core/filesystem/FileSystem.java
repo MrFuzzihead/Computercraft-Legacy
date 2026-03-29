@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PushbackInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -300,23 +301,23 @@ public class FileSystem {
         MountWrapper mount = getMount(path);
         InputStream stream = mount.openForRead(path);
         if (stream != null) {
-            final BufferedInputStream reader = new BufferedInputStream(stream);
+            // Wrap with PushbackInputStream(BufferedInputStream) so that \r\n handling never
+            // needs mark/reset (which BufferedInputStream can invalidate at buffer boundaries).
+            final PushbackInputStream reader = new PushbackInputStream(new BufferedInputStream(stream));
             IMountedFileNormal file = new IMountedFileNormal() {
 
                 @Override
                 public byte[] readLine() throws IOException {
-                    // FIXME: Is this the most efficient way?
                     ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
                     int val;
                     while ((val = reader.read()) != -1) {
                         if (val == '\r') {
-                            // Peek one character ahead
-                            reader.mark(1);
-                            int newVal = reader.read();
-                            reader.reset();
-
-                            // Consume '\n' as well
-                            if (newVal == '\n') reader.read();
+                            // Peek at the next byte to consume a \r\n pair.
+                            int next = reader.read();
+                            if (next != '\n' && next != -1) {
+                                // Not a \n — push it back so the next readLine() sees it.
+                                reader.unread(next);
+                            }
                             return buffer.toByteArray();
                         } else if (val == '\n') {
                             return buffer.toByteArray();
@@ -324,8 +325,7 @@ public class FileSystem {
                             buffer.write(val);
                         }
                     }
-
-                    // We never hit a new line, so we've reached the end of the stream
+                    // Reached EOF — return remaining content if any, otherwise null.
                     return buffer.size() > 0 ? buffer.toByteArray() : null;
                 }
 
