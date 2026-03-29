@@ -1,19 +1,26 @@
 package dan200.computercraft.core.lua;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.squiddev.cobalt.ValueFactory.varargsOf;
 
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
+import org.squiddev.cobalt.LuaBaseString;
 import org.squiddev.cobalt.LuaError;
+import org.squiddev.cobalt.LuaRope;
 import org.squiddev.cobalt.LuaState;
+import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
+import org.squiddev.cobalt.LuaValue;
 import org.squiddev.cobalt.Varargs;
 import org.squiddev.cobalt.function.VarArgFunction;
 
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.core.lua.lib.cobalt.CobaltArguments;
 import dan200.computercraft.core.lua.lib.cobalt.CobaltConverter;
 import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
 
@@ -449,5 +456,132 @@ class CobaltMachineTest {
         assertNotNull(cap.args);
         assertEquals("number", cap.args[0]);
         assertEquals(12345.0, cap.args[1]);
+    }
+
+    // -------------------------------------------------------------------------
+    // LuaRope regression tests (ClassCastException fix)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Cobalt 0.6.0 uses {@code LuaRope} for string concatenation results whose
+     * combined length exceeds {@code SMALL_STRING} (32 chars).  {@code LuaRope}
+     * extends {@code LuaBaseString} but is NOT a {@code LuaString}, so a direct
+     * {@code (LuaString) value} cast used to throw {@code ClassCastException}.
+     * These tests guard against that regression.
+     */
+
+    /** Builds a LuaRope from two LuaStrings whose combined length is > 32 chars. */
+    private static LuaValue makeLuaRope(String a, String b) {
+        LuaString partA = LuaString.valueOf(a);
+        LuaString partB = LuaString.valueOf(b);
+        int totalLen = a.length() + b.length();
+        // LuaRope.valueOf returns a LuaRope only when strLength > SMALL_STRING (32).
+        assertTrue(totalLen > 32, "Test strings must combine to >32 chars to force a LuaRope");
+        LuaValue rope = LuaRope.valueOf(new LuaValue[] { partA, partB }, 0, 2, totalLen);
+        assertTrue(rope instanceof LuaRope, "Combined length > 32 must produce a LuaRope, not a LuaString");
+        return rope;
+    }
+
+    @Test
+    void testCobaltConverterHandlesLuaRopeInBinaryMode() throws LuaError {
+        // Before the fix, toObject(rope, true) threw ClassCastException.
+        LuaValue rope = makeLuaRope("abcdefghijklmnopqrstuvwxyz", "0123456789AB"); // 26+12=38
+        Object result = CobaltConverter.toObject(rope, true);
+        assertTrue(result instanceof byte[], "Binary conversion of LuaRope must return byte[]");
+        assertArrayEquals(
+            "abcdefghijklmnopqrstuvwxyz0123456789AB".getBytes(StandardCharsets.ISO_8859_1),
+            (byte[]) result);
+    }
+
+    @Test
+    void testCobaltConverterHandlesLuaRopeInNonBinaryMode() throws LuaError {
+        LuaValue rope = makeLuaRope("Hello, ", "World! This is a long enough string!"); // 7+36=43
+        Object result = CobaltConverter.toObject(rope, false);
+        assertEquals("Hello, World! This is a long enough string!", result);
+    }
+
+    @Test
+    void testCobaltArgumentsGetStringHandlesLuaRope() throws LuaException {
+        LuaValue rope = makeLuaRope("first part of the string --", "second part of the string"); // 27+25=52
+        CobaltArguments args = new CobaltArguments(varargsOf(new LuaValue[] { rope }));
+        // getString must not throw ClassCastException
+        assertEquals("first part of the string --second part of the string", args.getString(0));
+    }
+
+    @Test
+    void testCobaltArgumentsGetStringBytesHandlesLuaRope() throws LuaException {
+        LuaValue rope = makeLuaRope("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJ"); // 26+10=36
+        CobaltArguments args = new CobaltArguments(varargsOf(new LuaValue[] { rope }));
+        // getStringBytes must not throw ClassCastException
+        byte[] bytes = args.getStringBytes(0);
+        assertNotNull(bytes);
+        assertEquals(36, bytes.length);
+        assertArrayEquals(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ".getBytes(StandardCharsets.ISO_8859_1),
+            bytes);
+    }
+
+    /**
+     * Injects a {@code _write} global that captures its first argument via
+     * {@link CobaltArguments#asBinary()}, simulating what {@code WriterObject.write}
+     * does when a Lua file handle's {@code write} method is called.
+     */
+    private static void injectBinaryCapture(CobaltMachine machine, ResultCapture capture) {
+        try {
+            Field f = CobaltMachine.class.getDeclaredField("globals");
+            f.setAccessible(true);
+            LuaTable globals = (LuaTable) f.get(machine);
+            globals.rawset("_write", new VarArgFunction() {
+
+                @Override
+                public Varargs invoke(LuaState state, Varargs args) throws LuaError {
+                    Object[] binary = new CobaltArguments(args).asBinary();
+                    capture.args = binary;
+                    return org.squiddev.cobalt.Constants.NONE;
+                }
+            });
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to inject _write", e);
+        }
+    }
+
+    @Test
+    void testLongStringConcatPassedAsBinaryArgEndToEnd() {
+        // Regression test for the full end-to-end path:
+        // Lua string concatenation that produces a LuaRope (length > 32) is
+        // passed to a Java method that calls arguments.asBinary().
+        // Before the LuaRope fix this threw ClassCastException inside the VM,
+        // which surfaced as "Java Exception Thrown: java.lang.ClassCastException".
+        ResultCapture cap = new ResultCapture();
+        CobaltMachine machine = buildMachine(new ResultCapture());
+        injectBinaryCapture(machine, cap);
+
+        // 40 'x' chars + '\n' = 41 total chars -> LuaRope (> SMALL_STRING 32)
+        run(machine, "local line = string.rep('x', 40) .. '\\n'\n_write(line)");
+
+        assertNotNull(cap.args, "_write must have been called");
+        assertTrue(cap.args[0] instanceof byte[], "Binary capture must be a byte array");
+        byte[] bytes = (byte[]) cap.args[0];
+        assertEquals(41, bytes.length, "41 bytes expected (40 x's + newline)");
+        for (int i = 0; i < 40; i++) {
+            assertEquals((byte) 'x', bytes[i], "Byte " + i + " must be 'x'");
+        }
+        assertEquals((byte) '\n', bytes[40], "Last byte must be '\\n'");
+    }
+
+    @Test
+    void testShortStringConcatStillWorksAsBinaryArg() {
+        // Short strings (<=32 chars total) remain LuaString, not LuaRope.
+        // Verify the fix didn't break the common short-string path.
+        ResultCapture cap = new ResultCapture();
+        CobaltMachine machine = buildMachine(new ResultCapture());
+        injectBinaryCapture(machine, cap);
+
+        // "hi" + "\n" = 3 chars -> plain LuaString
+        run(machine, "_write('hi' .. '\\n')");
+
+        assertNotNull(cap.args, "_write must have been called");
+        byte[] bytes = (byte[]) cap.args[0];
+        assertArrayEquals("hi\n".getBytes(StandardCharsets.ISO_8859_1), bytes);
     }
 }

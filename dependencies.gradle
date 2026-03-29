@@ -35,6 +35,10 @@
  */
 dependencies {
     shadowImplementation("org.squiddev:Cobalt:0.6.0")
+    // LuaJ is no longer used by ComputerCraft (Cobalt is the active Lua runtime), but its classes
+    // must remain in the shadow jar for backward compatibility with companion mods such as CCTweaks
+    // (org.squiddev.cctweaks) that reference org.luaj.vm2.* at class-load time.
+    shadowImplementation("org.luaj:luaj-jse:2.0.3")
 
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.4-GTNH:dev")
     implementation("com.github.GTNewHorizons:ForgeMultipart:1.7.2:dev")

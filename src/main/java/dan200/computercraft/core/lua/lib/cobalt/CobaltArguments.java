@@ -1,5 +1,6 @@
 package dan200.computercraft.core.lua.lib.cobalt;
 
+import org.squiddev.cobalt.LuaBaseString;
 import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaValue;
@@ -44,7 +45,7 @@ public class CobaltArguments implements IArguments {
     @Override
     public String getString(int index) throws LuaException {
         LuaValue value = args.arg(index + 1);
-        if (value instanceof LuaString) {
+        if (value instanceof LuaBaseString) {
             return value.toString();
         } else {
             throw new LuaException("Expected string");
@@ -54,8 +55,9 @@ public class CobaltArguments implements IArguments {
     @Override
     public byte[] getStringBytes(int index) throws LuaException {
         LuaValue value = args.arg(index + 1);
-        if (value instanceof LuaString) {
-            LuaString string = (LuaString) value;
+        if (value instanceof LuaBaseString) {
+            // Resolve LuaRope (and any other LuaBaseString) to a concrete LuaString first.
+            LuaString string = ((LuaBaseString) value).strvalue();
             if (string.offset == 0 && string.length == string.bytes.length) {
                 return string.bytes;
             } else {

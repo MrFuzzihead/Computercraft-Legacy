@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import org.squiddev.cobalt.LuaBaseString;
 import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
@@ -29,7 +30,9 @@ public class CobaltConverter {
                 return value.toBoolean();
             case TSTRING: {
                 if (binary) {
-                    LuaString string = (LuaString) value;
+                    // value may be a LuaRope (extends LuaBaseString but not LuaString).
+                    // Call strvalue() to resolve the rope into a concrete LuaString first.
+                    LuaString string = ((LuaBaseString) value).strvalue();
                     if (string.offset == 0 && string.length == string.bytes.length) {
                         return string.bytes;
                     } else {
