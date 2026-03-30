@@ -27,9 +27,7 @@ public class JarMount implements IMount {
                 throw new IOException("Error loading zip file");
             }
 
-            // ZIP directory entries are stored with a trailing slash (e.g. "assets/foo/rom/"),
-            // so check both forms to avoid false "Zip does not contain path" failures.
-            if (this.m_zipFile.getEntry(subPath) == null && this.m_zipFile.getEntry(subPath + "/") == null) {
+            if (this.m_zipFile.getEntry(subPath) == null) {
                 this.m_zipFile.close();
                 throw new IOException("Zip does not contain path");
             } else {

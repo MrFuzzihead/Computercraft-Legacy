@@ -550,42 +550,13 @@ public class ComputerCraft {
     }
 
     private static File getContainingJar(Class modClass) {
-        URL location;
-        try {
-            java.security.ProtectionDomain pd = modClass.getProtectionDomain();
-            if (pd == null) {
-                return null;
-            }
-            java.security.CodeSource codeSource = pd.getCodeSource();
-            if (codeSource == null) {
-                return null;
-            }
-            location = codeSource.getLocation();
-            if (location == null) {
-                return null;
-            }
-        } catch (SecurityException e) {
-            return null;
-        }
-
-        // Forge's LaunchClassLoader sets the code source to the jar: URL of the class file itself,
-        // e.g. "jar:file:/C:/mods/CC.jar!/dan200/computercraft/ComputerCraft.class".
-        // URL.getPath() on a jar: URL returns the inner path including the scheme of the nested URL,
-        // e.g. "file:/C:/mods/CC.jar!/dan200/...".  Stripping everything from "!" onward leaves
-        // "file:/C:/mods/CC.jar", which is a valid argument to new URL().
-        //
-        // For a plain file: URL (e.g. from newer launchers or dev environments that set the code
-        // source to the JAR directly), URL.getPath() strips the "file:" scheme, yielding
-        // "/C:/mods/CC.jar" on Windows — which is NOT a valid URL string (no protocol).
-        // In that case we fall back to toExternalForm() which preserves the scheme.
-        String path = location.getPath();
+        String path = modClass.getProtectionDomain()
+            .getCodeSource()
+            .getLocation()
+            .getPath();
         int bangIndex = path.indexOf("!");
         if (bangIndex >= 0) {
-            // jar: URL — strip the entry suffix to get just the JAR's own URL string.
             path = path.substring(0, bangIndex);
-        } else {
-            // Plain file: URL — getPath() lost the scheme; use the full external form instead.
-            path = location.toExternalForm();
         }
 
         URL url;
