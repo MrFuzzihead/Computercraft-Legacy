@@ -5,9 +5,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -124,7 +124,7 @@ public class JarMount implements IMount {
             this.m_path = path;
             this.m_directory = directory;
             this.m_size = this.m_directory ? 0L : size;
-            this.m_children = new LinkedHashMap<>();
+            this.m_children = new TreeMap<>();
         }
 
         public String getPath() {
