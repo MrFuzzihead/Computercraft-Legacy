@@ -2,7 +2,7 @@ package dan200.computercraft;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -550,30 +550,33 @@ public class ComputerCraft {
     }
 
     private static File getContainingJar(Class modClass) {
-        String path = modClass.getProtectionDomain()
-            .getCodeSource()
-            .getLocation()
-            .getPath();
-        int bangIndex = path.indexOf("!");
-        if (bangIndex >= 0) {
-            path = path.substring(0, bangIndex);
-        }
-
-        URL url;
+        URL location;
         try {
-            url = new URL(path);
-        } catch (MalformedURLException var7) {
+            java.security.CodeSource cs = modClass.getProtectionDomain()
+                .getCodeSource();
+            if (cs == null) return null;
+            location = cs.getLocation();
+            if (location == null) return null;
+        } catch (SecurityException e) {
             return null;
         }
 
-        File file;
         try {
-            file = new File(url.toURI());
-        } catch (URISyntaxException var6) {
-            file = new File(url.getPath());
+            URI uri = location.toURI();
+            // For jar: URIs (some classloaders use jar:file:/path/to/mod.jar!/package/...),
+            // extract only the file: portion before the "!/" separator.
+            if ("jar".equals(uri.getScheme())) {
+                String ssp = uri.getSchemeSpecificPart();
+                int bangIndex = ssp.indexOf("!/");
+                String fileUriStr = bangIndex >= 0 ? ssp.substring(0, bangIndex) : ssp;
+                return new File(new URI(fileUriStr));
+            }
+            // For plain file: URIs (the common case), new File(URI) correctly handles
+            // platform-specific paths including Windows drive letters (e.g. file:/C:/path).
+            return new File(uri);
+        } catch (URISyntaxException e) {
+            return null;
         }
-
-        return file;
     }
 
     private static File getDebugCodeDir() {
