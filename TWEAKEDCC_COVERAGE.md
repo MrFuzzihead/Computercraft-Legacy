@@ -19,7 +19,7 @@
 | `commands` | `CommandAPI.java` | `exec`, `execAsync`, `list`, `getBlockPosition`, `getBlockInfo` |
 | `bit` | `BitAPI.java` | `bnot`, `band`, `bor`, `bxor`, `brshift`, `blshift`, `blogic_rshift` |
 | `buffer` | `BufferAPI.java` | `new` |
-| `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test` |
+| `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test`, **`packRGB`**, **`unpackRGB`**, **`toBlit`**, **`fromBlit`** |
 | `rednet` | `rom/apis/rednet` | `open`, `close`, `isOpen`, `send`, `receive`, `broadcast`, `host`, `unhost`, `lookup` |
 | `textutils` | `rom/apis/textutils` | `slowWrite`, `slowPrint`, `formatTime`, `pagedPrint`, `tabulate`, `pagedTabulate`, `serialize/ise`, `unserialize/ise`, `serializeJSON/iseJSON`, `unserializeJSON/iseJSON`, `urlEncode`, `complete`, `empty_json_array`, `json_null` |
 | `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType`, `getMethods`, `call` |
@@ -114,16 +114,19 @@ CC:Tweaked has a full persistent settings system. No Java class or Lua file exis
 
 ---
 
-### 7. `colors` — **Missing 4 utility functions**
+### 7. `colors` — ~~Missing 4 utility functions~~ ✅ Done
 
 | Method | Notes |
 |---|---|
-| `colors.packRGB(r, g, b)` | Pack three `[0,1]` floats into a 24-bit integer |
-| `colors.unpackRGB(rgb)` | Unpack a 24-bit integer to `r, g, b` floats |
-| `colors.toBlit(color)` | Single-color bitmask → blit hex char (`"0"`–`"f"`) |
-| `colors.fromBlit(char)` | Blit hex char → color bitmask |
+| `colors.packRGB(r, g, b)` | ✅ Implemented in `rom/apis/colors` — pure arithmetic, no `bit32` dependency |
+| `colors.unpackRGB(rgb)` | ✅ Implemented in `rom/apis/colors` — pure arithmetic |
+| `colors.toBlit(color)` | ✅ Implemented in `rom/apis/colors` — O(1) pre-built lookup table (matching CC:Tweaked); loop fallback for non-power-of-two inputs |
+| `colors.fromBlit(char)` | ✅ Implemented in `rom/apis/colors` — enforces `#char == 1` to prevent multi-char strings (e.g. `"10"`) from returning a wrong value |
+| `colors.rgb8(r,g,b \| rgb)` | ✅ Implemented in `rom/apis/colors` — deprecated CC:Tweaked dispatcher to `packRGB`/`unpackRGB` |
 
-**Implementation**: Pure Lua additions to `rom/apis/colors` (and mirrored in `rom/apis/colours`).
+All five functions are automatically mirrored into `colours` via its existing `for k,v in pairs(colors)` copy loop.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/ColorsAPITest.java` — 35 cases, all green.
 
 ---
 
@@ -169,7 +172,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | Priority | Item | Effort | Type |
 |---|---|---|---|
 | 🔴 High | `settings` API | Small | Lua |
-| 🔴 High | `colors.packRGB/unpackRGB/toBlit/fromBlit` | Small | Lua |
+| ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit` | Small | Lua |
 | 🔴 High | `peripheral.find` | Small | Lua |
 | ✅ Done | `os.epoch` / `os.date` | Small | Java |
 | 🟡 Medium | `fs.attributes` / `fs.capacity` | Medium | Java |
