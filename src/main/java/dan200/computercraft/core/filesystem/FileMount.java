@@ -6,6 +6,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 
 import dan200.computercraft.api.filesystem.IWritableMount;
@@ -200,6 +202,39 @@ public class FileMount implements IWritableMount {
     @Override
     public long getRemainingSpace() throws IOException {
         return Math.max(this.m_capacity - this.m_usedSpace, 0L);
+    }
+
+    @Override
+    public long getCapacity() throws IOException {
+        return m_capacity;
+    }
+
+    @Override
+    public long getCreationTime(String path) throws IOException {
+        if (!this.created()) {
+            if (path.isEmpty()) return 0L;
+            throw new IOException("No such file");
+        }
+        File file = this.getRealPath(path);
+        if (!file.exists()) throw new IOException("No such file");
+        try {
+            return Files.readAttributes(file.toPath(), BasicFileAttributes.class)
+                .creationTime()
+                .toMillis();
+        } catch (IOException e) {
+            return file.lastModified();
+        }
+    }
+
+    @Override
+    public long getLastModified(String path) throws IOException {
+        if (!this.created()) {
+            if (path.isEmpty()) return 0L;
+            throw new IOException("No such file");
+        }
+        File file = this.getRealPath(path);
+        if (!file.exists()) throw new IOException("No such file");
+        return file.lastModified();
     }
 
     public File getRealPath(String path) {

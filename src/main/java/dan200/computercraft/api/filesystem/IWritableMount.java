@@ -14,4 +14,12 @@ public interface IWritableMount extends IMount {
     OutputStream openForAppend(String var1) throws IOException;
 
     long getRemainingSpace() throws IOException;
+
+    /**
+     * Returns the total capacity of this mount in bytes, or {@code -1} if
+     * the mount has no enforced capacity limit (e.g. the computer's ROM).
+     */
+    default long getCapacity() throws IOException {
+        return -1L;
+    }
 }

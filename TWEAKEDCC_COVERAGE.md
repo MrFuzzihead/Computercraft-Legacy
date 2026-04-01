@@ -75,14 +75,14 @@ Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 
 ---
 
-### 4. `fs` — **Missing 2 methods**
+### 4. `fs` — ~~Missing 2 methods~~ ✅ Done
 
 | Method | Notes |
 |---|---|
-| `fs.attributes(path)` | Returns `{size, isDir, isReadOnly, created, modified}` |
-| `fs.capacity(path)` | Returns total drive capacity in bytes (or `"unlimited"`) |
+| `fs.attributes(path)` | ✅ Implemented in `FSAPI.java` (method index 17); returns `{size, isDir, isReadOnly, created, modified, modification}`. Timestamps use `java.nio.file.attribute.BasicFileAttributes` on `FileMount` paths (falls back to `File.lastModified()`); read-only mounts return `0`. |
+| `fs.capacity(path)` | ✅ Implemented in `FSAPI.java` (method index 16); returns total drive capacity in bytes, or `nil` for read-only / unlimited mounts. `FileMount` overrides `IWritableMount.getCapacity()` to expose `m_capacity`; read-only `IMount` implementations inherit the default `-1` sentinel which is translated to `nil` in Lua. |
 
-**Implementation**: Java-side additions to `FSAPI.java`; backing data from `FileSystem` and `FileMount`. The `created`/`modified` timestamps require `java.nio.file` or `File.lastModified()`.
+**Tests**: `src/test/java/dan200/computercraft/core/apis/FSAPITest.java` — 10 cases, all green.
 
 ---
 
@@ -163,7 +163,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `settings` API | Small | Lua |
 | ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit` | Small | Lua |
 | ✅ Done | `os.epoch` / `os.date` | Small | Java |
-| 🟡 Medium | `fs.attributes` / `fs.capacity` | Medium | Java |
+| ✅ Done | `fs.attributes` / `fs.capacity` | Medium | Java |
 | 🟡 Medium | `term.getCursorBlink` | Trivial | Java |
 | 🟡 Medium | `http` response `getResponseHeaders()` | Small | Java |
 | 🟡 Medium | `cc.expect` module | Small | Lua |

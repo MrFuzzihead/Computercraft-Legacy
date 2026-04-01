@@ -45,7 +45,8 @@ public class FSAPI implements ILuaAPI {
     @Override
     public String[] getMethodNames() {
         return new String[] { "list", "combine", "getName", "getSize", "exists", "isDir", "isReadOnly", "makeDir",
-            "move", "copy", "delete", "open", "getDrive", "getFreeSpace", "find", "getDir" };
+            "move", "copy", "delete", "open", "getDrive", "getFreeSpace", "find", "getDir", "getCapacity",
+            "attributes" };
     }
 
     @Override
@@ -298,6 +299,34 @@ public class FSAPI implements ILuaAPI {
                 if (args.length == 1 && args[0] != null && args[0] instanceof String) {
                     String path = (String) args[0];
                     return new Object[] { FileSystem.getDirectory(path) };
+                }
+
+                throw new LuaException("Expected string");
+            case 16:
+                if (args.length == 1 && args[0] != null && args[0] instanceof String path) {
+
+                    try {
+                        long capacity = this.m_fileSystem.getCapacity(path);
+                        if (capacity >= 0L) {
+                            return new Object[] { capacity };
+                        }
+
+                        return new Object[] { null };
+                    } catch (FileSystemException e) {
+                        throw new LuaException(e.getMessage());
+                    }
+                }
+
+                throw new LuaException("Expected string");
+            case 17:
+                if (args.length == 1 && args[0] != null && args[0] instanceof String path) {
+
+                    try {
+                        Map<String, Object> attrs = this.m_fileSystem.getAttributes(path);
+                        return new Object[] { attrs };
+                    } catch (FileSystemException e) {
+                        throw new LuaException(e.getMessage());
+                    }
                 }
 
                 throw new LuaException("Expected string");
