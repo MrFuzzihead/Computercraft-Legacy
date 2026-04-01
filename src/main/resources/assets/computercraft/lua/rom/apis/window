@@ -79,15 +79,15 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
             parent.setCursorPos( 0, 0 )
         end
     end
-    
+
     local function updateCursorBlink()
         parent.setCursorBlink( bCursorBlink )
     end
-    
+
     local function updateCursorColor()
         parent.setTextColor( nTextColor )
     end
-    
+
     local function redrawLine( n )
         local tLine = tLines[ n ]
         parent.setCursorPos( nX, nY + n - 1 )
@@ -242,6 +242,10 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
         if bVisible then
             updateCursorBlink()
         end
+    end
+
+    function window.getCursorBlink()
+        return bCursorBlink
     end
 
     local function isColor()

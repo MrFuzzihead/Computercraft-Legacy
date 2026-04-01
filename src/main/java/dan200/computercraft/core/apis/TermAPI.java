@@ -33,7 +33,8 @@ public class TermAPI implements ILuaAPI {
     public String[] getMethodNames() {
         return new String[] { "write", "scroll", "setCursorPos", "setCursorBlink", "getCursorPos", "getSize", "clear",
             "clearLine", "setTextColour", "setTextColor", "setBackgroundColour", "setBackgroundColor", "isColour",
-            "isColor", "getTextColour", "getTextColor", "getBackgroundColour", "getBackgroundColor", "blit" };
+            "isColor", "getTextColour", "getTextColor", "getBackgroundColour", "getBackgroundColor", "blit",
+            "getCursorBlink" };
     }
 
     public static int parseColour(Object[] args, boolean _enableColours) throws LuaException {
@@ -183,6 +184,10 @@ public class TermAPI implements ILuaAPI {
                 }
 
                 throw new LuaException("Expected string, string, string");
+            case 19:
+                synchronized (this.m_terminal) {
+                    return new Object[] { this.m_terminal.getCursorBlink() };
+                }
             default:
                 return null;
         }

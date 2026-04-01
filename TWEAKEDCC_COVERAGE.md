@@ -99,15 +99,15 @@ Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 
 ---
 
-### 6. `term` — **Missing palette and blink-get**
+### 6. `term` — ~~Missing `getCursorBlink`~~ ✅ Done (palette still pending)
 
 | Method | Notes |
 |---|---|
-| `term.getCursorBlink()` | Read the current blink state (write-only today) |
-| `term.setPaletteColor(color, r, g, b)` | Set one of 16 palette entries to an RGB value |
-| `term.getPaletteColor(color)` | Read a palette entry back as `r, g, b` |
+| `term.getCursorBlink()` | ✅ Implemented in `TermAPI.java` (method index 19); reads `Terminal.m_cursorBlink` under the terminal lock. `window.getCursorBlink()` added to `rom/apis/window` so redirect targets expose the getter without an error stub. |
+| `term.setPaletteColor(color, r, g, b)` | Requires `Terminal.java` to carry a 16-entry RGB palette and all client-side rendering to consume it — significant scope; treat as a separate feature. |
+| `term.getPaletteColor(color)` | Same dependency as above. |
 
-**Implementation**: `getCursorBlink()` is trivial — read `Terminal.m_cursorBlink`. Palette support requires `Terminal.java` to carry a `int[16]` RGB array and all client-side rendering to consume it — significant scope; treat as a separate feature.
+**Tests**: `src/test/java/dan200/computercraft/core/apis/TermAPITest.java` — 4 cases, all green.
 
 ---
 
@@ -164,7 +164,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit` | Small | Lua |
 | ✅ Done | `os.epoch` / `os.date` | Small | Java |
 | ✅ Done | `fs.attributes` / `fs.capacity` | Medium | Java |
-| 🟡 Medium | `term.getCursorBlink` | Trivial | Java |
+| ✅ Done | `term.getCursorBlink` | Trivial | Java |
 | 🟡 Medium | `http` response `getResponseHeaders()` | Small | Java |
 | 🟡 Medium | `cc.expect` module | Small | Lua |
 | 🟡 Medium | `cc.completion` module | Small | Lua |
