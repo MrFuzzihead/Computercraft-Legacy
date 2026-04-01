@@ -236,8 +236,9 @@ public class OSAPI implements ILuaAPI {
                     case "utc":
                         return new Object[] { System.currentTimeMillis() };
                     case "local":
-                        return new Object[] {
-                            System.currentTimeMillis() + (long) Calendar.getInstance().getTimeZone().getRawOffset() };
+                        return new Object[] { System.currentTimeMillis() + (long) Calendar.getInstance()
+                            .getTimeZone()
+                            .getRawOffset() };
                     default:
                         throw new LuaException("Unsupported timezone '" + timezone + "'");
                 }
@@ -383,10 +384,14 @@ public class OSAPI implements ILuaAPI {
                     case 'Z':
                         sb.append(
                             cal.getTimeZone()
-                                .getDisplayName(cal.getTimeZone().inDaylightTime(cal.getTime()), TimeZone.SHORT));
+                                .getDisplayName(
+                                    cal.getTimeZone()
+                                        .inDaylightTime(cal.getTime()),
+                                    TimeZone.SHORT));
                         break;
                     case 'z': {
-                        int offsetMin = cal.getTimeZone().getOffset(cal.getTimeInMillis()) / 60000;
+                        int offsetMin = cal.getTimeZone()
+                            .getOffset(cal.getTimeInMillis()) / 60000;
                         sb.append(String.format("%+03d%02d", offsetMin / 60, Math.abs(offsetMin % 60)));
                         break;
                     }

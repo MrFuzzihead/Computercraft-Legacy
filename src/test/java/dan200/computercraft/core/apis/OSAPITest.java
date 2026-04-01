@@ -21,14 +21,20 @@ import dan200.computercraft.core.terminal.Terminal;
  * Unit tests for {@link OSAPI} covering the {@code os.epoch} and {@code os.date}
  * methods added to match the CC:Tweaked API.
  *
- * <p>All tests call {@link OSAPI#callMethod} directly with {@code null} as the
+ * <p>
+ * All tests call {@link OSAPI#callMethod} directly with {@code null} as the
  * {@link dan200.computercraft.api.lua.ILuaContext}; neither {@code epoch} nor
- * {@code date} schedule tasks on the main thread so this is safe.</p>
+ * {@code date} schedule tasks on the main thread so this is safe.
+ * </p>
  *
- * <p>The stub environment is initialised with <b>day&nbsp;=&nbsp;5</b> and
+ * <p>
+ * The stub environment is initialised with <b>day&nbsp;=&nbsp;5</b> and
  * <b>time&nbsp;=&nbsp;6.0</b> (06:00 in-game hours) to give deterministic ingame
  * epoch results:
- * <pre>ticks = 5 * 24000 + 6 * 1000 = 126 000 → ms = 6 300 000</pre>
+ * 
+ * <pre>
+ * ticks = 5 * 24000 + 6 * 1000 = 126 000 → ms = 6 300 000
+ * </pre>
  * </p>
  */
 class OSAPITest {
@@ -57,9 +63,7 @@ class OSAPITest {
 
         assertNotNull(result);
         long epoch = ((Number) result[0]).longValue();
-        assertTrue(
-            epoch >= before && epoch <= after + 5,
-            "utc epoch must fall within the measured system-time window");
+        assertTrue(epoch >= before && epoch <= after + 5, "utc epoch must fall within the measured system-time window");
     }
 
     @Test
@@ -71,7 +75,8 @@ class OSAPITest {
         long local = ((Number) localResult[0]).longValue();
 
         // Allow a small window for the two currentTimeMillis() calls racing.
-        long expectedOffset = TimeZone.getDefault().getRawOffset();
+        long expectedOffset = TimeZone.getDefault()
+            .getRawOffset();
         assertTrue(
             Math.abs((local - utc) - expectedOffset) < 200,
             "local epoch should differ from utc by the raw timezone offset");
@@ -217,10 +222,7 @@ class OSAPITest {
     @Test
     void dateFormatAmPm() throws LuaException {
         assertEquals("AM", api.callMethod(null, METHOD_DATE, new Object[] { "!%p", 0.0 })[0], "midnight → AM");
-        assertEquals(
-            "PM",
-            api.callMethod(null, METHOD_DATE, new Object[] { "!%p", 12 * 3600.0 })[0],
-            "noon → PM");
+        assertEquals("PM", api.callMethod(null, METHOD_DATE, new Object[] { "!%p", 12 * 3600.0 })[0], "noon → PM");
     }
 
     @Test
@@ -441,4 +443,3 @@ class OSAPITest {
         }
     }
 }
-

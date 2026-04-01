@@ -25,14 +25,18 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
  * Tests for the four new functions added to the {@code colors} Lua API:
  * {@code packRGB}, {@code unpackRGB}, {@code toBlit}, and {@code fromBlit}.
  *
- * <p>Each test loads the {@code colors} ROM file (and, where needed, the
+ * <p>
+ * Each test loads the {@code colors} ROM file (and, where needed, the
  * {@code colours} ROM file) into a fresh {@link CobaltMachine} and exercises the
- * API, capturing return values via the injected {@code _capture} helper.</p>
+ * API, capturing return values via the injected {@code _capture} helper.
+ * </p>
  *
- * <p>The {@code colours} tests simulate what {@code os.loadAPI} does: the
+ * <p>
+ * The {@code colours} tests simulate what {@code os.loadAPI} does: the
  * {@code colors} source is executed first (populating globals), a {@code colors}
  * table is built from those globals, and then the {@code colours} source runs and
- * copies entries from that table into its own environment.</p>
+ * copies entries from that table into its own environment.
+ * </p>
  */
 class ColorsAPITest {
 
@@ -115,10 +119,9 @@ class ColorsAPITest {
         // Build the 'colors' table as os.loadAPI would, then run coloursSource.
         // '_ENV = _G' mirrors what os.loadAPI does via setfenv: colours.lua uses
         // 'local colours = _ENV' to obtain a reference to its own environment.
-        String buildColorsTable =
-            "_ENV = _G\n"
-                + "colors = { packRGB=packRGB, unpackRGB=unpackRGB, toBlit=toBlit, fromBlit=fromBlit,"
-                + " gray=gray, lightGray=lightGray }\n";
+        String buildColorsTable = "_ENV = _G\n"
+            + "colors = { packRGB=packRGB, unpackRGB=unpackRGB, toBlit=toBlit, fromBlit=fromBlit,"
+            + " gray=gray, lightGray=lightGray }\n";
         String combined = colorsSource + "\n" + buildColorsTable + coloursSource + "\n" + testLua;
         machine.loadBios(new ByteArrayInputStream(combined.getBytes(StandardCharsets.UTF_8)));
         for (int i = 0; i < 50 && !machine.isFinished(); i++) {
@@ -254,7 +257,7 @@ class ColorsAPITest {
     @Test
     void toBlitWhiteIsZero() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "_capture(toBlit(1))");   // white = 1
+        run(buildMachine(cap), "_capture(toBlit(1))"); // white = 1
         assertNotNull(cap.args);
         assertEquals("0", cap.args[0]);
     }
@@ -262,7 +265,7 @@ class ColorsAPITest {
     @Test
     void toBlitOrangeIsOne() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "_capture(toBlit(2))");   // orange = 2
+        run(buildMachine(cap), "_capture(toBlit(2))"); // orange = 2
         assertNotNull(cap.args);
         assertEquals("1", cap.args[0]);
     }
@@ -297,8 +300,7 @@ class ColorsAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_capture("
-                + "toBlit(white),toBlit(orange),toBlit(magenta),toBlit(lightBlue),"
+            "_capture(" + "toBlit(white),toBlit(orange),toBlit(magenta),toBlit(lightBlue),"
                 + "toBlit(yellow),toBlit(lime),toBlit(pink),toBlit(gray),"
                 + "toBlit(lightGray),toBlit(cyan),toBlit(purple),toBlit(blue),"
                 + "toBlit(brown),toBlit(green),toBlit(red),toBlit(black)"
@@ -383,8 +385,7 @@ class ColorsAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local ok = true\n"
-                + "local cols = {white,orange,magenta,lightBlue,yellow,lime,pink,gray,"
+            "local ok = true\n" + "local cols = {white,orange,magenta,lightBlue,yellow,lime,pink,gray,"
                 + "lightGray,cyan,purple,blue,brown,green,red,black}\n"
                 + "for _,c in ipairs(cols) do\n"
                 + "  if fromBlit(toBlit(c)) ~= c then ok = false end\n"
@@ -482,12 +483,9 @@ class ColorsAPITest {
         ResultCapture cap = new ResultCapture();
         runColours(buildMachine(cap), "_capture(packRGB(1, 0, 0))");
         assertNotNull(cap.args);
-        assertEquals(0xFF0000L, ((Number) cap.args[0]).longValue(),
+        assertEquals(
+            0xFF0000L,
+            ((Number) cap.args[0]).longValue(),
             "colours.packRGB must produce the same result as colors.packRGB");
     }
 }
-
-
-
-
-

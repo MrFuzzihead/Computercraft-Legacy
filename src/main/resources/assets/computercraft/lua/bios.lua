@@ -9,7 +9,7 @@ if _VERSION == "Lua 5.1" then
         if mode ~= nil and mode ~= "t" then
             error( "Binary chunk loading prohibited", 2 )
         end
-        local ok, p1, p2 = pcall( function()        
+        local ok, p1, p2 = pcall( function()
             if type(x) == "string" then
                 local result, err = nativeloadstring( x, name )
                 if result then
@@ -38,7 +38,7 @@ if _VERSION == "Lua 5.1" then
             return p1, p2
         else
             error( p1, 2 )
-        end        
+        end
     end
     table.unpack = unpack
     table.pack = function( ... ) return { ... } end
@@ -152,9 +152,9 @@ function sleep( nTime )
 end
 
 function write( sText )
-    local w,h = term.getSize()        
+    local w,h = term.getSize()
     local x,y = term.getCursorPos()
-    
+
     local nLinesPrinted = 0
     local function newLine()
         if y + 1 <= h then
@@ -166,7 +166,7 @@ function write( sText )
         x, y = term.getCursorPos()
         nLinesPrinted = nLinesPrinted + 1
     end
-    
+
     -- Print the line with proper word wrapping
     while string.len(sText) > 0 do
         local whitespace = string.match( sText, "^[ \t]+" )
@@ -176,19 +176,19 @@ function write( sText )
             x,y = term.getCursorPos()
             sText = string.sub( sText, string.len(whitespace) + 1 )
         end
-        
+
         local newline = string.match( sText, "^\n" )
         if newline then
             -- Print newlines
             newLine()
             sText = string.sub( sText, 2 )
         end
-        
+
         local text = string.match( sText, "^[^ \t\n]+" )
         if text then
             sText = string.sub( sText, string.len(text) + 1 )
             if string.len(text) > w then
-                -- Print a multiline word                
+                -- Print a multiline word
                 while string.len( text ) > 0 do
                     if x > w then
                         newLine()
@@ -207,7 +207,7 @@ function write( sText )
             end
         end
     end
-    
+
     return nLinesPrinted
 end
 
@@ -301,7 +301,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
 
         term.setCursorPos( sx + nPos - nScroll, cy )
     end
-    
+
     local function clear()
         redraw( true )
     end
@@ -366,7 +366,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                     redraw()
                 end
                 break
-                
+
             elseif param == keys.left then
                 -- Left
                 if nPos > 0 then
@@ -375,9 +375,9 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                     recomplete()
                     redraw()
                 end
-                
+
             elseif param == keys.right then
-                -- Right                
+                -- Right
                 if nPos < string.len(sLine) then
                     -- Move right
                     clear()
@@ -425,11 +425,11 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                             nHistoryPos = nil
                         elseif nHistoryPos ~= nil then
                             nHistoryPos = nHistoryPos + 1
-                        end                        
+                        end
                     end
                     if nHistoryPos then
                         sLine = _tHistory[nHistoryPos]
-                        nPos = string.len( sLine ) 
+                        nPos = string.len( sLine )
                     else
                         sLine = ""
                         nPos = 0
@@ -462,7 +462,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                 -- Delete
                 if nPos < string.len(sLine) then
                     clear()
-                    sLine = string.sub( sLine, 1, nPos ) .. string.sub( sLine, nPos + 2 )                
+                    sLine = string.sub( sLine, 1, nPos ) .. string.sub( sLine, nPos + 2 )
                     recomplete()
                     redraw()
                 end
@@ -494,7 +494,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
     term.setCursorBlink( false )
     term.setCursorPos( w + 1, cy )
     print()
-    
+
     return sLine
 end
 
@@ -568,7 +568,7 @@ function os.loadAPI( _sPath )
         tAPIsLoading[sName] = nil
         return false
     end
-    
+
     local tAPI = {}
     for k,v in pairs( tEnv ) do
         if k ~= "_ENV" then
@@ -576,7 +576,7 @@ function os.loadAPI( _sPath )
         end
     end
 
-    _G[sName] = tAPI    
+    _G[sName] = tAPI
     tAPIsLoading[sName] = nil
     return true
 end
@@ -625,7 +625,7 @@ if http then
         end
         return nil, err
     end
-    
+
     http.get = function( _url, _headers )
         return wrapRequest( _url, nil, _headers )
     end
@@ -782,9 +782,14 @@ if bAPIError then
     term.setCursorPos( 1,1 )
 end
 
+-- Load persisted settings (silently succeeds when no .settings file exists yet)
+if settings then
+    settings.load( ".settings" )
+end
+
 -- Run the shell
 local ok, err = pcall( function()
-    parallel.waitForAny( 
+    parallel.waitForAny(
         function()
             if term.isColour() then
                 os.run( {}, "rom/programs/advanced/multishell" )

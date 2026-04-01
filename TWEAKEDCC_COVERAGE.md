@@ -22,7 +22,8 @@
 | `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test`, **`packRGB`**, **`unpackRGB`**, **`toBlit`**, **`fromBlit`** |
 | `rednet` | `rom/apis/rednet` | `open`, `close`, `isOpen`, `send`, `receive`, `broadcast`, `host`, `unhost`, `lookup` |
 | `textutils` | `rom/apis/textutils` | `slowWrite`, `slowPrint`, `formatTime`, `pagedPrint`, `tabulate`, `pagedTabulate`, `serialize/ise`, `unserialize/ise`, `serializeJSON/iseJSON`, `unserializeJSON/iseJSON`, `urlEncode`, `complete`, `empty_json_array`, `json_null` |
-| `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType`, `getMethods`, `call` |
+| `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType`, `getMethods`, `call`, `wrap`, `find` |
+| `settings` | `rom/apis/settings` | `define`, `undefine`, `set`, `get`, `unset`, `clear`, `getNames`, `getDetails`, `load`, `save`; auto-loaded from `.settings` at boot via `bios.lua` |
 | `gps` | `rom/apis/gps` | `locate` |
 | `paintutils` | `rom/apis/paintutils` | `loadImage`, `drawPixel`, `drawLine`, `drawBox`, `drawFilledBox`, `drawImage` |
 | `keys` | `rom/apis/keys` | All Minecraft key constants + `getName` |
@@ -42,16 +43,12 @@
 
 ## ❌ Missing / Gaps vs CC:Tweaked
 
-### 1. `settings` API — **Completely absent**
+### 1. ~~`settings` API~~ ✅ Done
 
-CC:Tweaked has a full persistent settings system. No Java class or Lua file exists for it.
+All ten methods are implemented as a pure-Lua file at `rom/apis/settings`.
+Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 
-- `settings.define(name, {default, description, type})`
-- `settings.set(name, value)` / `settings.get(name, default)` / `settings.unset(name)`
-- `settings.clear()`, `settings.getNames()`
-- `settings.load(path)` / `settings.save(path)`
-
-**Implementation**: Pure Lua — new `rom/apis/settings` file using `fs.open` for persistence.
+**Tests**: `src/test/java/dan200/computercraft/core/lua/SettingsAPITest.java` — 33 cases, all green.
 
 ---
 
@@ -130,15 +127,7 @@ All five functions are automatically mirrored into `colours` via its existing `f
 
 ---
 
-### 8. `peripheral` — **Missing `find`**
-
-- `peripheral.find(type [, filter])` — search all sides and cable network for peripherals matching a type, optionally filtered by a predicate function.
-
-**Implementation**: Pure Lua addition to `rom/apis/peripheral`.
-
----
-
-### 9. `cc.*` module system — **Not present**
+### 8. `cc.*` module system — **Not present**
 
 All absent. These are pure-Lua modules intended to be loaded via `require("cc.module")`.
 
@@ -154,7 +143,7 @@ All absent. These are pure-Lua modules intended to be loaded via `require("cc.mo
 
 ---
 
-### 10. Speaker peripheral — **Not implemented**
+### 9. Speaker peripheral — **Not implemented**
 
 CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 
@@ -171,9 +160,8 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 
 | Priority | Item | Effort | Type |
 |---|---|---|---|
-| 🔴 High | `settings` API | Small | Lua |
+| ✅ Done | `settings` API | Small | Lua |
 | ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit` | Small | Lua |
-| 🔴 High | `peripheral.find` | Small | Lua |
 | ✅ Done | `os.epoch` / `os.date` | Small | Java |
 | 🟡 Medium | `fs.attributes` / `fs.capacity` | Medium | Java |
 | 🟡 Medium | `term.getCursorBlink` | Trivial | Java |
