@@ -86,16 +86,21 @@ Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 
 ---
 
-### 5. `http` — **Missing WebSocket support, async check, and response headers**
+### 5. `http` — ~~Missing response method gaps~~ ✅ Done (WebSocket still pending)
 
 | Feature | Notes |
 |---|---|
-| `http.websocket(url, headers)` | Synchronous WebSocket open; returns WebSocket handle |
-| `http.websocketAsync(url, headers)` | Async; fires `websocket_success` / `websocket_failure` events |
-| `http.checkURLAsync(url)` | Async URL validation; fires `check_url_success` / `check_url_failure` |
-| Response `getResponseHeaders()` | Missing from the `wrapBufferedReader` response object in `HTTPAPI.java` |
+| `Response.getResponseHeaders()` | ✅ Returns `{ [string]: string }` — multiple values for the same header are joined with `", "`, and the HTTP status-line pseudo-header (null key from `HttpURLConnection`) is filtered out. |
+| `Response.readLine([withTrailingNewline])` | ✅ Optional boolean parameter added. When `true`, the terminator bytes (`\n`, `\r`, or `\r\n`) are included in the returned string. |
+| `Response.read([count])` | ✅ Now returns a Lua string (`byte[]`) instead of a raw number, and accepts an optional `count` to read multiple bytes at once. |
+| `Response.readAll()` | ✅ Already correct — returns the remaining body as a string. |
+| `Response.close()` | ✅ Already correct. |
+| `Response.getResponseCode()` | ✅ Already correct. |
+| `http.websocket(url, headers)` | Requires a new async handler class — significant scope; deferred. |
+| `http.websocketAsync(url, headers)` | Same dependency as above. |
+| `http.checkURLAsync(url)` | Async URL validation; fires `check_url_success` / `check_url_failure` events. |
 
-**Implementation**: `getResponseHeaders()` is low-effort (store headers map in `HTTPResponse`). WebSocket requires a new async handler class (e.g. `HTTPWebSocket.java`) using `java.net.http.WebSocket` (JVM 11+, available via Jabel syntax). Evaluate scope before starting.
+**Tests**: `src/test/java/dan200/computercraft/core/apis/HTTPResponseTest.java` — 17 cases, all green.
 
 ---
 
@@ -165,7 +170,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `os.epoch` / `os.date` | Small | Java |
 | ✅ Done | `fs.attributes` / `fs.capacity` | Medium | Java |
 | ✅ Done | `term.getCursorBlink` | Trivial | Java |
-| 🟡 Medium | `http` response `getResponseHeaders()` | Small | Java |
+| ✅ Done | `http` response `getResponseHeaders()` + `read`/`readLine` gaps | Small | Java |
 | 🟡 Medium | `cc.expect` module | Small | Lua |
 | 🟡 Medium | `cc.completion` module | Small | Lua |
 | 🟡 Medium | `cc.strings` module | Small | Lua |
