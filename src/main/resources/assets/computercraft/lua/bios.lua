@@ -641,6 +641,15 @@ if http then
         end
         return ok, err
     end
+
+    http.checkURLAsync = function( _url )
+        local ok, err = http.checkURL( _url )
+        if ok then
+            os.queueEvent( "check_url_success", _url )
+        else
+            os.queueEvent( "check_url_failure", _url, err )
+        end
+    end
 end
 
 -- Install the lua part of the FS api

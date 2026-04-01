@@ -98,7 +98,7 @@ Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 | `Response.getResponseCode()` | ✅ Already correct. |
 | `http.websocket(url, headers)` | Requires a new async handler class — significant scope; deferred. |
 | `http.websocketAsync(url, headers)` | Same dependency as above. |
-| `http.checkURLAsync(url)` | Async URL validation; fires `check_url_success` / `check_url_failure` events. |
+| `http.checkURLAsync(url)` | ✅ Implemented in `bios.lua` — calls the native synchronous `http.checkURL` (whitelist + format check) and queues `check_url_success(url)` or `check_url_failure(url, err)`. No Java changes needed since the check is already instant. |
 
 **Tests**: `src/test/java/dan200/computercraft/core/apis/HTTPResponseTest.java` — 17 cases, all green.
 
@@ -177,7 +177,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | 🟡 Medium | `cc.pretty` module | Medium | Lua |
 | 🟡 Medium | `cc.image.nft` module | Small | Lua |
 | 🟠 Low | `pocket` API methods | Medium | Java |
-| 🟠 Low | `http.checkURLAsync` | Small | Java |
+| ✅ Done | `http.checkURLAsync` | Trivial | Lua |
 | 🔵 Deferred | `term.setPaletteColor/getPaletteColor` | Large | Java + Client |
 | 🔵 Deferred | HTTP WebSocket support | Large | Java |
 | 🔵 Deferred | Speaker peripheral | Large | Java + Client |
