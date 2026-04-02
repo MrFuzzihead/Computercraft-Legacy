@@ -1,6 +1,8 @@
 package dan200.computercraft.shared.pocket.items;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.creativetab.CreativeTabs;
@@ -33,6 +35,15 @@ import dan200.computercraft.shared.pocket.peripherals.PocketModemPeripheral;
 public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
 
     public static IIcon[] s_icons;
+
+    /**
+     * Maps server-computer instance IDs to their {@link PocketAPI} so that
+     * {@link #onUpdate} can push the current player/stack reference to the API
+     * every tick. Entries are added when a new computer is created and are
+     * looked up by the computer's instance ID, which is stable for the lifetime
+     * of the running computer.
+     */
+    private static final Map<Integer, PocketAPI> s_pocketAPIs = new HashMap<>();
 
     public ItemPocketComputer() {
         this.setMaxStackSize(1);
@@ -80,6 +91,11 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
             IInventory inventory = entity instanceof EntityPlayer ? ((EntityPlayer) entity).inventory : null;
             ServerComputer computer = this.createServerComputer(world, inventory, stack);
             if (computer != null) {
+                // Refresh the PocketAPI's player/stack references so equipBack/unequipBack work.
+                PocketAPI pocketAPI = s_pocketAPIs.get(computer.getInstanceID());
+                if (pocketAPI != null) {
+                    pocketAPI.update(entity instanceof EntityPlayer ? (EntityPlayer) entity : null, stack, inventory);
+                }
                 computer.keepAlive();
                 computer.setWorld(world);
                 int id = computer.getID();
@@ -231,7 +247,9 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                     this.getFamily(stack),
                     26,
                     20);
-                computer.addAPI(new PocketAPI());
+                PocketAPI pocketAPI = new PocketAPI(computer);
+                computer.addAPI(pocketAPI);
+                s_pocketAPIs.put(instanceID, pocketAPI);
                 if (this.getHasModem(stack)) {
                     computer.setPeripheral(2, new PocketModemPeripheral());
                 }

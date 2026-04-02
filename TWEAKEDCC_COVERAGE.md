@@ -52,15 +52,17 @@ Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 
 ---
 
-### 2. `pocket` API — **Empty stub**
+### 2. ~~`pocket` API~~ ✅ Done
 
-`PocketAPI.java` returns zero methods. CC:Tweaked specifies:
+`PocketAPI.java` now implements all three methods.
 
-- `pocket.equipBack()`
-- `pocket.unequipBack()`
-- `pocket.isEquipped()`
+| Method | Notes |
+|---|---|
+| `pocket.equipBack()` | ✅ Searches the carrying player's inventory for a `WirelessModem` item, consumes one, sets `upgrade = 1` in the pocket computer's NBT, and attaches a `PocketModemPeripheral` to peripheral slot 2. Returns `true` on success or `false, reason` on failure. Runs on the main thread via `ILuaContext.executeMainThreadTask`. |
+| `pocket.unequipBack()` | ✅ Detaches the modem peripheral from slot 2, clears the `upgrade` key from the pocket computer's NBT, and returns a `WirelessModem` item to the player's inventory (or drops it if full). Returns `true` on success or `false, reason` on failure. |
+| `pocket.isEquipped()` | ✅ Returns `true` if `upgrade == 1` in the pocket computer's NBT (i.e., a modem is currently equipped). Reads the volatile stack reference directly — no main-thread dispatch required. |
 
-**Implementation**: Java-side in `PocketAPI.java`; requires hooking into pocket computer item/upgrade logic.
+The player/stack/inventory references used by `equipBack` and `unequipBack` are refreshed every game tick by `ItemPocketComputer.onUpdate` via `PocketAPI.update(player, stack, inventory)`. A static `Map<instanceID, PocketAPI>` in `ItemPocketComputer` keeps the mapping between `ServerComputer` instances and their `PocketAPI` objects.
 
 ---
 
@@ -189,7 +191,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `cc.strings` module | Small | Lua |
 | ✅ Done | `cc.pretty` module | Medium | Lua |
 | ✅ Done | `cc.image.nft` module | Small | Lua |
-| 🟠 Low | `pocket` API methods | Medium | Java |
+| ✅ Done | `pocket` API methods | Medium | Java |
 | ✅ Done | `http.checkURLAsync` | Trivial | Lua |
 | 🔵 Deferred | `term.setPaletteColor/getPaletteColor` | Large | Java + Client |
 | 🔵 Deferred | HTTP WebSocket support | Large | Java |
