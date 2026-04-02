@@ -132,19 +132,32 @@ All five functions are automatically mirrored into `colours` via its existing `f
 
 ---
 
-### 8. `cc.*` module system — **Not present**
+### 8. `cc.*` module system — ✅ Done
 
-All absent. These are pure-Lua modules intended to be loaded via `require("cc.module")`.
+Pure-Lua modules loaded via `require("cc.module")`. The `require` / `package` bootstrap is
+implemented in `bios.lua` and resolves paths under `rom/modules/main/`.
 
-| Module | Key Functions |
-|---|---|
-| `cc.completion` | `choice`, `peripheral`, `side`, `file`, `dir`, `program`, `setting` |
-| `cc.expect` | `expect(n, val, ...)`, `field(tbl, key, ...)`, `range(val, min, max)` |
-| `cc.pretty` | `pretty(val)`, `pretty_print(val)`, `document(...)` |
-| `cc.strings` | `wrap(text, width)`, `ensure_width(str, width)`, `split(str, sep)` |
-| `cc.image.nft` | `load(path)`, `draw(image, term, x, y)` |
+| Module | Status | Notes |
+|---|---|---|
+| `cc.expect` | ✅ Done | `rom/modules/main/cc/expect.lua` — `expect`, `field`, `range` |
+| `cc.completion` | ✅ Done | `rom/modules/main/cc/completion.lua` — `choice`, `peripheral`, `side`, `file`, `dir`, `program`, `setting` |
+| `cc.strings` | ✅ Done | `rom/modules/main/cc/strings.lua` — `wrap`, `ensure_width`, `split` |
+| `cc.pretty` | ✅ Done | `rom/modules/main/cc/pretty.lua` — full port of CC:Tweaked's pretty-printer |
+| `cc.image.nft` | ✅ Done | `rom/modules/main/cc/image/nft.lua` — `parse`, `load`, `draw` |
 
-**Implementation**: Pure Lua files placed under `rom/modules/main/cc/`. Requires adding a `require` implementation (or `cc.require`) to the bios/shell bootstrap so the `require` global resolves `rom/modules/main/`.
+**`cc.pretty` details**: Ported directly from CC:Tweaked. Exposes `empty`, `space`, `line`,
+`space_line`, `text`, `concat`, `nest`, `group`, `write`, `print`, `render`, `pretty`, and
+`pretty_print`. The `debug.getinfo` / `debug.getlocal` calls are guarded against `nil` (the
+debug library is not loaded), so function display falls back to plain `tostring(fn)`.
+
+**`cc.image.nft` details**: Faithful port of CC:Tweaked's NFT image module. Supports `\31`
+(foreground color token) and `\30` (background color token), each followed by one blit-format
+hex digit. Colors reset to `"0"`/`"f"` at every newline. `load()` is adapted to use `fs.open`
+instead of upstream's `io.open`, which correctly returns a `nil, error` pair on failure in
+this environment.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/CcPrettyTest.java` — 35 cases, all green.
+**Tests**: `src/test/java/dan200/computercraft/core/lua/CcImageNftTest.java` — 22 cases, all green.
 
 ---
 
@@ -171,11 +184,11 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `fs.attributes` / `fs.capacity` | Medium | Java |
 | ✅ Done | `term.getCursorBlink` | Trivial | Java |
 | ✅ Done | `http` response `getResponseHeaders()` + `read`/`readLine` gaps | Small | Java |
-| 🟡 Medium | `cc.expect` module | Small | Lua |
-| 🟡 Medium | `cc.completion` module | Small | Lua |
-| 🟡 Medium | `cc.strings` module | Small | Lua |
-| 🟡 Medium | `cc.pretty` module | Medium | Lua |
-| 🟡 Medium | `cc.image.nft` module | Small | Lua |
+| ✅ Done | `cc.expect` module | Small | Lua |
+| ✅ Done | `cc.completion` module | Small | Lua |
+| ✅ Done | `cc.strings` module | Small | Lua |
+| ✅ Done | `cc.pretty` module | Medium | Lua |
+| ✅ Done | `cc.image.nft` module | Small | Lua |
 | 🟠 Low | `pocket` API methods | Medium | Java |
 | ✅ Done | `http.checkURLAsync` | Trivial | Lua |
 | 🔵 Deferred | `term.setPaletteColor/getPaletteColor` | Large | Java + Client |

@@ -520,7 +520,41 @@ if _VERSION == "Lua 5.1" and not _CC_DISABLE_LUA51_FEATURES then
     end
 end
 
--- Install the rest of the OS api
+-- require / package
+-- Provides a Lua-5.2-style require that resolves modules from rom/modules/main/.
+-- package.path uses semicolon-separated templates where '?' is the slash-converted
+-- module name (e.g. "cc.expect" -> "cc/expect").
+package = {}
+package.loaded = {}
+package.path = "rom/modules/main/?.lua;rom/modules/main/?/init.lua"
+
+function require( _name )
+    if package.loaded[_name] ~= nil then
+        return package.loaded[_name]
+    end
+
+    local fragment = _name:gsub( "%.", "/" )
+    local searched = {}
+    for template in package.path:gmatch( "[^;]+" ) do
+        local path = template:gsub( "%?", fragment )
+        if fs.exists( path ) then
+            -- Set a sentinel first so circular requires get the partially-loaded table.
+            package.loaded[_name] = true
+            local fn, err = loadfile( path )
+            if not fn then
+                package.loaded[_name] = nil
+                error( "error loading module '" .. _name .. "' from '" .. path .. "':\n" .. tostring( err ), 2 )
+            end
+            local result = fn( _name )
+            package.loaded[_name] = ( result ~= nil ) and result or true
+            return package.loaded[_name]
+        end
+        searched[#searched + 1] = "  no file '" .. path .. "'"
+    end
+    error( "module '" .. _name .. "' not found:\n" .. table.concat( searched, "\n" ), 2 )
+end
+
+
 function os.run( _tEnv, _sPath, ... )
     local tArgs = { ... }
     local tEnv = _tEnv
