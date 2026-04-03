@@ -684,6 +684,27 @@ if http then
             os.queueEvent( "check_url_failure", _url, err )
         end
     end
+
+    local nativeWebsocket = http.websocket
+
+    http.websocketAsync = function( _url, _headers )
+        local ok, err = nativeWebsocket( _url, _headers )
+        if not ok then
+            os.queueEvent( "websocket_failure", _url, err )
+        end
+    end
+
+    http.websocket = function( _url, _headers )
+        http.websocketAsync( _url, _headers )
+        while true do
+            local event, evUrl, param = os.pullEvent()
+            if event == "websocket_success" and evUrl == _url then
+                return param
+            elseif event == "websocket_failure" and evUrl == _url then
+                return false, param
+            end
+        end
+    end
 end
 
 -- Install the lua part of the FS api

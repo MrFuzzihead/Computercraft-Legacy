@@ -8,6 +8,8 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +48,42 @@ public class HTTPRequest {
         if (!allowed) throw new LuaException("Domain not permitted");
 
         return url;
+    }
+
+    public static URI checkWebSocketURL(String urlString) throws LuaException {
+        URI uri;
+        try {
+            uri = new URI(urlString);
+        } catch (URISyntaxException e) {
+            throw new LuaException("URL malformed");
+        }
+
+        String scheme = uri.getScheme() != null ? uri.getScheme()
+            .toLowerCase() : "";
+        if (!scheme.equals("ws") && !scheme.equals("wss")) {
+            throw new LuaException("URL must be ws or wss");
+        }
+
+        String host = uri.getHost();
+        if (host == null || host.isEmpty()) {
+            throw new LuaException("URL malformed");
+        }
+
+        boolean allowed = false;
+        String whitelistString = ComputerCraft.http_whitelist;
+        String[] allowedURLs = whitelistString.split(";");
+        for (String allowedURL : allowedURLs) {
+            Pattern allowedURLPattern = Pattern.compile("^\\Q" + allowedURL.replaceAll("\\*", "\\\\E.*\\\\Q") + "\\E$");
+            if (allowedURLPattern.matcher(host)
+                .matches()) {
+                allowed = true;
+                break;
+            }
+        }
+
+        if (!allowed) throw new LuaException("Domain not permitted");
+
+        return uri;
     }
 
     private final Object lock = new Object();

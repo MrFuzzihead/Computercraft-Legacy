@@ -14,7 +14,7 @@
 | `fs` | `FSAPI.java` + `bios.lua` | `list`, `combine`, `getName`, `getSize`, `exists`, `isDir`, `isReadOnly`, `makeDir`, `move`, `copy`, `delete`, `open`, `getDrive`, `getFreeSpace`, `find`, `getDir`, `complete` |
 | `term` | `TermAPI.java` + `rom/apis/term` | `write`, `blit`, `scroll`, `clear`, `clearLine`, `setCursorPos`, `getCursorPos`, `setCursorBlink`, **`getCursorBlink`**, `getSize`, `setTextColor/Colour`, `setBackgroundColor/Colour`, `getTextColor/Colour`, `getBackgroundColor/Colour`, `isColor/Colour`, `redirect`, `current`, `native`, **`nativePaletteColor/Colour`**, **`setPaletteColor/Colour`**, **`getPaletteColor/Colour`** |
 | `redstone` / `rs` | `RedstoneAPI.java` | `getSides`, `setOutput`, `getOutput`, `getInput`, `setBundledOutput`, `getBundledOutput`, `getBundledInput`, `testBundledInput`, `setAnalogOutput/Analogue`, `getAnalogOutput/Analogue`, `getAnalogInput/Analogue` |
-| `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); response: `readLine`, `readAll`, `close`, `getResponseCode` |
+| `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); response: `readLine`, `readAll`, `close`, `getResponseCode`; **`websocket`**, **`websocketAsync`**; handle: **`receive`**, **`send`**, **`close`** |
 | `turtle` | `TurtleAPI.java` | All movement, dig, place, drop, suck, detect, compare, attack, fuel, inspect, equip, `getItemDetail` |
 | `commands` | `CommandAPI.java` | `exec`, `execAsync`, `list`, `getBlockPosition`, `getBlockInfo` |
 | `bit` | `BitAPI.java` | `bnot`, `band`, `bor`, `bxor`, `brshift`, `blshift`, `blogic_rshift` |
@@ -88,7 +88,7 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 
 ---
 
-### 5. `http` — ~~Missing response method gaps~~ ✅ Done (WebSocket still pending)
+### 5. `http` — ~~Missing response method gaps~~ ✅ Done ~~(WebSocket planned)~~ ✅ Done
 
 | Feature | Notes |
 |---|---|
@@ -98,11 +98,28 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 | `Response.readAll()` | ✅ Already correct — returns the remaining body as a string. |
 | `Response.close()` | ✅ Already correct. |
 | `Response.getResponseCode()` | ✅ Already correct. |
-| `http.websocket(url, headers)` | Requires a new async handler class — significant scope; deferred. |
-| `http.websocketAsync(url, headers)` | Same dependency as above. |
+| `http.websocket(url [, headers])` | ✅ Implemented — synchronous Lua wrapper in `bios.lua`; returns handle on success, `false, err` on failure. |
+| `http.websocketAsync(url [, headers])` | ✅ Implemented — async Lua wrapper in `bios.lua`; queues `websocket_failure` on immediate rejection. |
 | `http.checkURLAsync(url)` | ✅ Implemented in `bios.lua` — calls the native synchronous `http.checkURL` (whitelist + format check) and queues `check_url_success(url)` or `check_url_failure(url, err)`. No Java changes needed since the check is already instant. |
 
-**Tests**: `src/test/java/dan200/computercraft/core/apis/HTTPResponseTest.java` — 17 cases, all green.
+The WebSocket handle returned by `websocket_success` is a Java `ILuaObject` (`WebSocketHandle`) with three methods:
+
+| Method | Notes |
+|---|---|
+| `handle.receive([timeout])` | Loops on `ILuaContext.pullEventRaw` filtering for `websocket_message(url, msg, isBinary)` and `websocket_closed(url)` events. Optional wall-clock deadline; returns `nil` on timeout or close. |
+| `handle.send(message [, binary])` | Sends a text frame by default; `binary = true` sends a binary frame (`ByteBuffer`). Throws `LuaException` if the connection is closed. |
+| `handle.close()` | Initiates a WebSocket close handshake. Safe to call multiple times. |
+
+Background events queued by `WebSocketRequest` (extends `org.java_websocket.client.WebSocketClient`):
+- `websocket_message(url, message, isBinary)` — fired on `onMessage(String)` / `onMessage(ByteBuffer)`.
+- `websocket_closed(url)` — fired on `onClose` after a successful connection.
+- `websocket_success(url, handle)` / `websocket_failure(url, err)` — fired from `HTTPAPI.advance()` once the initial connect attempt settles.
+
+URL validation uses `HTTPRequest.checkWebSocketURL(String)` — permits `ws`/`wss` schemes, applies the same `ComputerCraft.http_whitelist` hostname check. TLS (`wss://`) is initialised from `SSLContext.getDefault()`.
+
+The WebSocket library (`org.java-websocket:Java-WebSocket:1.5.6`) is added as a `shadowImplementation` dependency, bundled into the mod JAR exactly like Cobalt.
+
+**Tests**: `src/test/java/dan200/computercraft/core/apis/WebSocketHandleTest.java` — 16 cases, all green.
 
 ---
 
@@ -202,7 +219,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `pocket` API methods | Medium | Java |
 | ✅ Done | `http.checkURLAsync` | Trivial | Lua |
 | ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor` | Large | Java + Client |
-| 🔵 Deferred | HTTP WebSocket support | Large | Java |
+| ✅ Done | HTTP WebSocket support | Large | Java + Lua |
 | 🔵 Deferred | Speaker peripheral | Large | Java + Client |
 
 ---
@@ -217,8 +234,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
    Touches `Terminal.java`, `TermAPI.java`, `FixedWidthFontRenderer.java`, both rendering call sites,
    and the `window` Lua API.
 
-3. **WebSocket and Speaker**: Both require new async Java infrastructure or sound engine hooks with
-   no clear 1.7.10 equivalent. Mark as out-of-scope unless explicitly requested.
+3. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless explicitly requested.
 
 4. **`bit32` vs `bit`**: This fork exposes `bit` (LuaJ/BitAPI) and shims `bit32` in `bios.lua`.
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
