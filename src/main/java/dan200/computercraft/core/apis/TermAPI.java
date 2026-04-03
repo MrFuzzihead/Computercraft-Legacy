@@ -34,7 +34,8 @@ public class TermAPI implements ILuaAPI {
         return new String[] { "write", "scroll", "setCursorPos", "setCursorBlink", "getCursorPos", "getSize", "clear",
             "clearLine", "setTextColour", "setTextColor", "setBackgroundColour", "setBackgroundColor", "isColour",
             "isColor", "getTextColour", "getTextColor", "getBackgroundColour", "getBackgroundColor", "blit",
-            "getCursorBlink" };
+            "getCursorBlink", "nativePaletteColor", "nativePaletteColour", "setPaletteColor", "setPaletteColour",
+            "getPaletteColor", "getPaletteColour" };
     }
 
     public static int parseColour(Object[] args, boolean _enableColours) throws LuaException {
@@ -188,6 +189,44 @@ public class TermAPI implements ILuaAPI {
                 synchronized (this.m_terminal) {
                     return new Object[] { this.m_terminal.getCursorBlink() };
                 }
+            case 20:
+            case 21: {
+                // nativePaletteColor(color) -> r, g, b
+                int paletteIdx20 = parseColour(args, true);
+                double[] defRgb = Terminal.getDefaultPaletteColour(paletteIdx20);
+                return new Object[] { defRgb[0], defRgb[1], defRgb[2] };
+            }
+            case 22:
+            case 23: {
+                // setPaletteColor(color, r, g, b)
+                if (args.length < 4 || !(args[0] instanceof Double)
+                    || !(args[1] instanceof Double)
+                    || !(args[2] instanceof Double)
+                    || !(args[3] instanceof Double)) {
+                    throw new LuaException("Expected number, number, number, number");
+                }
+                int paletteIdx22 = parseColour(new Object[] { args[0] }, true);
+                double r22 = (Double) args[1];
+                double g22 = (Double) args[2];
+                double b22 = (Double) args[3];
+                if (r22 < 0 || r22 > 1) throw new LuaException("'r' value must be between 0 and 1");
+                if (g22 < 0 || g22 > 1) throw new LuaException("'g' value must be between 0 and 1");
+                if (b22 < 0 || b22 > 1) throw new LuaException("'b' value must be between 0 and 1");
+                synchronized (this.m_terminal) {
+                    this.m_terminal.setPaletteColour(paletteIdx22, r22, g22, b22);
+                }
+                return null;
+            }
+            case 24:
+            case 25: {
+                // getPaletteColor(color) -> r, g, b
+                int paletteIdx24 = parseColour(args, true);
+                double[] rgb24;
+                synchronized (this.m_terminal) {
+                    rgb24 = this.m_terminal.getPaletteColour(paletteIdx24);
+                }
+                return new Object[] { rgb24[0], rgb24[1], rgb24[2] };
+            }
             default:
                 return null;
         }

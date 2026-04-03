@@ -106,13 +106,22 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 
 ---
 
-### 6. `term` — ~~Missing `getCursorBlink`~~ ✅ Done (palette still pending)
+### 6. `term` — ~~Missing `getCursorBlink`~~ ✅ Done ~~(palette still pending)~~ ✅ Done
 
 | Method | Notes |
 |---|---|
 | `term.getCursorBlink()` | ✅ Implemented in `TermAPI.java` (method index 19); reads `Terminal.m_cursorBlink` under the terminal lock. `window.getCursorBlink()` added to `rom/apis/window` so redirect targets expose the getter without an error stub. |
-| `term.setPaletteColor(color, r, g, b)` | Requires `Terminal.java` to carry a 16-entry RGB palette and all client-side rendering to consume it — significant scope; treat as a separate feature. |
-| `term.getPaletteColor(color)` | Same dependency as above. |
+| `term.nativePaletteColor(color)` | ✅ Implemented in `TermAPI.java` (method index 20/21). Returns factory-default `{r,g,b}` from the static `Terminal.DEFAULT_PALETTE_HEX` table; never reflects custom palette changes. `*Colour` British variant at index 21. |
+| `term.setPaletteColor(color, r, g, b)` | ✅ Implemented in `TermAPI.java` (method index 22/23). Validates r/g/b in [0,1]; stores in `Terminal.m_palette`; marks terminal changed so the state is flushed to NBT and synced to the client. `*Colour` British variant at index 23. |
+| `term.getPaletteColor(color)` | ✅ Implemented in `TermAPI.java` (method index 24/25). Returns current palette entry as `{r,g,b}` copy. `*Colour` British variant at index 25. |
+
+Palette is serialized via a packed `int[16]` NBT array (`"term_palette"`) in `Terminal.writeToNBT`/`readFromNBT`, flowing automatically through the existing `ServerTerminal.writeDescription` → `ClientTerminal.readDescription` sync path. Old terminals without the key fall back to factory defaults.
+
+Client-side rendering: `FixedWidthFontRenderer.drawString` has a new overload accepting `double[][] palette`; colour changes now flush the draw-buffer and call `GL11.glColor3f` inline rather than using the baked Colour display lists. Both `WidgetTerminal` and `TileEntityMonitorRenderer` pass `terminal.getPalette()`. The `window` Lua API forwards all six palette methods to `parent`.
+
+Terminal `reset()` restores the palette to factory defaults.
+
+**Tests**: `src/test/java/dan200/computercraft/core/apis/TermAPITest.java` — 17 cases, all green.
 
 **Tests**: `src/test/java/dan200/computercraft/core/apis/TermAPITest.java` — 4 cases, all green.
 
@@ -193,7 +202,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `cc.image.nft` module | Small | Lua |
 | ✅ Done | `pocket` API methods | Medium | Java |
 | ✅ Done | `http.checkURLAsync` | Trivial | Lua |
-| 🔵 Deferred | `term.setPaletteColor/getPaletteColor` | Large | Java + Client |
+| ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor` | Large | Java + Client |
 | 🔵 Deferred | HTTP WebSocket support | Large | Java |
 | 🔵 Deferred | Speaker peripheral | Large | Java + Client |
 
@@ -205,9 +214,9 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
    a `require` implementation added to `bios.lua` (or the shell) that resolves paths under
    `rom/modules/main/`. Confirm whether `os.loadAPI` compatibility must be preserved alongside it.
 
-2. **Palette support (`setPaletteColor`)**: Requires `Terminal.java` to carry a 16-entry RGB palette
-   and all rendering code (client-side `TileMonitor`, computer GUI) to consume it. Worth a dedicated
-   planning session before starting.
+2. **Palette support (`setPaletteColor`)**: Full implementation plan documented in `PALETTE_PLAN.md`.
+   Touches `Terminal.java`, `TermAPI.java`, `FixedWidthFontRenderer.java`, both rendering call sites,
+   and the `window` Lua API.
 
 3. **WebSocket and Speaker**: Both require new async Java infrastructure or sound engine hooks with
    no clear 1.7.10 equivalent. Mark as out-of-scope unless explicitly requested.

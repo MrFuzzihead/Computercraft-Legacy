@@ -15,12 +15,14 @@ import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.terminal.Terminal;
 
 /**
- * Unit tests for {@link TermAPI} covering the {@code term.getCursorBlink} method.
+ * Unit tests for {@link TermAPI} covering the {@code term.getCursorBlink} method
+ * and the palette methods ({@code nativePaletteColor}, {@code setPaletteColor},
+ * {@code getPaletteColor}) including British {@code *Colour} variants.
  *
  * <p>
  * Tests call {@link TermAPI#callMethod} directly with a {@code null}
- * {@link dan200.computercraft.api.lua.ILuaContext}; {@code getCursorBlink} and
- * {@code setCursorBlink} do not schedule work on the main thread, so this is safe.
+ * {@link dan200.computercraft.api.lua.ILuaContext}; none of the tested methods
+ * schedule work on the main thread, so this is safe.
  * </p>
  */
 class TermAPITest {
@@ -28,12 +30,23 @@ class TermAPITest {
     // Method indices must match the order declared in TermAPI.getMethodNames().
     private static final int METHOD_SET_CURSOR_BLINK = 3;
     private static final int METHOD_GET_CURSOR_BLINK = 19;
+    private static final int METHOD_NATIVE_PALETTE_COLOR = 20;
+    private static final int METHOD_NATIVE_PALETTE_COLOUR = 21;
+    private static final int METHOD_SET_PALETTE_COLOR = 22;
+    private static final int METHOD_SET_PALETTE_COLOUR = 23;
+    private static final int METHOD_GET_PALETTE_COLOR = 24;
+    private static final int METHOD_GET_PALETTE_COLOUR = 25;
 
+    // colors.white = 1 (2^0); colors.black = 32768 (2^15)
+    private static final double WHITE_BITMASK = 1.0;
+    private static final double BLACK_BITMASK = 32768.0;
+
+    private Terminal terminal;
     private TermAPI api;
 
     @BeforeEach
     void setUp() {
-        Terminal terminal = new Terminal(51, 19);
+        terminal = new Terminal(51, 19);
         api = new TermAPI(new StubEnv(terminal));
     }
 
@@ -81,6 +94,157 @@ class TermAPITest {
             assertNotNull(result);
             assertEquals(expected, result[0], "round-trip failed for value: " + expected);
         }
+    }
+
+    // =========================================================================
+    // term.nativePaletteColor / nativePaletteColour
+    // =========================================================================
+
+    @Test
+    void nativePaletteColorWhiteReturnsDefaultRGB() throws LuaException {
+        // colors.white bitmask = 1 → blit index 0 → DEFAULT_PALETTE_HEX[0] = 0xF0F0F0
+        double expected = 0xF0 / 255.0;
+        Object[] result = api.callMethod(null, METHOD_NATIVE_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+
+        assertNotNull(result);
+        assertEquals(3, result.length);
+        assertEquals(expected, (Double) result[0], 1e-6, "r");
+        assertEquals(expected, (Double) result[1], 1e-6, "g");
+        assertEquals(expected, (Double) result[2], 1e-6, "b");
+    }
+
+    @Test
+    void nativePaletteColorBlackReturnsDefaultRGB() throws LuaException {
+        // colors.black bitmask = 32768 → blit index 15 → DEFAULT_PALETTE_HEX[15] = 0x191919
+        double expected = 0x19 / 255.0;
+        Object[] result = api.callMethod(null, METHOD_NATIVE_PALETTE_COLOR, new Object[] { BLACK_BITMASK });
+
+        assertNotNull(result);
+        assertEquals(expected, (Double) result[0], 1e-6, "r");
+        assertEquals(expected, (Double) result[1], 1e-6, "g");
+        assertEquals(expected, (Double) result[2], 1e-6, "b");
+    }
+
+    @Test
+    void nativePaletteColorIsUnaffectedBySetPaletteColor() throws LuaException {
+        // Remap white to red, then verify nativePaletteColor still returns original white.
+        api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { WHITE_BITMASK, 1.0, 0.0, 0.0 });
+
+        double expectedDefault = 0xF0 / 255.0;
+        Object[] result = api.callMethod(null, METHOD_NATIVE_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+
+        assertNotNull(result);
+        assertEquals(expectedDefault, (Double) result[0], 1e-6, "native r should still be default white");
+    }
+
+    @Test
+    void nativePaletteColourMatchesNativePaletteColor() throws LuaException {
+        Object[] american = api.callMethod(null, METHOD_NATIVE_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+        Object[] british = api.callMethod(null, METHOD_NATIVE_PALETTE_COLOUR, new Object[] { WHITE_BITMASK });
+
+        assertNotNull(american);
+        assertNotNull(british);
+        assertEquals(american[0], british[0]);
+        assertEquals(american[1], british[1]);
+        assertEquals(american[2], british[2]);
+    }
+
+    // =========================================================================
+    // term.setPaletteColor / setPaletteColour
+    // =========================================================================
+
+    @Test
+    void setPaletteColorStoresCustomRGB() throws LuaException {
+        api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { WHITE_BITMASK, 0.5, 0.25, 0.75 });
+
+        Object[] result = api.callMethod(null, METHOD_GET_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+
+        assertNotNull(result);
+        assertEquals(0.5, (Double) result[0], 1e-9, "r");
+        assertEquals(0.25, (Double) result[1], 1e-9, "g");
+        assertEquals(0.75, (Double) result[2], 1e-9, "b");
+    }
+
+    @Test
+    void setPaletteColourEquivalentToSetPaletteColor() throws LuaException {
+        api.callMethod(null, METHOD_SET_PALETTE_COLOUR, new Object[] { BLACK_BITMASK, 0.1, 0.2, 0.3 });
+
+        Object[] result = api.callMethod(null, METHOD_GET_PALETTE_COLOUR, new Object[] { BLACK_BITMASK });
+
+        assertNotNull(result);
+        assertEquals(0.1, (Double) result[0], 1e-9, "r");
+        assertEquals(0.2, (Double) result[1], 1e-9, "g");
+        assertEquals(0.3, (Double) result[2], 1e-9, "b");
+    }
+
+    @Test
+    void setPaletteColorZeroBitmaskThrows() {
+        assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { 0.0, 1.0, 1.0, 1.0 }));
+    }
+
+    @Test
+    void setPaletteColorOutOfRangeColorBitmaskThrows() {
+        // 2^16 = 65536 → blit index 16, which is > 15
+        assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { 65536.0, 1.0, 1.0, 1.0 }));
+    }
+
+    @Test
+    void setPaletteColorOutOfRangeRGBThrows() {
+        assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { WHITE_BITMASK, 1.5, 0.0, 0.0 }));
+    }
+
+    // =========================================================================
+    // term.getPaletteColor / getPaletteColour
+    // =========================================================================
+
+    @Test
+    void getPaletteColorReturnsDefaultsInitially() throws LuaException {
+        // Default white: 0xF0F0F0
+        double expected = 0xF0 / 255.0;
+        Object[] result = api.callMethod(null, METHOD_GET_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+
+        assertNotNull(result);
+        assertEquals(expected, (Double) result[0], 1e-6, "r");
+        assertEquals(expected, (Double) result[1], 1e-6, "g");
+        assertEquals(expected, (Double) result[2], 1e-6, "b");
+    }
+
+    @Test
+    void getPaletteColourMatchesGetPaletteColor() throws LuaException {
+        api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { WHITE_BITMASK, 0.3, 0.6, 0.9 });
+
+        Object[] american = api.callMethod(null, METHOD_GET_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+        Object[] british = api.callMethod(null, METHOD_GET_PALETTE_COLOUR, new Object[] { WHITE_BITMASK });
+
+        assertNotNull(american);
+        assertNotNull(british);
+        assertEquals(american[0], british[0]);
+        assertEquals(american[1], british[1]);
+        assertEquals(american[2], british[2]);
+    }
+
+    @Test
+    void terminalResetRestoresPaletteDefaults() throws LuaException {
+        // Remap white to red.
+        api.callMethod(null, METHOD_SET_PALETTE_COLOR, new Object[] { WHITE_BITMASK, 1.0, 0.0, 0.0 });
+
+        // Verify the change is in effect.
+        Object[] before = api.callMethod(null, METHOD_GET_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+        assertEquals(1.0, (Double) before[0], 1e-9, "r should be 1.0 after set");
+
+        // Reset terminal.
+        terminal.reset();
+
+        // Palette should be restored to factory white (0xF0F0F0).
+        double expectedDefault = 0xF0 / 255.0;
+        Object[] after = api.callMethod(null, METHOD_GET_PALETTE_COLOR, new Object[] { WHITE_BITMASK });
+        assertEquals(expectedDefault, (Double) after[0], 1e-6, "r should be restored to default");
     }
 
     // =========================================================================

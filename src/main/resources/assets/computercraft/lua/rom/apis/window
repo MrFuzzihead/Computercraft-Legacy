@@ -344,6 +344,31 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
         return nBackgroundColor
     end
 
+    -- Palette functions — delegate directly to parent terminal.
+    function window.setPaletteColor(colour, r, g, b)
+        parent.setPaletteColor(colour, r, g, b)
+    end
+
+    function window.setPaletteColour(colour, r, g, b)
+        parent.setPaletteColour(colour, r, g, b)
+    end
+
+    function window.getPaletteColor(colour)
+        return parent.getPaletteColor(colour)
+    end
+
+    function window.getPaletteColour(colour)
+        return parent.getPaletteColour(colour)
+    end
+
+    function window.nativePaletteColor(colour)
+        return parent.nativePaletteColor(colour)
+    end
+
+    function window.nativePaletteColour(colour)
+        return parent.nativePaletteColour(colour)
+    end
+
     -- Other functions
     function window.setVisible( bVis )
         if bVisible ~= bVis then
