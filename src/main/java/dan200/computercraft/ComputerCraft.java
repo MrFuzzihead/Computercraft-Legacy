@@ -265,6 +265,7 @@ public class ComputerCraft {
         if (FMLCommonHandler.instance()
             .getEffectiveSide() == Side.SERVER) {
             serverComputerRegistry.reset();
+            ItemPocketComputer.clearPocketAPIs();
         }
     }
 
@@ -273,6 +274,7 @@ public class ComputerCraft {
         if (FMLCommonHandler.instance()
             .getEffectiveSide() == Side.SERVER) {
             serverComputerRegistry.reset();
+            ItemPocketComputer.clearPocketAPIs();
         }
     }
 

@@ -201,12 +201,15 @@ public class PocketAPI implements ILuaAPI {
         }
 
         // Return a wireless modem item to the player's inventory.
+        // Guard first: if the item cannot be created, abort without mutating state
+        // so the player does not lose the modem upgrade silently.
         ItemStack modemStack = PeripheralItemFactory.create(PeripheralType.WirelessModem, null, 1);
-        if (modemStack != null) {
-            if (!player.inventory.addItemStackToInventory(modemStack)) {
-                // Inventory full: drop the item at the player's feet.
-                player.dropPlayerItemWithRandomChoice(modemStack, false);
-            }
+        if (modemStack == null) {
+            return new Object[] { false, "Cannot create upgrade item" };
+        }
+        if (!player.inventory.addItemStackToInventory(modemStack)) {
+            // Inventory full: drop the item at the player's feet.
+            player.dropPlayerItemWithRandomChoice(modemStack, false);
         }
 
         // Clear the upgrade flag.

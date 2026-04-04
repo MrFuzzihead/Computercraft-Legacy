@@ -36,9 +36,16 @@ local native_select, native_type = select, type
 
 --- Build a human-readable list of type names from varargs.
 -- Strips any literal "nil" entries (they are implied when a value is absent).
+--
+-- Uses select('#', ...) rather than table.pack so that we are not reliant on
+-- the bios-provided table.pack including the 'n' field (it doesn't in 1.7.10).
 local function get_type_names(...)
-    local types = table.pack(...)
-    for i = types.n, 1, -1 do
+    local count = native_select("#", ...)
+    local types = {}
+    for i = 1, count do
+        types[i] = native_select(i, ...)
+    end
+    for i = #types, 1, -1 do
         if types[i] == "nil" then table.remove(types, i) end
     end
 

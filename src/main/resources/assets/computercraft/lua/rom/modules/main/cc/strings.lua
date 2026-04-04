@@ -118,7 +118,7 @@ By default the delimiter is treated as a Lua pattern. Pass `true` as the
 `plain` argument to treat it as a literal string instead.
 
 @tparam string str The string to split.
-@tparam string deliminator The pattern to split this string on.
+@tparam string delimiter The pattern to split this string on.
 @tparam[opt=false] boolean plain Treat the delimiter as a plain string, rather than a pattern.
 @tparam[opt] number limit The maximum number of elements in the returned list.
 @treturn { string... } The list of split strings.
@@ -134,15 +134,15 @@ By default the delimiter is treated as a Lua pattern. Pass `true` as the
 @see table.concat To join strings together.
 @since 1.112.0
 ]]
-local function split(str, deliminator, plain, limit)
+local function split(str, delimiter, plain, limit)
     expect(1, str, "string")
-    expect(2, deliminator, "string")
+    expect(2, delimiter, "string")
     expect(3, plain, "boolean", "nil")
     expect(4, limit, "number", "nil")
 
     local out, out_n, pos = {}, 0, 1
     while not limit or out_n < limit - 1 do
-        local start, finish = str:find(deliminator, pos, plain)
+        local start, finish = str:find(delimiter, pos, plain)
         if not start then break end
 
         out_n = out_n + 1

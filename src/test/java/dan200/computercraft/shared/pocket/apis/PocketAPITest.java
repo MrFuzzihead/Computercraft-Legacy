@@ -34,6 +34,8 @@ import dan200.computercraft.api.lua.LuaException;
  * {@link dan200.computercraft.shared.computer.core.ServerComputer#setPeripheral}
  * — require Minecraft's item registry and a live {@code ServerComputer}. Those
  * paths are covered by the in-game script {@code testPocketAPI}.
+ * The {@code PeripheralItemFactory.create == null} guard in {@code unequipBack()}
+ * similarly requires a live item registry and is covered by the same in-game tests.
  *
  * <h2>Threading note</h2>
  * <p>

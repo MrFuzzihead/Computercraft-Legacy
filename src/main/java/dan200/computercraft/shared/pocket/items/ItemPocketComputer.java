@@ -45,6 +45,17 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
      */
     private static final Map<Integer, PocketAPI> s_pocketAPIs = new HashMap<>();
 
+    /**
+     * Removes all entries from the pocket-API map. Must be called whenever
+     * {@link dan200.computercraft.shared.computer.core.ServerComputerRegistry#reset()}
+     * is called so that stale {@link PocketAPI} instances (and the
+     * {@link dan200.computercraft.shared.computer.core.ServerComputer} objects
+     * they reference) can be garbage-collected.
+     */
+    public static void clearPocketAPIs() {
+        s_pocketAPIs.clear();
+    }
+
     public ItemPocketComputer() {
         this.setMaxStackSize(1);
         this.setHasSubtypes(true);
@@ -228,6 +239,11 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                 computer = ComputerCraft.serverComputerRegistry.get(instanceID);
             } else {
                 if (instanceID < 0 || sessionID != correctSessionID) {
+                    // Remove any stale PocketAPI entry for the old instance ID so it
+                    // can be garbage-collected along with its ServerComputer reference.
+                    if (instanceID >= 0) {
+                        s_pocketAPIs.remove(instanceID);
+                    }
                     instanceID = ComputerCraft.serverComputerRegistry.getUnusedInstanceID();
                     this.setInstanceID(stack, instanceID);
                     this.setSessionID(stack, correctSessionID);

@@ -79,10 +79,10 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 
 ### 4. `fs` — ~~Missing 2 methods~~ ✅ Done
 
-| Method | Notes |
-|---|---|
-| `fs.attributes(path)` | ✅ Implemented in `FSAPI.java` (method index 17); returns `{size, isDir, isReadOnly, created, modified, modification}`. Timestamps use `java.nio.file.attribute.BasicFileAttributes` on `FileMount` paths (falls back to `File.lastModified()`); read-only mounts return `0`. |
-| `fs.capacity(path)` | ✅ Implemented in `FSAPI.java` (method index 16); returns total drive capacity in bytes, or `nil` for read-only / unlimited mounts. `FileMount` overrides `IWritableMount.getCapacity()` to expose `m_capacity`; read-only `IMount` implementations inherit the default `-1` sentinel which is translated to `nil` in Lua. |
+| Method                 | Notes |
+|------------------------|---|
+| `fs.attributes(path)`  | ✅ Implemented in `FSAPI.java` (method index 17); returns `{size, isDir, isReadOnly, created, modified, modification}`. Timestamps use `java.nio.file.attribute.BasicFileAttributes` on `FileMount` paths (falls back to `File.lastModified()`); read-only mounts return `0`. |
+| `fs.getCapacity(path)` | ✅ Implemented in `FSAPI.java` (method index 16); returns total drive capacity in bytes, or `nil` for read-only / unlimited mounts. `FileMount` overrides `IWritableMount.getCapacity()` to expose `m_capacity`; read-only `IMount` implementations inherit the default `-1` sentinel which is translated to `nil` in Lua. |
 
 **Tests**: `src/test/java/dan200/computercraft/core/apis/FSAPITest.java` — 10 cases, all green.
 
@@ -203,24 +203,24 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 
 ## Prioritized Implementation Roadmap
 
-| Priority | Item | Effort | Type |
-|---|---|---|---|
-| ✅ Done | `settings` API | Small | Lua |
-| ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit` | Small | Lua |
-| ✅ Done | `os.epoch` / `os.date` | Small | Java |
-| ✅ Done | `fs.attributes` / `fs.capacity` | Medium | Java |
-| ✅ Done | `term.getCursorBlink` | Trivial | Java |
+| Priority | Item                                                            | Effort | Type |
+|---|-----------------------------------------------------------------|---|---|
+| ✅ Done | `settings` API                                                  | Small | Lua |
+| ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit`                      | Small | Lua |
+| ✅ Done | `os.epoch` / `os.date`                                          | Small | Java |
+| ✅ Done | `fs.attributes` / `fs.getCapacity`                              | Medium | Java |
+| ✅ Done | `term.getCursorBlink`                                           | Trivial | Java |
 | ✅ Done | `http` response `getResponseHeaders()` + `read`/`readLine` gaps | Small | Java |
-| ✅ Done | `cc.expect` module | Small | Lua |
-| ✅ Done | `cc.completion` module | Small | Lua |
-| ✅ Done | `cc.strings` module | Small | Lua |
-| ✅ Done | `cc.pretty` module | Medium | Lua |
-| ✅ Done | `cc.image.nft` module | Small | Lua |
-| ✅ Done | `pocket` API methods | Medium | Java |
-| ✅ Done | `http.checkURLAsync` | Trivial | Lua |
-| ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor` | Large | Java + Client |
-| ✅ Done | HTTP WebSocket support | Large | Java + Lua |
-| 🔵 Deferred | Speaker peripheral | Large | Java + Client |
+| ✅ Done | `cc.expect` module                                              | Small | Lua |
+| ✅ Done | `cc.completion` module                                          | Small | Lua |
+| ✅ Done | `cc.strings` module                                             | Small | Lua |
+| ✅ Done | `cc.pretty` module                                              | Medium | Lua |
+| ✅ Done | `cc.image.nft` module                                           | Small | Lua |
+| ✅ Done | `pocket` API methods                                            | Medium | Java |
+| ✅ Done | `http.checkURLAsync`                                            | Trivial | Lua |
+| ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor`       | Large | Java + Client |
+| ✅ Done | HTTP WebSocket support                                          | Large | Java + Lua |
+| 🔵 Deferred | Speaker peripheral                                              | Large | Java + Client |
 
 ---
 

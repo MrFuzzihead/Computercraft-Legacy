@@ -55,23 +55,31 @@ public class HTTPAPI implements ILuaAPI {
             }
         }
 
+        // Collect completed WebSocket connections under the lock, then release
+        // before calling queueEvent or acquiring m_activeWebsockets, so we
+        // never hold m_pendingWebsockets while calling external or nested code.
+        List<WebSocketRequest> completedWebsockets = new ArrayList<>();
         synchronized (m_pendingWebsockets) {
             Iterator<WebSocketRequest> wsIt = m_pendingWebsockets.iterator();
             while (wsIt.hasNext()) {
                 WebSocketRequest ws = wsIt.next();
                 if (ws.isConnectComplete()) {
-                    String url = ws.getURL();
-                    if (ws.wasConnectSuccessful()) {
-                        m_apiEnvironment
-                            .queueEvent("websocket_success", new Object[] { url, new WebSocketHandle(url, ws) });
-                        synchronized (m_activeWebsockets) {
-                            m_activeWebsockets.add(ws);
-                        }
-                    } else {
-                        m_apiEnvironment.queueEvent("websocket_failure", new Object[] { url, ws.getConnectError() });
-                    }
+                    completedWebsockets.add(ws);
                     wsIt.remove();
                 }
+            }
+        }
+        for (WebSocketRequest ws : completedWebsockets) {
+            String url = ws.getURL();
+            if (ws.wasConnectSuccessful()) {
+                m_apiEnvironment.queueEvent(
+                    "websocket_success",
+                    new Object[] { url, new WebSocketHandle(url, ws, m_apiEnvironment) });
+                synchronized (m_activeWebsockets) {
+                    m_activeWebsockets.add(ws);
+                }
+            } else {
+                m_apiEnvironment.queueEvent("websocket_failure", new Object[] { url, ws.getConnectError() });
             }
         }
 

@@ -538,15 +538,20 @@ function require( _name )
     for template in package.path:gmatch( "[^;]+" ) do
         local path = template:gsub( "%?", fragment )
         if fs.exists( path ) then
-            -- Set a sentinel first so circular requires get the partially-loaded table.
-            package.loaded[_name] = true
+            -- Set an empty-table sentinel so that circular requires receive a
+            -- usable table rather than boolean true.  This matches the Lua 5.2+
+            -- package library behaviour.
+            local loading = {}
+            package.loaded[_name] = loading
             local fn, err = loadfile( path )
             if not fn then
                 package.loaded[_name] = nil
                 error( "error loading module '" .. _name .. "' from '" .. path .. "':\n" .. tostring( err ), 2 )
             end
             local result = fn( _name )
-            package.loaded[_name] = ( result ~= nil ) and result or true
+            -- If the module body returned nil keep the sentinel table so callers
+            -- always get a table from require(), never a boolean.
+            package.loaded[_name] = ( result ~= nil ) and result or loading
             return package.loaded[_name]
         end
         searched[#searched + 1] = "  no file '" .. path .. "'"

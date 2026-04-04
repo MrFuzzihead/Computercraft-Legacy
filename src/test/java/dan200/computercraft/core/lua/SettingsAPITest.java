@@ -140,6 +140,9 @@ class SettingsAPITest {
                 + "  end\n"
                 + "  return nil\n"
                 + "end\n"
+                + "function fs.exists(path)\n"
+                + "  return _mock_fs[path] ~= nil\n"
+                + "end\n"
                 // Minimal textutils: serialize produces a basic Lua table literal;
                 // unserialize evaluates it via loadstring.
                 + "textutils = {}\n"
@@ -489,15 +492,15 @@ class SettingsAPITest {
     // =========================================================================
 
     @Test
-    void loadMissingFileReturnsFalse() {
+    void loadMissingFileReturnsTrue() {
         ResultCapture cap = new ResultCapture();
         runWithMocks(
             buildMachine(cap),
             null, // no .settings file in mock fs
-            "local ok, err = load()\n" + "_capture(ok, type(err))");
+            "local ok, err = load()\n" + "_capture(ok, err)");
         assertNotNull(cap.args);
-        assertFalse((Boolean) cap.args[0]);
-        assertEquals("string", cap.args[1]);
+        assertTrue((Boolean) cap.args[0], "Missing file must be treated as empty (fresh install)");
+        assertNull(cap.args[1], "No error message expected for missing file");
     }
 
     @Test

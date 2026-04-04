@@ -160,6 +160,8 @@ function load( path )
 
     local file = fs.open( path, "r" )
     if not file then
+        -- A missing file is not an error (fresh install / first boot).
+        if not fs.exists( path ) then return true end
         return false, "Cannot open '" .. path .. "'"
     end
 

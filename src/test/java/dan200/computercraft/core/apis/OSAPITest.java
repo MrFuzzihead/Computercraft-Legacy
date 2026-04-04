@@ -31,7 +31,7 @@ import dan200.computercraft.core.terminal.Terminal;
  * The stub environment is initialised with <b>day&nbsp;=&nbsp;5</b> and
  * <b>time&nbsp;=&nbsp;6.0</b> (06:00 in-game hours) to give deterministic ingame
  * epoch results:
- * 
+ *
  * <pre>
  * ticks = 5 * 24000 + 6 * 1000 = 126 000 → ms = 6 300 000
  * </pre>
@@ -67,19 +67,22 @@ class OSAPITest {
     }
 
     @Test
-    void epochLocalDiffersFromUtcByRawTimezoneOffset() throws LuaException {
+    void epochLocalDiffersFromUtcByTotalTimezoneOffset() throws LuaException {
+        long before = System.currentTimeMillis();
         Object[] utcResult = api.callMethod(null, METHOD_EPOCH, new Object[] { "utc" });
         Object[] localResult = api.callMethod(null, METHOD_EPOCH, new Object[] { "local" });
+        long after = System.currentTimeMillis();
 
         long utc = ((Number) utcResult[0]).longValue();
         long local = ((Number) localResult[0]).longValue();
 
-        // Allow a small window for the two currentTimeMillis() calls racing.
+        // Expected offset includes DST; use the midpoint of the measurement window
+        // to compute it, matching what the implementation uses.
         long expectedOffset = TimeZone.getDefault()
-            .getRawOffset();
+            .getOffset((before + after) / 2);
         assertTrue(
             Math.abs((local - utc) - expectedOffset) < 200,
-            "local epoch should differ from utc by the raw timezone offset");
+            "local epoch should differ from utc by the full timezone offset (including DST)");
     }
 
     @Test

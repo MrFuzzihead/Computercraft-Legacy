@@ -235,10 +235,11 @@ public class OSAPI implements ILuaAPI {
                         }
                     case "utc":
                         return new Object[] { System.currentTimeMillis() };
-                    case "local":
-                        return new Object[] { System.currentTimeMillis() + (long) Calendar.getInstance()
-                            .getTimeZone()
-                            .getRawOffset() };
+                    case "local": {
+                        long now = System.currentTimeMillis();
+                        return new Object[] { now + (long) TimeZone.getDefault()
+                            .getOffset(now) };
+                    }
                     default:
                         throw new LuaException("Unsupported timezone '" + timezone + "'");
                 }
