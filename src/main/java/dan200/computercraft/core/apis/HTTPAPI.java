@@ -16,10 +16,16 @@ public class HTTPAPI implements ILuaAPI {
 
     private IAPIEnvironment m_apiEnvironment;
     private List<HTTPRequest> m_httpRequests;
+    /** WebSocket connections whose initial connect attempt has not yet settled. */
+    private List<WebSocketRequest> m_pendingWebsockets;
+    /** WebSocket connections that have successfully opened (needed for shutdown cleanup). */
+    private List<WebSocketRequest> m_activeWebsockets;
 
     public HTTPAPI(IAPIEnvironment environment) {
         this.m_apiEnvironment = environment;
         this.m_httpRequests = new ArrayList<>();
+        this.m_pendingWebsockets = new ArrayList<>();
+        this.m_activeWebsockets = new ArrayList<>();
     }
 
     @Override
@@ -47,6 +53,39 @@ public class HTTPAPI implements ILuaAPI {
                     it.remove();
                 }
             }
+        }
+
+        // Collect completed WebSocket connections under the lock, then release
+        // before calling queueEvent or acquiring m_activeWebsockets, so we
+        // never hold m_pendingWebsockets while calling external or nested code.
+        List<WebSocketRequest> completedWebsockets = new ArrayList<>();
+        synchronized (m_pendingWebsockets) {
+            Iterator<WebSocketRequest> wsIt = m_pendingWebsockets.iterator();
+            while (wsIt.hasNext()) {
+                WebSocketRequest ws = wsIt.next();
+                if (ws.isConnectComplete()) {
+                    completedWebsockets.add(ws);
+                    wsIt.remove();
+                }
+            }
+        }
+        for (WebSocketRequest ws : completedWebsockets) {
+            String url = ws.getURL();
+            if (ws.wasConnectSuccessful()) {
+                m_apiEnvironment.queueEvent(
+                    "websocket_success",
+                    new Object[] { url, new WebSocketHandle(url, ws, m_apiEnvironment) });
+                synchronized (m_activeWebsockets) {
+                    m_activeWebsockets.add(ws);
+                }
+            } else {
+                m_apiEnvironment.queueEvent("websocket_failure", new Object[] { url, ws.getConnectError() });
+            }
+        }
+
+        // Remove any active WebSockets that have since closed, to avoid memory leaks.
+        synchronized (m_activeWebsockets) {
+            m_activeWebsockets.removeIf(ws -> !ws.isConnectionOpen());
         }
     }
 
@@ -111,14 +150,27 @@ public class HTTPAPI implements ILuaAPI {
             for (HTTPRequest r : this.m_httpRequests) {
                 r.cancel();
             }
-
             this.m_httpRequests.clear();
+        }
+
+        synchronized (this.m_pendingWebsockets) {
+            for (WebSocketRequest ws : this.m_pendingWebsockets) {
+                ws.closeConnection();
+            }
+            this.m_pendingWebsockets.clear();
+        }
+
+        synchronized (this.m_activeWebsockets) {
+            for (WebSocketRequest ws : this.m_activeWebsockets) {
+                ws.closeConnection();
+            }
+            this.m_activeWebsockets.clear();
         }
     }
 
     @Override
     public String[] getMethodNames() {
-        return new String[] { "request", "fetch", "checkURL" };
+        return new String[] { "request", "fetch", "checkURL", "websocket" };
     }
 
     @Override
@@ -158,7 +210,7 @@ public class HTTPAPI implements ILuaAPI {
                     return new Object[] { Boolean.valueOf(false), e.getMessage() };
                 }
             }
-            case 2: { // Check URL
+            case 2: { // checkURL
                 if (args.length < 1 || !(args[0] instanceof String)) {
                     throw new LuaException("Expected string");
                 }
@@ -166,6 +218,34 @@ public class HTTPAPI implements ILuaAPI {
 
                 try {
                     HTTPRequest.checkURL(urlString);
+                    return new Object[] { Boolean.valueOf(true) };
+                } catch (LuaException e) {
+                    return new Object[] { Boolean.valueOf(false), e.getMessage() };
+                }
+            }
+            case 3: { // websocket(url [, headers])
+                if (args.length < 1 || !(args[0] instanceof String)) {
+                    throw new LuaException("Expected string");
+                }
+                String urlString = args[0].toString();
+
+                HashMap<String, String> headers = null;
+                if (args.length >= 2 && args[1] instanceof Map) {
+                    Map<?, ?> argHeader = (Map<?, ?>) args[1];
+                    headers = new HashMap<>(argHeader.size());
+                    for (Object key : argHeader.keySet()) {
+                        Object value = argHeader.get(key);
+                        if (key instanceof String && value instanceof String) {
+                            headers.put((String) key, (String) value);
+                        }
+                    }
+                }
+
+                try {
+                    WebSocketRequest request = new WebSocketRequest(urlString, headers, this.m_apiEnvironment);
+                    synchronized (this.m_pendingWebsockets) {
+                        this.m_pendingWebsockets.add(request);
+                    }
                     return new Object[] { Boolean.valueOf(true) };
                 } catch (LuaException e) {
                     return new Object[] { Boolean.valueOf(false), e.getMessage() };

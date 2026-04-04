@@ -41,7 +41,17 @@ public class SubMount implements IMount {
         return this.m_parent.openForRead(this.getFullPath(path));
     }
 
+    @Override
+    public long getCreationTime(String path) throws IOException {
+        return this.m_parent.getCreationTime(this.getFullPath(path));
+    }
+
+    @Override
+    public long getLastModified(String path) throws IOException {
+        return this.m_parent.getLastModified(this.getFullPath(path));
+    }
+
     private String getFullPath(String path) {
-        return path.length() == 0 ? this.m_subPath : this.m_subPath + "/" + path;
+        return path.isEmpty() ? this.m_subPath : this.m_subPath + "/" + path;
     }
 }

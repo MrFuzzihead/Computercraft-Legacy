@@ -9,7 +9,7 @@ if _VERSION == "Lua 5.1" then
         if mode ~= nil and mode ~= "t" then
             error( "Binary chunk loading prohibited", 2 )
         end
-        local ok, p1, p2 = pcall( function()        
+        local ok, p1, p2 = pcall( function()
             if type(x) == "string" then
                 local result, err = nativeloadstring( x, name )
                 if result then
@@ -38,7 +38,7 @@ if _VERSION == "Lua 5.1" then
             return p1, p2
         else
             error( p1, 2 )
-        end        
+        end
     end
     table.unpack = unpack
     table.pack = function( ... ) return { ... } end
@@ -152,9 +152,9 @@ function sleep( nTime )
 end
 
 function write( sText )
-    local w,h = term.getSize()        
+    local w,h = term.getSize()
     local x,y = term.getCursorPos()
-    
+
     local nLinesPrinted = 0
     local function newLine()
         if y + 1 <= h then
@@ -166,7 +166,7 @@ function write( sText )
         x, y = term.getCursorPos()
         nLinesPrinted = nLinesPrinted + 1
     end
-    
+
     -- Print the line with proper word wrapping
     while string.len(sText) > 0 do
         local whitespace = string.match( sText, "^[ \t]+" )
@@ -176,19 +176,19 @@ function write( sText )
             x,y = term.getCursorPos()
             sText = string.sub( sText, string.len(whitespace) + 1 )
         end
-        
+
         local newline = string.match( sText, "^\n" )
         if newline then
             -- Print newlines
             newLine()
             sText = string.sub( sText, 2 )
         end
-        
+
         local text = string.match( sText, "^[^ \t\n]+" )
         if text then
             sText = string.sub( sText, string.len(text) + 1 )
             if string.len(text) > w then
-                -- Print a multiline word                
+                -- Print a multiline word
                 while string.len( text ) > 0 do
                     if x > w then
                         newLine()
@@ -207,7 +207,7 @@ function write( sText )
             end
         end
     end
-    
+
     return nLinesPrinted
 end
 
@@ -301,7 +301,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
 
         term.setCursorPos( sx + nPos - nScroll, cy )
     end
-    
+
     local function clear()
         redraw( true )
     end
@@ -366,7 +366,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                     redraw()
                 end
                 break
-                
+
             elseif param == keys.left then
                 -- Left
                 if nPos > 0 then
@@ -375,9 +375,9 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                     recomplete()
                     redraw()
                 end
-                
+
             elseif param == keys.right then
-                -- Right                
+                -- Right
                 if nPos < string.len(sLine) then
                     -- Move right
                     clear()
@@ -425,11 +425,11 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                             nHistoryPos = nil
                         elseif nHistoryPos ~= nil then
                             nHistoryPos = nHistoryPos + 1
-                        end                        
+                        end
                     end
                     if nHistoryPos then
                         sLine = _tHistory[nHistoryPos]
-                        nPos = string.len( sLine ) 
+                        nPos = string.len( sLine )
                     else
                         sLine = ""
                         nPos = 0
@@ -462,7 +462,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
                 -- Delete
                 if nPos < string.len(sLine) then
                     clear()
-                    sLine = string.sub( sLine, 1, nPos ) .. string.sub( sLine, nPos + 2 )                
+                    sLine = string.sub( sLine, 1, nPos ) .. string.sub( sLine, nPos + 2 )
                     recomplete()
                     redraw()
                 end
@@ -494,7 +494,7 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
     term.setCursorBlink( false )
     term.setCursorPos( w + 1, cy )
     print()
-    
+
     return sLine
 end
 
@@ -520,7 +520,46 @@ if _VERSION == "Lua 5.1" and not _CC_DISABLE_LUA51_FEATURES then
     end
 end
 
--- Install the rest of the OS api
+-- require / package
+-- Provides a Lua-5.2-style require that resolves modules from rom/modules/main/.
+-- package.path uses semicolon-separated templates where '?' is the slash-converted
+-- module name (e.g. "cc.expect" -> "cc/expect").
+package = {}
+package.loaded = {}
+package.path = "rom/modules/main/?.lua;rom/modules/main/?/init.lua"
+
+function require( _name )
+    if package.loaded[_name] ~= nil then
+        return package.loaded[_name]
+    end
+
+    local fragment = _name:gsub( "%.", "/" )
+    local searched = {}
+    for template in package.path:gmatch( "[^;]+" ) do
+        local path = template:gsub( "%?", fragment )
+        if fs.exists( path ) then
+            -- Set an empty-table sentinel so that circular requires receive a
+            -- usable table rather than boolean true.  This matches the Lua 5.2+
+            -- package library behaviour.
+            local loading = {}
+            package.loaded[_name] = loading
+            local fn, err = loadfile( path )
+            if not fn then
+                package.loaded[_name] = nil
+                error( "error loading module '" .. _name .. "' from '" .. path .. "':\n" .. tostring( err ), 2 )
+            end
+            local result = fn( _name )
+            -- If the module body returned nil keep the sentinel table so callers
+            -- always get a table from require(), never a boolean.
+            package.loaded[_name] = ( result ~= nil ) and result or loading
+            return package.loaded[_name]
+        end
+        searched[#searched + 1] = "  no file '" .. path .. "'"
+    end
+    error( "module '" .. _name .. "' not found:\n" .. table.concat( searched, "\n" ), 2 )
+end
+
+
 function os.run( _tEnv, _sPath, ... )
     local tArgs = { ... }
     local tEnv = _tEnv
@@ -568,7 +607,7 @@ function os.loadAPI( _sPath )
         tAPIsLoading[sName] = nil
         return false
     end
-    
+
     local tAPI = {}
     for k,v in pairs( tEnv ) do
         if k ~= "_ENV" then
@@ -576,7 +615,7 @@ function os.loadAPI( _sPath )
         end
     end
 
-    _G[sName] = tAPI    
+    _G[sName] = tAPI
     tAPIsLoading[sName] = nil
     return true
 end
@@ -625,7 +664,7 @@ if http then
         end
         return nil, err
     end
-    
+
     http.get = function( _url, _headers )
         return wrapRequest( _url, nil, _headers )
     end
@@ -640,6 +679,36 @@ if http then
             os.queueEvent( "http_failure", _url, err )
         end
         return ok, err
+    end
+
+    http.checkURLAsync = function( _url )
+        local ok, err = http.checkURL( _url )
+        if ok then
+            os.queueEvent( "check_url_success", _url )
+        else
+            os.queueEvent( "check_url_failure", _url, err )
+        end
+    end
+
+    local nativeWebsocket = http.websocket
+
+    http.websocketAsync = function( _url, _headers )
+        local ok, err = nativeWebsocket( _url, _headers )
+        if not ok then
+            os.queueEvent( "websocket_failure", _url, err )
+        end
+    end
+
+    http.websocket = function( _url, _headers )
+        http.websocketAsync( _url, _headers )
+        while true do
+            local event, evUrl, param = os.pullEvent()
+            if event == "websocket_success" and evUrl == _url then
+                return param
+            elseif event == "websocket_failure" and evUrl == _url then
+                return false, param
+            end
+        end
     end
 end
 
@@ -782,9 +851,14 @@ if bAPIError then
     term.setCursorPos( 1,1 )
 end
 
+-- Load persisted settings (silently succeeds when no .settings file exists yet)
+if settings then
+    settings.load( ".settings" )
+end
+
 -- Run the shell
 local ok, err = pcall( function()
-    parallel.waitForAny( 
+    parallel.waitForAny(
         function()
             if term.isColour() then
                 os.run( {}, "rom/programs/advanced/multishell" )

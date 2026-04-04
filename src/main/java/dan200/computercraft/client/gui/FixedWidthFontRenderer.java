@@ -149,8 +149,31 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
         return !(colour != 0 && colour != 15 && colour != 7 && colour != 8);
     }
 
+    /**
+     * Renders a line of terminal text using the baked {@link Colour} display lists.
+     * Delegates to {@link #drawString(TextBuffer, int, int, TextBuffer, TextBuffer, float, float, boolean, double[][])}
+     * with a {@code null} palette so the pre-baked GL display lists are used for colours.
+     */
     public void drawString(TextBuffer s, int x, int y, TextBuffer textColour, TextBuffer backgroundColour,
         float leftMarginSize, float rightMarginSize, boolean greyScale) {
+        this.drawString(s, x, y, textColour, backgroundColour, leftMarginSize, rightMarginSize, greyScale, null);
+    }
+
+    /**
+     * Renders a line of terminal text.
+     *
+     * <p>
+     * When {@code palette} is non-null, each colour index is resolved via
+     * {@code GL11.glColor3f} from the palette rather than the baked display lists,
+     * allowing per-terminal custom palettes to take effect. When {@code palette} is
+     * {@code null}, the pre-baked {@link Colour} display lists are used (legacy path).
+     * </p>
+     *
+     * @param palette 16-entry {@code double[16][3]} palette ({@code {r,g,b}} in [0,1]), or
+     *                {@code null} for the default baked-colour path
+     */
+    public void drawString(TextBuffer s, int x, int y, TextBuffer textColour, TextBuffer backgroundColour,
+        float leftMarginSize, float rightMarginSize, boolean greyScale, double[][] palette) {
         if (s != null) {
             boolean hasBackgrounds = backgroundColour != null;
             if (hasBackgrounds) {
@@ -166,7 +189,7 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
                     GL11.glPushMatrix();
                     GL11.glScalef(marginSquish, 1.0F, 1.0F);
                     GL11.glTranslatef((x - leftMarginSize) / marginSquish, y, 0.0F);
-                    GL11.glCallList(this.m_firstDisplayList + 256 + colour1);
+                    this.applyColour(colour1, palette);
                     GL11.glCallList(this.m_firstDisplayList + 256 + 16);
                     GL11.glPopMatrix();
                 }
@@ -181,7 +204,7 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
                     GL11.glPushMatrix();
                     GL11.glScalef(marginSquish, 1.0F, 1.0F);
                     GL11.glTranslatef((x + s.length() * FONT_WIDTH) / marginSquish, y, 0.0F);
-                    GL11.glCallList(this.m_firstDisplayList + 256 + colour2);
+                    this.applyColour(colour2, palette);
                     GL11.glCallList(this.m_firstDisplayList + 256 + 16);
                     GL11.glPopMatrix();
                 }
@@ -197,13 +220,13 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
                     }
 
                     if (colour != lastColour) {
-                        this.m_drawBuffer.put(this.m_firstDisplayList + 256 + colour);
-                        if (this.m_drawBuffer.remaining() == 0) {
+                        // Flush pending geometry before switching colour.
+                        if (this.m_drawBuffer.position() > 0) {
                             ((Buffer) this.m_drawBuffer).flip();
                             GL11.glCallLists(this.m_drawBuffer);
                             ((Buffer) this.m_drawBuffer).clear();
                         }
-
+                        this.applyColour(colour, palette);
                         lastColour = colour;
                     }
 
@@ -233,13 +256,13 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
                 }
 
                 if (colourx != lastColourx) {
-                    this.m_drawBuffer.put(this.m_firstDisplayList + 256 + colourx);
-                    if (this.m_drawBuffer.remaining() == 0) {
+                    // Flush pending glyphs before switching colour.
+                    if (this.m_drawBuffer.position() > 0) {
                         ((Buffer) this.m_drawBuffer).flip();
                         GL11.glCallLists(this.m_drawBuffer);
                         ((Buffer) this.m_drawBuffer).clear();
                     }
-
+                    this.applyColour(colourx, palette);
                     lastColourx = colourx;
                 }
 
@@ -257,6 +280,22 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
             ((Buffer) this.m_drawBuffer).flip();
             GL11.glCallLists(this.m_drawBuffer);
             GL11.glPopMatrix();
+        }
+    }
+
+    /**
+     * Sets the current GL color for rendering.
+     * Uses the supplied {@code palette} when non-null; otherwise falls back to the
+     * pre-baked display list for the given blit color index.
+     */
+    private void applyColour(int colourIndex, double[][] palette) {
+        if (palette != null) {
+            GL11.glColor3f(
+                (float) palette[colourIndex][0],
+                (float) palette[colourIndex][1],
+                (float) palette[colourIndex][2]);
+        } else {
+            GL11.glCallList(this.m_firstDisplayList + 256 + colourIndex);
         }
     }
 

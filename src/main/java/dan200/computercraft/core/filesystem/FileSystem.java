@@ -468,6 +468,34 @@ public class FileSystem {
         return mount.getFreeSpace();
     }
 
+    public synchronized long getCapacity(String path) throws FileSystemException {
+        path = sanitizePath(path);
+        MountWrapper mount = this.getMount(path);
+        return mount.getCapacity();
+    }
+
+    public synchronized Map<String, Object> getAttributes(String path) throws FileSystemException {
+        path = sanitizePath(path);
+        MountWrapper mount = this.getMount(path);
+        if (!mount.exists(path)) {
+            throw new FileSystemException("No such file");
+        }
+        boolean isDir = mount.isDirectory(path);
+        long size = isDir ? 0L : mount.getSize(path);
+        boolean isReadOnly = mount.isReadOnly(path);
+        long created = mount.getCreationTime(path);
+        long modified = mount.getLastModified(path);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("size", size);
+        result.put("isDir", isDir);
+        result.put("isReadOnly", isReadOnly);
+        result.put("created", created);
+        result.put("modified", modified);
+        result.put("modification", modified);
+        return result;
+    }
+
     private FileSystem.MountWrapper getMount(String path) throws FileSystemException {
         Iterator<FileSystem.MountWrapper> it = this.m_mounts.values()
             .iterator();
@@ -633,6 +661,35 @@ public class FileSystem {
                 } catch (IOException var2) {
                     return 0L;
                 }
+            }
+        }
+
+        public long getCapacity() {
+            if (this.m_writableMount == null) {
+                return -1L;
+            }
+            try {
+                return this.m_writableMount.getCapacity();
+            } catch (IOException e) {
+                return -1L;
+            }
+        }
+
+        public long getCreationTime(String path) throws FileSystemException {
+            path = this.toLocal(path);
+            try {
+                return this.m_mount.getCreationTime(path);
+            } catch (IOException e) {
+                throw new FileSystemException(e.getMessage());
+            }
+        }
+
+        public long getLastModified(String path) throws FileSystemException {
+            path = this.toLocal(path);
+            try {
+                return this.m_mount.getLastModified(path);
+            } catch (IOException e) {
+                throw new FileSystemException(e.getMessage());
             }
         }
 

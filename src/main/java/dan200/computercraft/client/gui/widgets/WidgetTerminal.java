@@ -277,6 +277,7 @@ public class WidgetTerminal extends Widget {
             synchronized (terminal) {
                 FixedWidthFontRenderer fontRenderer = (FixedWidthFontRenderer) ComputerCraft
                     .getFixedWidthFontRenderer();
+                double[][] palette = terminal.getPalette();
                 boolean tblink = this.m_focus && terminal.getCursorBlink() && ComputerCraft.getGlobalCursorBlink();
                 int tw = terminal.getWidth();
                 int th = terminal.getHeight();
@@ -294,7 +295,8 @@ public class WidgetTerminal extends Widget {
                         terminal.getBackgroundColourLine(0),
                         this.m_leftMargin,
                         this.m_rightMargin,
-                        greyscale);
+                        greyscale,
+                        palette);
                 }
 
                 if (this.m_bottomMargin > 0) {
@@ -306,7 +308,8 @@ public class WidgetTerminal extends Widget {
                         terminal.getBackgroundColourLine(th - 1),
                         this.m_leftMargin,
                         this.m_rightMargin,
-                        greyscale);
+                        greyscale,
+                        palette);
                 }
 
                 for (int line = 0; line < th; line++) {
@@ -321,7 +324,8 @@ public class WidgetTerminal extends Widget {
                         backgroundColour,
                         this.m_leftMargin,
                         this.m_rightMargin,
-                        greyscale);
+                        greyscale,
+                        palette);
                     if (tblink && ty == line && tx >= 0 && tx < tw) {
                         TextBuffer cursor = new TextBuffer('_', 1);
                         TextBuffer cursorColour = new TextBuffer(
@@ -335,7 +339,8 @@ public class WidgetTerminal extends Widget {
                             null,
                             0.0F,
                             0.0F,
-                            greyscale);
+                            greyscale,
+                            palette);
                     }
 
                     y += FixedWidthFontRenderer.FONT_HEIGHT;

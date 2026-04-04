@@ -8,6 +8,8 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +50,42 @@ public class HTTPRequest {
         return url;
     }
 
+    public static URI checkWebSocketURL(String urlString) throws LuaException {
+        URI uri;
+        try {
+            uri = new URI(urlString);
+        } catch (URISyntaxException e) {
+            throw new LuaException("URL malformed");
+        }
+
+        String scheme = uri.getScheme() != null ? uri.getScheme()
+            .toLowerCase() : "";
+        if (!scheme.equals("ws") && !scheme.equals("wss")) {
+            throw new LuaException("URL must be ws or wss");
+        }
+
+        String host = uri.getHost();
+        if (host == null || host.isEmpty()) {
+            throw new LuaException("URL malformed");
+        }
+
+        boolean allowed = false;
+        String whitelistString = ComputerCraft.http_whitelist;
+        String[] allowedURLs = whitelistString.split(";");
+        for (String allowedURL : allowedURLs) {
+            Pattern allowedURLPattern = Pattern.compile("^\\Q" + allowedURL.replaceAll("\\*", "\\\\E.*\\\\Q") + "\\E$");
+            if (allowedURLPattern.matcher(host)
+                .matches()) {
+                allowed = true;
+                break;
+            }
+        }
+
+        if (!allowed) throw new LuaException("Domain not permitted");
+
+        return uri;
+    }
+
     private final Object lock = new Object();
     private URL url;
     private final String urlString;
@@ -56,7 +94,7 @@ public class HTTPRequest {
     private boolean success = false;
     private byte[] result;
     private int responseCode = -1;
-    private Map<String, Map<Integer, String>> responseHeaders;
+    private Map<String, String> responseHeaders;
 
     private static final String[] methods = { "GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE" };
 
@@ -150,17 +188,11 @@ public class HTTPRequest {
                             success = responseSuccess;
                             result = buffer.toByteArray();
 
-                            Map<String, Map<Integer, String>> headers = responseHeaders = new HashMap<String, Map<Integer, String>>();
+                            Map<String, String> headers = responseHeaders = new HashMap<>();
                             for (Map.Entry<String, List<String>> header : connection.getHeaderFields()
                                 .entrySet()) {
-                                Map<Integer, String> values = new HashMap<Integer, String>();
-
-                                int i = 0;
-                                for (String value : header.getValue()) {
-                                    values.put(++i, value);
-                                }
-
-                                headers.put(header.getKey(), values);
+                                if (header.getKey() == null) continue; // skip the HTTP status-line pseudo-header
+                                headers.put(header.getKey(), String.join(", ", header.getValue()));
                             }
                         }
                     }

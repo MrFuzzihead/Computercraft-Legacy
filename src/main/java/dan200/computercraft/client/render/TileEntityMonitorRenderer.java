@@ -85,6 +85,7 @@ public class TileEntityMonitorRenderer extends TileEntitySpecialRenderer {
                 if (redraw) {
                     int cursorX = terminal.getCursorX();
                     int cursorY = terminal.getCursorY();
+                    double[][] palette = terminal.getPalette();
                     TextBuffer emptyLine = new TextBuffer(' ', width);
                     GL11.glNewList(monitor.m_renderDisplayList, 4864);
                     float marginXSize = 0.03125F / xScale;
@@ -101,7 +102,8 @@ public class TileEntityMonitorRenderer extends TileEntitySpecialRenderer {
                         terminal.getBackgroundColourLine(0),
                         marginXSize,
                         marginXSize,
-                        greyscale);
+                        greyscale,
+                        palette);
                     GL11.glTranslatef(
                         0.0F,
                         (marginYSize + height * FixedWidthFontRenderer.FONT_HEIGHT) / marginSquash,
@@ -114,7 +116,8 @@ public class TileEntityMonitorRenderer extends TileEntitySpecialRenderer {
                         terminal.getBackgroundColourLine(height - 1),
                         marginXSize,
                         marginXSize,
-                        greyscale);
+                        greyscale,
+                        palette);
                     GL11.glPopMatrix();
 
                     for (int y = 0; y < height; y++) {
@@ -126,7 +129,8 @@ public class TileEntityMonitorRenderer extends TileEntitySpecialRenderer {
                             terminal.getBackgroundColourLine(y),
                             marginXSize,
                             marginXSize,
-                            greyscale);
+                            greyscale,
+                            palette);
                     }
 
                     GL11.glEndList();
@@ -147,7 +151,8 @@ public class TileEntityMonitorRenderer extends TileEntitySpecialRenderer {
                             null,
                             0.0F,
                             0.0F,
-                            greyscale);
+                            greyscale,
+                            palette);
                     }
 
                     GL11.glEndList();

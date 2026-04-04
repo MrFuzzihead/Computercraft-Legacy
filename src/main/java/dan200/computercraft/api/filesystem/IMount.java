@@ -15,4 +15,21 @@ public interface IMount {
     long getSize(String var1) throws IOException;
 
     InputStream openForRead(String var1) throws IOException;
+
+    /**
+     * Returns the creation time of the file or directory at {@code path} in
+     * milliseconds since the Unix epoch, or {@code 0} if unavailable.
+     */
+    default long getCreationTime(String path) throws IOException {
+        return 0L;
+    }
+
+    /**
+     * Returns the last-modification time of the file or directory at
+     * {@code path} in milliseconds since the Unix epoch, or {@code 0} if
+     * unavailable.
+     */
+    default long getLastModified(String path) throws IOException {
+        return 0L;
+    }
 }

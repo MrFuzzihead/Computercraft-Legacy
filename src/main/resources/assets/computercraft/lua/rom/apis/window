@@ -79,15 +79,15 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
             parent.setCursorPos( 0, 0 )
         end
     end
-    
+
     local function updateCursorBlink()
         parent.setCursorBlink( bCursorBlink )
     end
-    
+
     local function updateCursorColor()
         parent.setTextColor( nTextColor )
     end
-    
+
     local function redrawLine( n )
         local tLine = tLines[ n ]
         parent.setCursorPos( nX, nY + n - 1 )
@@ -244,6 +244,10 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
         end
     end
 
+    function window.getCursorBlink()
+        return bCursorBlink
+    end
+
     local function isColor()
         return parent.isColor()
     end
@@ -338,6 +342,31 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
 
     function window.getBackgroundColour()
         return nBackgroundColor
+    end
+
+    -- Palette functions — delegate directly to parent terminal.
+    function window.setPaletteColor(colour, r, g, b)
+        parent.setPaletteColor(colour, r, g, b)
+    end
+
+    function window.setPaletteColour(colour, r, g, b)
+        parent.setPaletteColour(colour, r, g, b)
+    end
+
+    function window.getPaletteColor(colour)
+        return parent.getPaletteColor(colour)
+    end
+
+    function window.getPaletteColour(colour)
+        return parent.getPaletteColour(colour)
+    end
+
+    function window.nativePaletteColor(colour)
+        return parent.nativePaletteColor(colour)
+    end
+
+    function window.nativePaletteColour(colour)
+        return parent.nativePaletteColour(colour)
     end
 
     -- Other functions

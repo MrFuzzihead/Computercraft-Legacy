@@ -1,0 +1,208 @@
+-- settings API
+-- Provides a persistent key-value store that is saved to / loaded from disk.
+-- Compatible with CC:Tweaked's settings API (1.7.10 / Lua 5.1 edition).
+--
+-- NOTE: textutils.unserialize evaluates the stored file as Lua; this carries
+-- the same sandbox risk as the CC:Tweaked original and is intentional.
+
+local defined = {}  -- name -> { default, description, type }
+local values   = {}  -- name -> value
+
+-- ---------------------------------------------------------------------------
+-- Internal helpers
+-- ---------------------------------------------------------------------------
+
+local function checkString( n, v )
+    if type( v ) ~= "string" then
+        error( "bad argument #" .. n .. " (string expected, got " .. type( v ) .. ")", 3 )
+    end
+end
+
+local function checkTable( n, v )
+    if type( v ) ~= "table" then
+        error( "bad argument #" .. n .. " (table expected, got " .. type( v ) .. ")", 3 )
+    end
+end
+
+local function isSerializable( v )
+    local t = type( v )
+    return t == "number" or t == "string" or t == "boolean" or t == "table"
+end
+
+-- ---------------------------------------------------------------------------
+-- Public API
+-- ---------------------------------------------------------------------------
+
+--- Register a setting, or update an existing registration.
+-- @param name        The setting name (string, required).
+-- @param options     Optional table with any of:
+--                      default     — the default value
+--                      description — a string description
+--                      type        — expected Lua type ("string","number","boolean","table")
+function define( name, options )
+    checkString( 1, name )
+    if options ~= nil then checkTable( 2, options ) end
+
+    local current = defined[ name ] or {}
+    if options then
+        if options.default     ~= nil then current.default     = options.default     end
+        if options.description ~= nil then current.description = options.description end
+        if options.type        ~= nil then current.type        = options.type        end
+    end
+    defined[ name ] = current
+end
+
+--- Remove a setting definition.
+-- Any stored value for the setting is preserved.
+function undefine( name )
+    checkString( 1, name )
+    defined[ name ] = nil
+end
+
+--- Set the value of a setting.
+-- Errors if the value violates the registered type constraint, or if the
+-- value cannot be serialized (function, thread, userdata, nil).
+function set( name, value )
+    checkString( 1, name )
+    if value == nil then
+        error( "bad argument #2 (value must not be nil)", 2 )
+    end
+    if not isSerializable( value ) then
+        error( "bad argument #2 (cannot serialize type " .. type( value ) .. ")", 2 )
+    end
+
+    local options = defined[ name ]
+    if options and options.type and type( value ) ~= options.type then
+        error( "bad argument #2 (" .. options.type .. " expected, got " .. type( value ) .. ")", 2 )
+    end
+
+    values[ name ] = value
+end
+
+--- Get the value of a setting.
+-- Resolution order: set value → registered default → provided default → nil.
+function get( name, default )
+    checkString( 1, name )
+
+    local v = values[ name ]
+    if v ~= nil then return v end
+
+    local options = defined[ name ]
+    if options and options.default ~= nil then return options.default end
+
+    return default
+end
+
+--- Remove a stored value, reverting the setting to its default.
+function unset( name )
+    checkString( 1, name )
+    values[ name ] = nil
+end
+
+--- Remove all stored values (definitions are preserved).
+function clear()
+    values = {}
+end
+
+--- Return a sorted list of all defined and explicitly-set setting names.
+function getNames()
+    local seen   = {}
+    local result = {}
+
+    for k in pairs( defined ) do
+        if not seen[ k ] then
+            seen[ k ]            = true
+            result[ #result + 1 ] = k
+        end
+    end
+    for k in pairs( values ) do
+        if not seen[ k ] then
+            seen[ k ]            = true
+            result[ #result + 1 ] = k
+        end
+    end
+
+    table.sort( result )
+    return result
+end
+
+--- Return detailed information about a setting.
+-- The returned table always has: default, description, type.
+-- It also has value (the current value) when changed is true.
+function getDetails( name )
+    checkString( 1, name )
+
+    local options = defined[ name ] or {}
+    local result  = {
+        description = options.description,
+        default     = options.default,
+        type        = options.type,
+    }
+
+    local v = values[ name ]
+    if v ~= nil then
+        result.value   = v
+        result.changed = true
+    else
+        result.changed = false
+    end
+
+    return result
+end
+
+--- Load settings from a file, merging into the current values.
+-- Entries that violate a registered type constraint are silently skipped.
+-- @param path  Path to load from (defaults to ".settings").
+-- @return true on success, or false + error-message string on failure.
+function load( path )
+    if path == nil then path = ".settings" end
+    checkString( 1, path )
+
+    local file = fs.open( path, "r" )
+    if not file then
+        -- A missing file is not an error (fresh install / first boot).
+        if not fs.exists( path ) then return true end
+        return false, "Cannot open '" .. path .. "'"
+    end
+
+    local contents = file.readAll()
+    file.close()
+
+    if not contents or #contents == 0 then
+        return true
+    end
+
+    local data = textutils.unserialize( contents )
+    if type( data ) ~= "table" then
+        return false, "Cannot parse settings file"
+    end
+
+    for k, v in pairs( data ) do
+        if type( k ) == "string" and isSerializable( v ) then
+            local options = defined[ k ]
+            if not ( options and options.type and type( v ) ~= options.type ) then
+                values[ k ] = v
+            end
+        end
+    end
+
+    return true
+end
+
+--- Save all current values to a file.
+-- @param path  Path to write to (defaults to ".settings").
+-- @return true on success, or false + error-message string on failure.
+function save( path )
+    if path == nil then path = ".settings" end
+    checkString( 1, path )
+
+    local file = fs.open( path, "w" )
+    if not file then
+        return false, "Cannot open '" .. path .. "' for writing"
+    end
+
+    file.write( textutils.serialize( values ) )
+    file.close()
+    return true
+end
+
