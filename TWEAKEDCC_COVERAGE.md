@@ -22,7 +22,7 @@
 | `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test`, **`packRGB`**, **`unpackRGB`**, **`toBlit`**, **`fromBlit`** |
 | `rednet` | `rom/apis/rednet` | `open`, `close`, `isOpen`, `send`, `receive`, `broadcast`, `host`, `unhost`, `lookup` |
 | `textutils` | `rom/apis/textutils` | `slowWrite`, `slowPrint`, `formatTime`, `pagedPrint`, `tabulate`, `pagedTabulate`, `serialize/ise`, `unserialize/ise`, `serializeJSON/iseJSON`, `unserializeJSON/iseJSON`, `urlEncode`, `complete`, `empty_json_array`, `json_null` |
-| `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType`, `getMethods`, `call`, `wrap`, `find` |
+| `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType`, `getMethods`, `call`, `wrap`, `find`, **`getName`**, **`hasType`** |
 | `settings` | `rom/apis/settings` | `define`, `undefine`, `set`, `get`, `unset`, `clear`, `getNames`, `getDetails`, `load`, `save`; auto-loaded from `.settings` at boot via `bios.lua` |
 | `gps` | `rom/apis/gps` | `locate` |
 | `paintutils` | `rom/apis/paintutils` | `loadImage`, `drawPixel`, `drawLine`, `drawBox`, `drawFilledBox`, `drawImage` |
@@ -188,16 +188,20 @@ this environment.
 
 ---
 
+### 9. ~~Speaker peripheral~~ ✅ Done
+
+Two speaker block variants share a single `TileSpeaker` / `SpeakerPeripheral` class pair. A
 ### 9. Speaker peripheral — **Not implemented**
+Iterates `MinecraftServer.getConfigurationManager().playerEntityList` and sends
+`S29PacketSoundEffect` to every online player regardless of distance.
 
-CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
+**Crafting**: Speaker = stone frame around a Note Block (3×3 with noteblock centre).
+Advanced Speaker = Speaker + Ender Pearl (shapeless).
 
-- `speaker.playNote(instrument, volume, pitch)`
-- `speaker.playSound(id, volume, pitch)`
-- `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
-- `speaker.stop()`
+**Config**: `speaker_range` (default `32`) in `[general]` — controls the maximum audible range of
+the local Speaker.
 
-**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/speaker/SpeakerPeripheralTest.java` — 16 cases, all green.
 
 ---
 
@@ -209,18 +213,18 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit`                      | Small | Lua |
 | ✅ Done | `os.epoch` / `os.date`                                          | Small | Java |
 | ✅ Done | `fs.attributes` / `fs.getCapacity`                              | Medium | Java |
-| ✅ Done | `term.getCursorBlink`                                           | Trivial | Java |
-| ✅ Done | `http` response `getResponseHeaders()` + `read`/`readLine` gaps | Small | Java |
-| ✅ Done | `cc.expect` module                                              | Small | Lua |
+CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `cc.completion` module                                          | Small | Lua |
 | ✅ Done | `cc.strings` module                                             | Small | Lua |
-| ✅ Done | `cc.pretty` module                                              | Medium | Lua |
-| ✅ Done | `cc.image.nft` module                                           | Small | Lua |
-| ✅ Done | `pocket` API methods                                            | Medium | Java |
-| ✅ Done | `http.checkURLAsync`                                            | Trivial | Lua |
+- `speaker.playNote(instrument, volume, pitch)`
+- `speaker.playSound(id, volume, pitch)`
+- `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
+- `speaker.stop()`
+**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
 | ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor`       | Large | Java + Client |
 | ✅ Done | HTTP WebSocket support                                          | Large | Java + Lua |
-| 🔵 Deferred | Speaker peripheral                                              | Large | Java + Client |
+|  Deferred | Speaker peripheral                                              | Large | Java + Client |
+| ✅ Done | Speaker peripheral (local + global variants)                    | Large | Java |
 
 ---
 
@@ -237,6 +241,7 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 3. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless explicitly requested.
 
 4. **`bit32` vs `bit`**: This fork exposes `bit` (LuaJ/BitAPI) and shims `bit32` in `bios.lua`.
+3. **`bit32` vs `bit`**: This fork exposes `bit` (LuaJ/BitAPI) and shims `bit32` in `bios.lua`.
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
    approach is correct — no change needed.
 
