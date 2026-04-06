@@ -280,9 +280,7 @@ class PeripheralAPITest {
         run(buildMachine(cap), "local ok, err = pcall(hasType, 'left', 42)\n_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "hasType('left', 42) must throw — type must be a string");
-        assertTrue(
-            ((String) cap.args[1]).contains("Expected string"),
-            "Error message must mention 'Expected string'");
+        assertTrue(((String) cap.args[1]).contains("Expected string"), "Error message must mention 'Expected string'");
     }
 
     @Test
@@ -307,13 +305,9 @@ class PeripheralAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w1 = wrap('left')\n"
-                + "local w2 = wrap('right')\n"
-                + "_capture(getName(w1), getName(w2))");
+            "local w1 = wrap('left')\n" + "local w2 = wrap('right')\n" + "_capture(getName(w1), getName(w2))");
         assertNotNull(cap.args);
         assertEquals("left", cap.args[0]);
         assertEquals("right", cap.args[1]);
     }
 }
-
-

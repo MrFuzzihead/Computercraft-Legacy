@@ -3,6 +3,7 @@ package dan200.computercraft.core.apis;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
@@ -188,14 +189,45 @@ public class OSAPI implements ILuaAPI {
                 synchronized (this.m_timers) {
                     return new Object[] { this.m_clock * 0.05 };
                 }
-            case 11:
-                synchronized (this.m_alarms) {
-                    return new Object[] { this.m_time };
+            case 11: { // time
+                if (args.length >= 1 && args[0] instanceof Map) {
+                    return new Object[] { tableToTimestamp((Map<?, ?>) args[0]) };
                 }
-            case 12:
-                synchronized (this.m_alarms) {
-                    return new Object[] { this.m_day };
+                String locale11 = "ingame";
+                if (args.length >= 1 && args[0] instanceof String) {
+                    locale11 = ((String) args[0]).toLowerCase(Locale.ROOT);
                 }
+                switch (locale11) {
+                    case "utc":
+                        return new Object[] { getTimeForCalendar(Calendar.getInstance(TimeZone.getTimeZone("UTC"))) };
+                    case "local":
+                        return new Object[] { getTimeForCalendar(Calendar.getInstance()) };
+                    case "ingame":
+                        synchronized (this.m_alarms) {
+                            return new Object[] { this.m_time };
+                        }
+                    default:
+                        throw new LuaException("Unsupported operation");
+                }
+            }
+            case 12: { // day
+                String locale12 = "ingame";
+                if (args.length >= 1 && args[0] instanceof String) {
+                    locale12 = ((String) args[0]).toLowerCase(Locale.ROOT);
+                }
+                switch (locale12) {
+                    case "utc":
+                        return new Object[] { getDayForCalendar(Calendar.getInstance(TimeZone.getTimeZone("UTC"))) };
+                    case "local":
+                        return new Object[] { getDayForCalendar(Calendar.getInstance()) };
+                    case "ingame":
+                        synchronized (this.m_alarms) {
+                            return new Object[] { this.m_day };
+                        }
+                    default:
+                        throw new LuaException("Unsupported operation");
+                }
+            }
             case 13:
                 if (args.length >= 1 && args[0] != null && args[0] instanceof Number) {
                     int token = ((Number) args[0]).intValue();
@@ -292,6 +324,69 @@ public class OSAPI implements ILuaAPI {
 
     private int getComputerID() {
         return this.m_apiEnvironment.getComputerID();
+    }
+
+    /**
+     * Returns the hour-of-day for a given {@link Calendar} as a value in [0, 24),
+     * including fractional minutes and seconds. Matches upstream CC:Tweaked behaviour.
+     */
+    private static double getTimeForCalendar(Calendar c) {
+        double time = c.get(Calendar.HOUR_OF_DAY);
+        time += c.get(Calendar.MINUTE) / 60.0;
+        time += c.get(Calendar.SECOND) / (60.0 * 60.0);
+        return time;
+    }
+
+    /**
+     * Returns the number of days elapsed since 1&nbsp;January&nbsp;1970 for the
+     * date represented by {@code calendar}. Matches upstream CC:Tweaked behaviour.
+     */
+    private static int getDayForCalendar(Calendar calendar) {
+        GregorianCalendar g = (calendar instanceof GregorianCalendar) ? (GregorianCalendar) calendar
+            : new GregorianCalendar();
+        int year = calendar.get(Calendar.YEAR);
+        int day = 0;
+        for (int y = 1970; y < year; y++) {
+            day += g.isLeapYear(y) ? 366 : 365;
+        }
+        day += calendar.get(Calendar.DAY_OF_YEAR);
+        return day;
+    }
+
+    /**
+     * Converts a Lua date table (as returned by {@code os.date("*t")}) into a
+     * UNIX timestamp (seconds since 1&nbsp;January&nbsp;1970) using the local
+     * timezone — matching C's {@code mktime()} semantics.
+     *
+     * <p>
+     * Required fields: {@code year}, {@code month} (1-indexed), {@code day}.
+     * Optional fields: {@code hour} (default&nbsp;12), {@code min} (default&nbsp;0),
+     * {@code sec} (default&nbsp;0).
+     * </p>
+     */
+    private static long tableToTimestamp(Map<?, ?> table) throws LuaException {
+        int year = getTableInt(table, "year");
+        int month = getTableInt(table, "month");
+        int day = getTableInt(table, "day");
+        int hour = getTableIntOpt(table, "hour", 12);
+        int min = getTableIntOpt(table, "min", 0);
+        int sec = getTableIntOpt(table, "sec", 0);
+        Calendar cal = Calendar.getInstance();
+        cal.set(year, month - 1, day, hour, min, sec);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTimeInMillis() / 1000L;
+    }
+
+    private static int getTableInt(Map<?, ?> table, String key) throws LuaException {
+        Object val = table.get(key);
+        if (val instanceof Number) return ((Number) val).intValue();
+        throw new LuaException("Field '" + key + "' missing or not a number");
+    }
+
+    private static int getTableIntOpt(Map<?, ?> table, String key, int defaultValue) {
+        Object val = table.get(key);
+        if (val instanceof Number) return ((Number) val).intValue();
+        return defaultValue;
     }
 
     /**
