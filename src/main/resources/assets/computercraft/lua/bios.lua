@@ -563,7 +563,14 @@ end
 function os.run( _tEnv, _sPath, ... )
     local tArgs = { ... }
     local tEnv = _tEnv
-    setmetatable( tEnv, { __index = _G } )
+    -- Only install the _G fallback when the caller has not already set up a
+    -- metatable on the env.  The shell creates a fresh per-run table with
+    -- __index pointing at its own tEnv (which contains 'shell', 'multishell',
+    -- etc.) and then chains _G from tEnv itself.  Overwriting that metatable
+    -- here would sever the shell chain and make 'shell' invisible to programs.
+    if getmetatable( tEnv ) == nil then
+        setmetatable( tEnv, { __index = _G } )
+    end
     local fnFile, err = loadfile( _sPath, tEnv )
     if fnFile then
         local ok, err = pcall( function()

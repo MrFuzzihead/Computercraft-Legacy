@@ -42,6 +42,10 @@ public class TurtleInspectCommand implements ITurtleCommand {
                 Map<Object, Object> table = new HashMap<>();
                 table.put("name", "minecraft:air");
                 table.put("metadata", 0);
+                // MC 1.7.10 has no BlockState / named-property API (introduced in 1.8).
+                // The opaque metadata integer above is the only block-state information
+                // available at this level; state is always empty on this platform.
+                table.put("state", new HashMap<Object, Object>());
                 return TurtleCommandResult.success(new Object[] { table });
             } else {
                 return TurtleCommandResult.failure("No block to inspect");
@@ -53,6 +57,10 @@ public class TurtleInspectCommand implements ITurtleCommand {
             Map<Object, Object> table = new HashMap<>();
             table.put("name", name);
             table.put("metadata", metadata);
+            // MC 1.7.10 has no BlockState / named-property API (introduced in 1.8).
+            // The opaque metadata integer above is the only block-state information
+            // available at this level; state is always empty on this platform.
+            table.put("state", new HashMap<Object, Object>());
             return TurtleCommandResult.success(new Object[] { table });
         }
     }

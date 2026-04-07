@@ -12,12 +12,20 @@ end
 function lookup( _sTopic )
  	-- Look on the path variable
     for sPath in string.gmatch(sPath, "[^:]+") do
-    	sPath = fs.combine( sPath, _sTopic )
-    	if fs.exists( sPath ) and not fs.isDir( sPath ) then
-			return sPath
-    	end
+        local sFile = fs.combine( sPath, _sTopic )
+        if fs.exists( sFile ) and not fs.isDir( sFile ) then
+            return sFile
+        end
+        sFile = sFile .. ".md"
+        if fs.exists( sFile ) and not fs.isDir( sFile ) then
+            return sFile
+        end
+        sFile = fs.combine( sPath, _sTopic ) .. ".txt"
+        if fs.exists( sFile ) and not fs.isDir( sFile ) then
+            return sFile
+        end
     end
-	
+
 	-- Not found
 	return nil
 end
@@ -27,20 +35,26 @@ function topics()
 	local tItems = {
 	    [ "index" ] = true
 	}
-	
-	-- Add topics from the path
+
+		-- Add topics from the path
     for sPath in string.gmatch(sPath, "[^:]+") do
 		if fs.isDir( sPath ) then
 			local tList = fs.list( sPath )
 			for n,sFile in pairs( tList ) do
 				if string.sub( sFile, 1, 1 ) ~= "." then
 					if not fs.isDir( fs.combine( sPath, sFile ) ) then
-						tItems[ sFile ] = true
+						local sTopic = sFile
+						if #sTopic > 3 and string.sub( sTopic, -3 ) == ".md" then
+							sTopic = string.sub( sTopic, 1, -4 )
+						elseif #sTopic > 4 and string.sub( sTopic, -4 ) == ".txt" then
+							sTopic = string.sub( sTopic, 1, -5 )
+						end
+						tItems[ sTopic ] = true
 					end
 				end
 			end
 		end
-    end	
+    end
 
 	-- Sort and return
 	local tItemList = {}

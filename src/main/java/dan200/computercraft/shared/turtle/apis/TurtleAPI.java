@@ -3,8 +3,11 @@ package dan200.computercraft.shared.turtle.apis;
 import java.util.HashMap;
 import java.util.Map;
 
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 
 import com.google.common.base.Optional;
 
@@ -12,6 +15,7 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
+import dan200.computercraft.api.turtle.ITurtleUpgrade;
 import dan200.computercraft.api.turtle.TurtleSide;
 import dan200.computercraft.core.apis.IAPIEnvironment;
 import dan200.computercraft.core.apis.ILuaAPI;
@@ -65,7 +69,7 @@ public class TurtleAPI implements ILuaAPI {
             "detectDown", "compare", "compareUp", "compareDown", "attack", "attackUp", "attackDown", "dropUp",
             "dropDown", "suck", "suckUp", "suckDown", "getFuelLevel", "refuel", "compareTo", "transferTo",
             "getSelectedSlot", "getFuelLimit", "equipLeft", "equipRight", "inspect", "inspectUp", "inspectDown",
-            "getItemDetail" };
+            "getItemDetail", "getEquippedLeft", "getEquippedRight" };
     }
 
     private Object[] tryCommand(ILuaContext context, ITurtleCommand command) throws LuaException, InterruptedException {
@@ -291,6 +295,7 @@ public class TurtleAPI implements ILuaAPI {
                 return this.tryCommand(context, new TurtleInspectCommand(InteractDirection.Down, true));
             case 41: {
                 int slot = this.parseOptionalSlotNumber(args, 0, this.m_turtle.getSelectedSlot());
+                boolean detailed = args.length > 1 && Boolean.TRUE.equals(args[1]);
                 ItemStack stack = this.m_turtle.getInventory()
                     .getStackInSlot(slot);
                 if (stack != null && stack.stackSize > 0) {
@@ -302,13 +307,58 @@ public class TurtleAPI implements ILuaAPI {
                     table.put("name", name);
                     table.put("damage", damage);
                     table.put("count", count41);
+                    if (detailed) {
+                        table.put("displayName", stack.getDisplayName());
+                        table.put("maxDamage", stack.getMaxDamage());
+                        Map<Object, Object> enchantments = new HashMap<>();
+                        NBTTagList enchTags = stack.getEnchantmentTagList();
+                        if (enchTags != null) {
+                            for (int i = 0; i < enchTags.tagCount(); i++) {
+                                NBTTagCompound enchTag = enchTags.getCompoundTagAt(i);
+                                int enchId = enchTag.getShort("id");
+                                int enchLevel = enchTag.getShort("lvl");
+                                Enchantment ench = (enchId >= 0 && enchId < Enchantment.enchantmentsList.length)
+                                    ? Enchantment.enchantmentsList[enchId]
+                                    : null;
+                                Map<Object, Object> enchEntry = new HashMap<>();
+                                enchEntry.put("name", ench != null ? ench.getName() : "unknown");
+                                enchEntry.put("level", enchLevel);
+                                enchantments.put(i + 1, enchEntry);
+                            }
+                        }
+                        table.put("enchantments", enchantments);
+                    }
                     return new Object[] { table };
                 }
 
                 return new Object[] { null };
             }
+            case 42:
+                return this.getEquippedDetails(TurtleSide.Left);
+            case 43:
+                return this.getEquippedDetails(TurtleSide.Right);
             default:
                 return null;
         }
+    }
+
+    private Object[] getEquippedDetails(TurtleSide side) {
+        ITurtleUpgrade upgrade = this.m_turtle.getUpgrade(side);
+        if (upgrade == null) {
+            return new Object[] { null };
+        }
+        ItemStack stack = upgrade.getCraftingItem();
+        if (stack == null) {
+            return new Object[] { null };
+        }
+        Item item = stack.getItem();
+        String name = Item.itemRegistry.getNameForObject(item);
+        int damage = stack.getItemDamage();
+        int count = stack.stackSize;
+        Map<Object, Object> table = new HashMap<>();
+        table.put("name", name);
+        table.put("damage", damage);
+        table.put("count", count);
+        return new Object[] { table };
     }
 }
