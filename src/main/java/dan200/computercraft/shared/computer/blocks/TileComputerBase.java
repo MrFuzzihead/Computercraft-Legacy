@@ -155,10 +155,18 @@ public abstract class TileComputerBase extends TileGeneric implements IComputerT
                 if (computer.hasOutputChanged()) {
                     this.updateOutput();
                 }
+                // Capture whether this is the very first tick for this ServerComputer instance.
+                // On that tick the underlying Computer hasn't had a chance to advance yet, so
+                // isOn() returns false even though the tile entity intends the computer to be on.
+                // Preserving m_on here lets the m_fresh restart path work correctly after a
+                // registry flush (e.g. FMLServerStartedEvent firing after the first server tick).
+                boolean justCreated = this.m_fresh;
                 this.m_fresh = false;
                 this.m_computerID = computer.getID();
                 this.m_label = computer.getLabel();
-                this.m_on = computer.isOn();
+                if (!justCreated) {
+                    this.m_on = computer.isOn();
+                }
             }
         } else {
             ClientComputer computer = this.createClientComputer();
