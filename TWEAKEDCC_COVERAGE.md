@@ -11,7 +11,7 @@
 | API / Peripheral | Source | Methods Covered |
 |---|---|---|
 | `os` | `OSAPI.java` + `bios.lua` | `queueEvent`, `startTimer`, `cancelTimer`, `setAlarm`, `cancelAlarm`, `shutdown`, `reboot`, `computerID`, `getComputerID`, `setComputerLabel`, `computerLabel`, `getComputerLabel`, `clock`, **`time`** (locale string + table→timestamp), **`day`** (locale string), `version`, `pullEvent`, `pullEventRaw`, `run`, `loadAPI`, `unloadAPI`, `sleep`, **`epoch`**, **`date`** |
-| `fs` | `FSAPI.java` + `bios.lua` | `list`, `combine`, `getName`, `getSize`, `exists`, `isDir`, `isReadOnly`, `makeDir`, `move`, `copy`, `delete`, `open`, `getDrive`, `getFreeSpace`, `find`, `getDir`, `complete` |
+| `fs` | `FSAPI.java` + `bios.lua` | `list`, `combine`, `getName`, `getSize`, `exists`, `isDir`, `isReadOnly`, `makeDir`, `move`, `copy`, `delete`, `open`, `getDrive`, `getFreeSpace`, `find`, `getDir`, `complete`, **`getCapacity`**, **`attributes`** |
 | `term` | `TermAPI.java` + `rom/apis/term` | `write`, `blit`, `scroll`, `clear`, `clearLine`, `setCursorPos`, `getCursorPos`, `setCursorBlink`, **`getCursorBlink`**, `getSize`, `setTextColor/Colour`, `setBackgroundColor/Colour`, `getTextColor/Colour`, `getBackgroundColor/Colour`, `isColor/Colour`, `redirect`, `current`, `native`, **`nativePaletteColor/Colour`**, **`setPaletteColor/Colour`**, **`getPaletteColor/Colour`** |
 | `redstone` / `rs` | `RedstoneAPI.java` | `getSides`, `setOutput`, `getOutput`, `getInput`, `setBundledOutput`, `getBundledOutput`, `getBundledInput`, `testBundledInput`, `setAnalogOutput/Analogue`, `getAnalogOutput/Analogue`, `getAnalogInput/Analogue` |
 | `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); response: `readLine`, `readAll`, `close`, `getResponseCode`; **`websocket`**, **`websocketAsync`**; handle: **`receive`**, **`send`**, **`close`** |
@@ -21,19 +21,20 @@
 | `buffer` | `BufferAPI.java` | `new` |
 | `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test`, **`packRGB`**, **`unpackRGB`**, **`toBlit`**, **`fromBlit`** |
 | `rednet` | `rom/apis/rednet` | `open`, `close`, `isOpen`, `send`, `receive`, `broadcast`, `host`, `unhost`, `lookup` |
-| `textutils` | `rom/apis/textutils` | `slowWrite`, `slowPrint`, `formatTime`, `pagedPrint`, `tabulate`, `pagedTabulate`, `serialize/ise`, `unserialize/ise`, `serializeJSON/iseJSON`, `unserializeJSON/iseJSON`, `urlEncode`, `complete`, `empty_json_array`, `json_null` |
-| `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType`, `getMethods`, `call`, `wrap`, `find`, **`getName`**, **`hasType`** |
+| `textutils` | `rom/apis/textutils` | `slowWrite`, `slowPrint`, `formatTime`, `pagedPrint`, `tabulate`, `pagedTabulate`, **`serialize/ise`** (+ `opts.compact`, `opts.allow_repetitions`), `unserialize/ise`, **`serializeJSON/iseJSON`** (+ `opts.unicode_strings`, `opts.allow_repetitions`), **`unserializeJSON/iseJSON`** (+ `opts.null`, `opts.parse_empty_array`), `urlEncode`, `complete`, `empty_json_array`, `json_null` |
+| `peripheral` | `rom/apis/peripheral` | `getNames`, `isPresent`, `getType` (string side **or** wrapped table), `getMethods`, `call`, `wrap`, `find`, **`getName`**, **`hasType`** |
 | `settings` | `rom/apis/settings` | `define`, `undefine`, `set`, `get`, `unset`, `clear`, `getNames`, `getDetails`, `load`, `save`; auto-loaded from `.settings` at boot via `bios.lua` |
 | `gps` | `rom/apis/gps` | `locate` |
-| `paintutils` | `rom/apis/paintutils` | `loadImage`, `drawPixel`, `drawLine`, `drawBox`, `drawFilledBox`, `drawImage` |
+| `paintutils` | `rom/apis/paintutils` | **`parseImage`**, `loadImage`, `drawPixel`, `drawLine`, `drawBox`, `drawFilledBox`, `drawImage` |
 | `keys` | `rom/apis/keys` | All Minecraft key constants + `getName` |
-| `help` | `rom/apis/help` | `path`, `setPath`, `lookup`, `topics`, `completeTopic` |
-| `window` | `rom/apis/window` | `create` (full window object with all term-surface methods) |
+| `help` | `rom/apis/help` | `path`, `setPath`, `lookup` (exact → `.md` → `.txt` priority), `topics` (strips `.md`/`.txt` extensions, deduplicates), `completeTopic` |
+| `window` | `rom/apis/window` | `create` (full window object with all term-surface methods); **`getLine`**, **`isVisible`**, **`reposition`** (optional 5th `newParent` arg) |
 | `parallel` | `rom/apis/parallel` | `waitForAny`, `waitForAll` |
 | `io` | `rom/apis/io` | `close`, `flush`, `input`, `output`, `lines`, `open`, `read`, `write` |
 | `vector` | `rom/apis/vector` | `new` + full vector math (`add`, `sub`, `mul`, `div`, `unm`, `dot`, `cross`, `length`, `normalize`, `round`, `tostring`) |
 | `disk` | `rom/apis/disk` | `isPresent`, `getLabel`, `setLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `eject`, `getID` |
 | `multishell` | `rom/programs/advanced/multishell` | `launch`, `getFocus`, `setFocus`, `getTitle`, `setTitle`, `getCurrent`, `getCount` |
+| `shell` | `rom/programs/shell` | `execute`, `run`, `exit`, `dir`, `setDir`, `path`, `setPath`, `resolve`, `resolveProgram` (with `.lua` extension fallback), `getRunningProgram`, `setAlias`, `clearAlias`, `aliases`, `programs`, `complete`, `getCompletionInfo`, `setCompletionInfo`; per-program env isolation; `arg` table injection |
 | Modem peripheral | `ModemPeripheral.java` | `open`, `isOpen`, `close`, `closeAll`, `transmit`, `isWireless` + cable remote methods (`getNamesRemote`, `isPresentRemote`, `getTypeRemote`, `getMethodsRemote`, `callRemote`) |
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
@@ -188,20 +189,147 @@ this environment.
 
 ---
 
-### 9. ~~Speaker peripheral~~ ✅ Done
-
-Two speaker block variants share a single `TileSpeaker` / `SpeakerPeripheral` class pair. A
 ### 9. Speaker peripheral — **Not implemented**
-Iterates `MinecraftServer.getConfigurationManager().playerEntityList` and sends
-`S29PacketSoundEffect` to every online player regardless of distance.
 
-**Crafting**: Speaker = stone frame around a Note Block (3×3 with noteblock centre).
-Advanced Speaker = Speaker + Ender Pearl (shapeless).
+CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
+- `speaker.playNote(instrument, volume, pitch)`
+- `speaker.playSound(id, volume, pitch)`
+- `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
+- `speaker.stop()`
 
-**Config**: `speaker_range` (default `32`) in `[general]` — controls the maximum audible range of
-the local Speaker.
+**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to
+Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
 
-**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/speaker/SpeakerPeripheralTest.java` — 16 cases, all green.
+---
+
+### 10. ~~`shell` — Missing CC:Tweaked additions~~ ✅ Done
+
+| Feature | Notes |
+|---|---|
+| `shell.execute(_sCommand, ...)` | ✅ New CC:Tweaked 1.87.0 method. Resolves the program path, runs it, and returns `true` on success or `false, "No such program"` on failure. Does **not** call `printError` — the caller is responsible for error display. |
+| `shell.run(...)` | ✅ Now delegates to `execute`; tokenises its arguments, calls `execute`, and forwards any error string to `printError`. Returns `false` for empty input. |
+| Per-program environment isolation | ✅ Each `execute` call creates a fresh `tRunEnv = setmetatable({}, {__index = tEnv})` table. Globals written in one run do not bleed into the next. The base `tEnv` (containing `shell`, `multishell`) is still reachable via `__index`. |
+| `arg` table injection | ✅ CC:Tweaked 1.83.0. `env.arg` is set to `{[0] = resolvedPath, ...args}` before each `os.run` call so programs can inspect their own path and arguments. |
+| `shell.resolveProgram` `.lua` fallback | ✅ When a bare program name is not found on the path, `resolveProgram` also tries the name with a `.lua` suffix appended. The bare name is preferred when both exist. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/ShellAPITest.java` — 37 cases, all green.
+
+---
+
+### 11. ~~`window` — Missing 3 methods~~ ✅ Done
+
+| Method | Notes |
+|---|---|
+| `window.getLine(y)` | ✅ Returns `text, textColor, backgroundColor` strings for line `y` (1-indexed). Throws if `y` is not a number or is out of the window's height range. |
+| `window.isVisible()` | ✅ Returns the current boolean visibility state. Counterpart to the existing `setVisible`. |
+| `window.reposition(nX, nY [, nW, nH [, newParent]])` | ✅ Optional 5th argument `newParent` swaps the window's underlying parent terminal surface. Throws if `newParent` is non-nil and non-table. Passing `nil` explicitly is a no-op for the parent. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/WindowAPITest.java` — 15 cases, all green.
+
+---
+
+### 12. ~~`help` — Extension-aware lookup~~ ✅ Done
+
+| Change | Notes |
+|---|---|
+| `lookup` extension search | ✅ Now checks `<topic>` (exact), then `<topic>.md`, then `<topic>.txt`, returning the first match. Priority is exact > `.md` > `.txt`. |
+| `topics` extension stripping | ✅ Strips `.md` and `.txt` suffixes before inserting into the result set. Duplicate topic names (e.g. both `intro.md` and `intro.txt` on disk) appear only once. Extension-less files are still included unchanged. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/HelpAPITest.java` — 16 cases, all green.
+
+---
+
+### 13. ~~`paintutils` — Missing `parseImage`~~ ✅ Done
+
+| Method | Notes |
+|---|---|
+| `paintutils.parseImage(s)` | ✅ New CC:Tweaked function. Parses an NFP-formatted string into a `{{color, ...}, ...}` pixel table. Each hex character maps to the corresponding `2^n` color value; spaces map to `0` (transparent). `loadImage` now delegates to `parseImage` internally. Throws if the argument is not a string. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/PaintutilsAPITest.java` — 29 cases, all green.
+
+---
+
+### 14. ~~`bios.lua` `require` sentinel bug~~ ✅ Fixed
+
+**Problem**: When `package.loaded[name]` was set during module loading, the sentinel value was
+`true`. Any module that returned `nil` would cause the slot to be overwritten with `true`, and
+any circular `require` would hand the caller a boolean instead of a usable value.
+
+**Fix**: The sentinel is now an empty table `{}` assigned before the module body runs. If the
+module returns `nil`, the sentinel table is kept. Circular requires receive the (empty) sentinel
+table rather than `true`.
+
+```lua
+local loading = {}
+package.loaded[_name] = loading
+-- ...
+package.loaded[_name] = (result ~= nil) and result or loading
+```
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/BiosRequireTest.java` — 4 cases, all green.
+
+---
+
+### 15. ~~`cc.expect` `table.pack.n` compatibility bug~~ ✅ Fixed
+
+**Problem**: `get_type_names` in `cc/expect.lua` iterated over its type-list argument using
+`table.pack` and then indexed `.n` to get the count. The `table.pack` polyfill installed by
+`bios.lua` does not include the `n` field (Lua 5.1 limitation), so `types.n` was `nil` and
+iteration over multiple allowed types would silently truncate or error.
+
+**Fix**: `get_type_names` now uses `select("#", ...)` to count varargs and `select(i, ...)` to
+retrieve each one, with no dependency on `table.pack.n`.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/CcExpectTest.java` — 6 cases, all green.
+
+---
+
+### 16. ~~`rednet` — Test coverage~~ ✅ Done
+
+No functional changes to the `rednet` Lua API. A full unit-test suite has been added covering:
+`open`/`close`/`isOpen` (with and without modems), `send` (loopback, open modem, no modem),
+`broadcast`, `host`/`unhost`/`lookup` (including reserved-hostname and wrong-type errors).
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/RednetAPITest.java` — 26 cases, all green.
+
+---
+
+### 17. ~~`peripheral` — `getType` wrapped-table support + test coverage~~ ✅ Done
+
+**Change**: `peripheral.getType` now accepts either a string side name or a wrapped peripheral
+table (looked up via the weak-keyed `wrapNames` registry, the same mechanism used by `getName`
+and `hasType`). Passing a plain table that was not created by `wrap` throws
+`"value is not a peripheral"`. Passing a non-string/non-table throws `"Expected string or table"`.
+
+This completes the CC:Tweaked contract for `getType`, `getName`, and `hasType` — all three now
+consistently accept both string sides and wrapped tables.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/PeripheralAPITest.java` — 18 cases, all green.
+
+---
+
+### 18. ~~`_G` — `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param~~ ✅ Done
+
+| Feature | Notes |
+|---|---|
+| `_HOST` | ✅ Set by `CobaltMachine` via the existing `getHostString()` reflection hook on `IComputerEnvironment`. `IComputerEnvironment` now declares `default String getHostString()` (returns `""` so anonymous test stubs compile unchanged). `ServerComputer` overrides it to return `"ComputerCraft <version> (Minecraft 1.7.10)"`. |
+| `_CC_DEFAULT_SETTINGS` | ✅ A new `public static String cc_default_settings = ""` field in `ComputerCraft.java`, loaded from the `"cc_default_settings"` config key. `CobaltMachine` sets `_CC_DEFAULT_SETTINGS` as a Lua global when the field is non-empty. `bios.lua` processes the global at boot (before `settings.load(".settings")`) by iterating comma-separated `key=value` pairs and calling `settings.set`. `textutils.unserialise` is used to deserialise each value; falls back to the raw string on failure. |
+| `read(replaceChar?, history?, completeFn?, default?)` | ✅ Added optional 4th argument `_sDefault`. When non-nil, `sLine` is pre-populated with `tostring(_sDefault)` and `nPos` is set to `string.len(sLine)` before the input loop begins. The cursor is therefore placed at the end of the default text, and the user can edit or accept it immediately. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/GlobalsTest.java` — 7 cases, all green.
+
+---
+
+### 19. ~~`textutils` — `serialize` opts + `serializeJSON` opts + `unserializeJSON` opts~~ ✅ Done
+
+| Feature | Notes |
+|---|---|
+| `textutils.serialize(t, opts?)` | ✅ `opts.compact` (boolean) — when `true`, emits no indentation, newlines, or spaces around `=`/`,`. Array output: `{1,2,3,}`. Key-value output: `{key=value,}`. Nested tables collapse to a single line. `opts.allow_repetitions` (boolean) — when `true`, the duplicate-table guard is relaxed: after a table is fully serialised its tracking entry is cleared (`tTracking[t] = nil`), so the same table may appear in multiple sibling positions. True cycles (a table that contains itself at any depth) still always error. |
+| `textutils.serializeJSON(t, opts?)` | ✅ `opts.unicode_strings` (boolean, default `false`) — when `true`, all bytes ≥ 0x80 in string values are escaped as `\uXXXX`, producing pure-ASCII JSON output. ASCII control characters (`\b`, `\f`, `\n`, `\r`, `\t`, and `\0`–`\31`) are always escaped regardless of this flag. `opts.allow_repetitions` (boolean, default `false`) — when `true`, the same table reference may appear in multiple sibling positions without error; true self-referential cycles still always error. British alias `serialiseJSON` is provided. |
+| `textutils.unserializeJSON(s, opts?)` | ✅ `opts.parse_empty_array` (boolean, default `true`) — when `true` (or omitted), an empty JSON array `[]` returns the `empty_json_array` sentinel, matching the CC:Tweaked round-trip contract. When `false`, `[]` returns a fresh empty table `{}`. Non-empty arrays are unaffected. Existing `opts.null` handling is unchanged. British alias `unserialiseJSON` is provided. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsSerializeTest.java` — 14 cases, all green.
+**Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsJsonTest.java` — 42 cases, all green.
 
 ---
 
@@ -213,38 +341,29 @@ the local Speaker.
 | ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit`                      | Small | Lua |
 | ✅ Done | `os.epoch` / `os.date`                                          | Small | Java |
 | ✅ Done | `fs.attributes` / `fs.getCapacity`                              | Medium | Java |
-CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 | ✅ Done | `cc.completion` module                                          | Small | Lua |
 | ✅ Done | `cc.strings` module                                             | Small | Lua |
-- `speaker.playNote(instrument, volume, pitch)`
-- `speaker.playSound(id, volume, pitch)`
-- `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
-- `speaker.stop()`
-**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
 | ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor`       | Large | Java + Client |
 | ✅ Done | HTTP WebSocket support                                          | Large | Java + Lua |
-|  Deferred | Speaker peripheral                                              | Large | Java + Client |
-| ✅ Done | Speaker peripheral (local + global variants)                    | Large | Java |
+| ✅ Done | `shell.execute` / per-program env isolation / `arg` table       | Medium | Lua |
+| ✅ Done | `window.getLine` / `window.isVisible` / `reposition` newParent  | Small | Lua |
+| ✅ Done | `help` `.md`/`.txt` lookup + `topics` extension stripping       | Small | Lua |
+| ✅ Done | `paintutils.parseImage`                                         | Small | Lua |
+| ✅ Done | `bios.lua` `require` sentinel table fix                         | Small | Lua |
+| ✅ Done | `cc.expect` `table.pack.n` compatibility fix                    | Small | Lua |
+| ✅ Done | `peripheral.getType` wrapped-table support                      | Small | Lua |
+| ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
+| ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
+| Deferred | Speaker peripheral                                              | Large | Java + Client |
 
 ---
 
 ## Further Considerations
 
-1. **`cc.*` module `require` bootstrap**: The `cc.*` modules use `require("cc.expect")` etc. This needs
-   a `require` implementation added to `bios.lua` (or the shell) that resolves paths under
-   `rom/modules/main/`. Confirm whether `os.loadAPI` compatibility must be preserved alongside it.
-
-2. **Palette support (`setPaletteColor`)**: Full implementation plan documented in `PALETTE_PLAN.md`.
-   Touches `Terminal.java`, `TermAPI.java`, `FixedWidthFontRenderer.java`, both rendering call sites,
-   and the `window` Lua API.
-
-3. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless explicitly requested.
-
-4. **`bit32` vs `bit`**: This fork exposes `bit` (LuaJ/BitAPI) and shims `bit32` in `bios.lua`.
-3. **`bit32` vs `bit`**: This fork exposes `bit` (LuaJ/BitAPI) and shims `bit32` in `bios.lua`.
+1. **`bit32` vs `bit`**: This fork exposes `bit` (LuaJ/BitAPI) and shims `bit32` in `bios.lua`.
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
    approach is correct — no change needed.
 
-
-
-
+2. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired
+   to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless
+   explicitly requested.

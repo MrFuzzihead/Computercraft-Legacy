@@ -252,6 +252,11 @@ public class ServerComputer extends ServerTerminal implements IComputer, IComput
     }
 
     @Override
+    public String getHostString() {
+        return "ComputerCraft " + ComputerCraft.getVersion() + " (Minecraft 1.7.10)";
+    }
+
+    @Override
     public void writeDescription(NBTTagCompound nbttagcompound) {
         super.writeDescription(nbttagcompound);
         nbttagcompound.setInteger("id", this.m_computer.getID());

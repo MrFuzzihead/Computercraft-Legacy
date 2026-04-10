@@ -46,19 +46,18 @@ class RednetAPITest {
      * globals required by {@code rednet.lua}.
      *
      * <ul>
-     *   <li>{@code _modem_sides} — map of side → type; add {@code "modem"} entries to simulate
-     *       attached modems before calling {@code open()}.</li>
-     *   <li>{@code _open_channels[side][channel]} — tracks open channels per modem side.</li>
-     *   <li>{@code _queued_events} — accumulates calls to {@code os.queueEvent}.</li>
-     *   <li>{@code _transmit_calls} — accumulates {@code peripheral.call(side,"transmit",...)}
-     *       invocations; each entry is {@code {channel, replyChannel, message}}.</li>
-     *   <li>{@code os.pullEvent} immediately returns {@code "timer", 999} so that
-     *       {@code lookup} exits after one event-loop iteration when a modem is open.</li>
-     *   <li>{@code table.unpack = unpack} mirrors the shim installed by {@code bios.lua}.</li>
+     * <li>{@code _modem_sides} — map of side → type; add {@code "modem"} entries to simulate
+     * attached modems before calling {@code open()}.</li>
+     * <li>{@code _open_channels[side][channel]} — tracks open channels per modem side.</li>
+     * <li>{@code _queued_events} — accumulates calls to {@code os.queueEvent}.</li>
+     * <li>{@code _transmit_calls} — accumulates {@code peripheral.call(side,"transmit",...)}
+     * invocations; each entry is {@code {channel, replyChannel, message}}.</li>
+     * <li>{@code os.pullEvent} immediately returns {@code "timer", 999} so that
+     * {@code lookup} exits after one event-loop iteration when a modem is open.</li>
+     * <li>{@code table.unpack = unpack} mirrors the shim installed by {@code bios.lua}.</li>
      * </ul>
      */
-    private static final String MOCK_PREAMBLE = "table.unpack = unpack\n"
-        + "_queued_events = {}\n"
+    private static final String MOCK_PREAMBLE = "table.unpack = unpack\n" + "_queued_events = {}\n"
         + "_transmit_calls = {}\n"
         + "_open_channels = {}\n"
         + "_modem_sides = {}\n"
@@ -183,11 +182,7 @@ class RednetAPITest {
     @Test
     void openSetsChannelsSoIsOpenReturnsTrue() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "_capture(isOpen('left'))");
+        run(buildMachine(cap), "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "_capture(isOpen('left'))");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "isOpen('left') must be true after open('left')");
     }
@@ -211,11 +206,7 @@ class RednetAPITest {
     @Test
     void isOpenAnyReturnsTrueAfterOpen() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "_capture(isOpen())");
+        run(buildMachine(cap), "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "_capture(isOpen())");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "isOpen() must be true when at least one modem is open");
     }
@@ -229,10 +220,7 @@ class RednetAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "close('left')\n"
-                + "_capture(isOpen('left'))");
+            "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "close('left')\n" + "_capture(isOpen('left'))");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "isOpen('left') must be false after close('left')");
     }
@@ -242,10 +230,7 @@ class RednetAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "close()\n"
-                + "_capture(isOpen())");
+            "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "close()\n" + "_capture(isOpen())");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "isOpen() must be false after close()");
     }
@@ -275,11 +260,7 @@ class RednetAPITest {
     @Test
     void sendReturnsTrueWhenOpenModemExists() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "_capture(send(99, 'hello'))");
+        run(buildMachine(cap), "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "_capture(send(99, 'hello'))");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "send must return true when a modem is open");
     }
@@ -299,9 +280,7 @@ class RednetAPITest {
         // Modem is attached but open() was never called
         run(buildMachine(cap), "_modem_sides['left'] = 'modem'\n_capture(send(99, 'hello'))");
         assertNotNull(cap.args);
-        assertFalse(
-            (Boolean) cap.args[0],
-            "send must return false when a modem is present but not opened");
+        assertFalse((Boolean) cap.args[0], "send must return false when a modem is present but not opened");
     }
 
     // =========================================================================
@@ -313,8 +292,7 @@ class RednetAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "send(42, 'hi', 'myproto')\n"
-                + "_capture(\n"
+            "send(42, 'hi', 'myproto')\n" + "_capture(\n"
                 + "  #_queued_events,\n"
                 + "  _queued_events[1][1],\n"
                 + "  _queued_events[1][2],\n"
@@ -331,13 +309,9 @@ class RednetAPITest {
     @Test
     void sendTransmitsToRecipientChannelAndRepeatChannel() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "send(99, 'msg')\n"
-                // transmit args: {channel, replyChannel, message}
-                + "_capture(#_transmit_calls, _transmit_calls[1][1], _transmit_calls[2][1])");
+        run(buildMachine(cap), "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "send(99, 'msg')\n"
+        // transmit args: {channel, replyChannel, message}
+            + "_capture(#_transmit_calls, _transmit_calls[1][1], _transmit_calls[2][1])");
         assertNotNull(cap.args);
         assertEquals(2.0, ((Number) cap.args[0]).doubleValue(), "send must produce 2 transmit calls");
         assertEquals(99.0, ((Number) cap.args[1]).doubleValue(), "First transmit must target recipient channel");
@@ -354,11 +328,7 @@ class RednetAPITest {
     @Test
     void broadcastReturnsTrueWhenModemOpen() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
-                + "_capture(broadcast('hello'))");
+        run(buildMachine(cap), "_modem_sides['left'] = 'modem'\n" + "open('left')\n" + "_capture(broadcast('hello'))");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "broadcast must return true when a modem is open");
     }
@@ -377,8 +347,7 @@ class RednetAPITest {
         // CHANNEL_BROADCAST = 65535; verify that the first transmit targets it
         run(
             buildMachine(cap),
-            "_modem_sides['left'] = 'modem'\n"
-                + "open('left')\n"
+            "_modem_sides['left'] = 'modem'\n" + "open('left')\n"
                 + "broadcast('hello')\n"
                 + "_capture(_transmit_calls[1][1])");
         assertNotNull(cap.args);
@@ -395,10 +364,7 @@ class RednetAPITest {
     @Test
     void lookupLocalhostReturnsOwnComputerIdWhenHosted() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "host('myproto', 'myhost')\n"
-                + "_capture(lookup('myproto', 'localhost'))");
+        run(buildMachine(cap), "host('myproto', 'myhost')\n" + "_capture(lookup('myproto', 'localhost'))");
         assertNotNull(cap.args);
         assertEquals(42.0, ((Number) cap.args[0]).doubleValue(), "localhost lookup must return own computer ID");
     }
@@ -406,15 +372,9 @@ class RednetAPITest {
     @Test
     void lookupByExactNameReturnsOwnComputerIdWhenHosted() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "host('myproto', 'myhost')\n"
-                + "_capture(lookup('myproto', 'myhost'))");
+        run(buildMachine(cap), "host('myproto', 'myhost')\n" + "_capture(lookup('myproto', 'myhost'))");
         assertNotNull(cap.args);
-        assertEquals(
-            42.0,
-            ((Number) cap.args[0]).doubleValue(),
-            "Exact hostname lookup must return own computer ID");
+        assertEquals(42.0, ((Number) cap.args[0]).doubleValue(), "Exact hostname lookup must return own computer ID");
     }
 
     @Test
@@ -430,9 +390,7 @@ class RednetAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "host('myproto', 'myhost')\n"
-                + "unhost('myproto')\n"
-                + "_capture(lookup('myproto', 'myhost'))");
+            "host('myproto', 'myhost')\n" + "unhost('myproto')\n" + "_capture(lookup('myproto', 'myhost'))");
         assertNotNull(cap.args);
         assertNull(cap.args[0], "lookup must return nil after unhost");
     }
@@ -477,4 +435,3 @@ class RednetAPITest {
         assertTrue(((String) cap.args[1]).contains("expected string"), "Error must mention expected string");
     }
 }
-

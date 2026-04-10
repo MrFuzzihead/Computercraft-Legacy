@@ -170,6 +170,9 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         globals.rawset("_CC_VERSION", valueOf(ComputerCraft.getVersion()));
         globals.rawset("_MC_VERSION", valueOf("1.7.10"));
         globals.rawset("_COBALT_VERSION", valueOf("0.6"));
+        if (ComputerCraft.cc_default_settings != null && !ComputerCraft.cc_default_settings.isEmpty()) {
+            globals.rawset("_CC_DEFAULT_SETTINGS", valueOf(ComputerCraft.cc_default_settings));
+        }
         if (ComputerCraft.disable_lua51_features) {
             globals.rawset("_CC_DISABLE_LUA51_FEATURES", Constants.TRUE);
         }

@@ -45,15 +45,14 @@ class HelpAPITest {
      * Mock {@code fs} preamble.
      *
      * <ul>
-     *   <li>{@code _mock_files} — set of full file paths that "exist" as regular files.</li>
-     *   <li>{@code _mock_dirs} — set of directory paths; {@code /rom/help} is pre-seeded.</li>
-     *   <li>{@code fs.combine} concatenates with {@code /} without double-slashes.</li>
-     *   <li>{@code fs.list} returns the direct children of a directory present in
-     *       {@code _mock_files}.</li>
+     * <li>{@code _mock_files} — set of full file paths that "exist" as regular files.</li>
+     * <li>{@code _mock_dirs} — set of directory paths; {@code /rom/help} is pre-seeded.</li>
+     * <li>{@code fs.combine} concatenates with {@code /} without double-slashes.</li>
+     * <li>{@code fs.list} returns the direct children of a directory present in
+     * {@code _mock_files}.</li>
      * </ul>
      */
-    private static final String MOCK_PREAMBLE = "_mock_files = {}\n"
-        + "_mock_dirs  = { ['/rom/help'] = true }\n"
+    private static final String MOCK_PREAMBLE = "_mock_files = {}\n" + "_mock_dirs  = { ['/rom/help'] = true }\n"
         + "fs = {\n"
         + "  exists  = function(p) return _mock_files[p] == true or _mock_dirs[p] == true end,\n"
         + "  isDir   = function(p) return _mock_dirs[p] == true end,\n"
@@ -145,10 +144,7 @@ class HelpAPITest {
     @Test
     void lookupFindsExactMatch() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/intro'] = true\n"
-                + "_capture(lookup('intro'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/intro'] = true\n" + "_capture(lookup('intro'))");
         assertNotNull(cap.args);
         assertEquals("/rom/help/intro", cap.args[0], "lookup must return the exact path when found");
     }
@@ -168,10 +164,7 @@ class HelpAPITest {
     @Test
     void lookupFindsMdFile() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/intro.md'] = true\n"
-                + "_capture(lookup('intro'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/intro.md'] = true\n" + "_capture(lookup('intro'))");
         assertNotNull(cap.args);
         assertEquals("/rom/help/intro.md", cap.args[0], "lookup must find 'intro.md' when queried as 'intro'");
     }
@@ -180,10 +173,7 @@ class HelpAPITest {
     void lookupMdReturnedWithFullExtensionPath() {
         // The returned path must include the .md suffix so the caller can open it.
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/turtle.md'] = true\n"
-                + "_capture(lookup('turtle'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/turtle.md'] = true\n" + "_capture(lookup('turtle'))");
         assertNotNull(cap.args);
         assertTrue(((String) cap.args[0]).endsWith(".md"), "Returned path must end with .md");
     }
@@ -195,10 +185,7 @@ class HelpAPITest {
     @Test
     void lookupFindsTxtFile() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/fs.txt'] = true\n"
-                + "_capture(lookup('fs'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/fs.txt'] = true\n" + "_capture(lookup('fs'))");
         assertNotNull(cap.args);
         assertEquals("/rom/help/fs.txt", cap.args[0], "lookup must find 'fs.txt' when queried as 'fs'");
     }
@@ -206,10 +193,7 @@ class HelpAPITest {
     @Test
     void lookupTxtReturnedWithFullExtensionPath() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/os.txt'] = true\n"
-                + "_capture(lookup('os'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/os.txt'] = true\n" + "_capture(lookup('os'))");
         assertNotNull(cap.args);
         assertTrue(((String) cap.args[0]).endsWith(".txt"), "Returned path must end with .txt");
     }
@@ -223,14 +207,10 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/intro']    = true\n"
-                + "_mock_files['/rom/help/intro.md'] = true\n"
+            "_mock_files['/rom/help/intro']    = true\n" + "_mock_files['/rom/help/intro.md'] = true\n"
                 + "_capture(lookup('intro'))");
         assertNotNull(cap.args);
-        assertEquals(
-            "/rom/help/intro",
-            cap.args[0],
-            "Exact match must take priority over .md when both exist");
+        assertEquals("/rom/help/intro", cap.args[0], "Exact match must take priority over .md when both exist");
     }
 
     @Test
@@ -238,23 +218,16 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/intro.md']  = true\n"
-                + "_mock_files['/rom/help/intro.txt'] = true\n"
+            "_mock_files['/rom/help/intro.md']  = true\n" + "_mock_files['/rom/help/intro.txt'] = true\n"
                 + "_capture(lookup('intro'))");
         assertNotNull(cap.args);
-        assertEquals(
-            "/rom/help/intro.md",
-            cap.args[0],
-            ".md must take priority over .txt when both exist");
+        assertEquals("/rom/help/intro.md", cap.args[0], ".md must take priority over .txt when both exist");
     }
 
     @Test
     void lookupFallsBackToTxtWhenMdAbsent() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/intro.txt'] = true\n"
-                + "_capture(lookup('intro'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/intro.txt'] = true\n" + "_capture(lookup('intro'))");
         assertNotNull(cap.args);
         assertEquals("/rom/help/intro.txt", cap.args[0], "lookup must fall back to .txt when no exact or .md exists");
     }
@@ -268,8 +241,7 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/turtle.md'] = true\n"
-                + "local t = topics()\n"
+            "_mock_files['/rom/help/turtle.md'] = true\n" + "local t = topics()\n"
                 + "local found = false\n"
                 + "for _, v in ipairs(t) do if v == 'turtle' then found = true end end\n"
                 + "_capture(found)");
@@ -282,8 +254,7 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/fs.txt'] = true\n"
-                + "local t = topics()\n"
+            "_mock_files['/rom/help/fs.txt'] = true\n" + "local t = topics()\n"
                 + "local found = false\n"
                 + "for _, v in ipairs(t) do if v == 'fs' then found = true end end\n"
                 + "_capture(found)");
@@ -297,8 +268,7 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/turtle.md'] = true\n"
-                + "local t = topics()\n"
+            "_mock_files['/rom/help/turtle.md'] = true\n" + "local t = topics()\n"
                 + "local rawFound = false\n"
                 + "for _, v in ipairs(t) do if v == 'turtle.md' then rawFound = true end end\n"
                 + "_capture(rawFound)");
@@ -312,8 +282,7 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/intro.md']  = true\n"
-                + "_mock_files['/rom/help/intro.txt'] = true\n"
+            "_mock_files['/rom/help/intro.md']  = true\n" + "_mock_files['/rom/help/intro.txt'] = true\n"
                 + "local t = topics()\n"
                 + "local count = 0\n"
                 + "for _, v in ipairs(t) do if v == 'intro' then count = count + 1 end end\n"
@@ -328,8 +297,7 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/rednet'] = true\n"
-                + "local t = topics()\n"
+            "_mock_files['/rom/help/rednet'] = true\n" + "local t = topics()\n"
                 + "local found = false\n"
                 + "for _, v in ipairs(t) do if v == 'rednet' then found = true end end\n"
                 + "_capture(found)");
@@ -346,9 +314,7 @@ class HelpAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "_mock_files['/rom/help/turtle.md'] = true\n"
-                + "local r = completeTopic('turt')\n"
-                + "_capture(#r, r[1])");
+            "_mock_files['/rom/help/turtle.md'] = true\n" + "local r = completeTopic('turt')\n" + "_capture(#r, r[1])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "completeTopic must return one completion");
         assertEquals("le", cap.args[1], "Completion suffix must be 'le' (completing 'turt' -> 'turtle')");
@@ -357,12 +323,8 @@ class HelpAPITest {
     @Test
     void completeTopicReturnsEmptyForNoMatch() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_mock_files['/rom/help/turtle.md'] = true\n"
-                + "_capture(#completeTopic('xyz'))");
+        run(buildMachine(cap), "_mock_files['/rom/help/turtle.md'] = true\n" + "_capture(#completeTopic('xyz'))");
         assertNotNull(cap.args);
         assertEquals(0.0, ((Number) cap.args[0]).doubleValue(), "completeTopic must return empty list for no match");
     }
 }
-

@@ -24,13 +24,15 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
 /**
  * Tests for the three additions to the {@code window} Lua API:
  * <ul>
- *   <li>{@code window.getLine(y)} — returns text/textColor/backgroundColor for a line</li>
- *   <li>{@code window.isVisible()} — reflects the current visibility state</li>
- *   <li>{@code window.reposition} — optional 5th {@code newParent} parameter</li>
+ * <li>{@code window.getLine(y)} — returns text/textColor/backgroundColor for a line</li>
+ * <li>{@code window.isVisible()} — reflects the current visibility state</li>
+ * <li>{@code window.reposition} — optional 5th {@code newParent} parameter</li>
  * </ul>
  *
- * <p>Each test loads the {@code window} ROM file into a fresh {@link CobaltMachine}
- * after setting up a {@code colors} table and a minimal mock parent terminal.</p>
+ * <p>
+ * Each test loads the {@code window} ROM file into a fresh {@link CobaltMachine}
+ * after setting up a {@code colors} table and a minimal mock parent terminal.
+ * </p>
  */
 class WindowAPITest {
 
@@ -42,8 +44,7 @@ class WindowAPITest {
      * in {@code create} does not fire, and a {@code mockParent()} factory function
      * that returns a minimal but complete terminal-surface table.
      */
-    private static final String PREAMBLE = "colors = {\n"
-        + "  white=1, orange=2, magenta=4, lightBlue=8,\n"
+    private static final String PREAMBLE = "colors = {\n" + "  white=1, orange=2, magenta=4, lightBlue=8,\n"
         + "  yellow=16, lime=32, pink=64, gray=128,\n"
         + "  lightGray=256, cyan=512, purple=1024, blue=2048,\n"
         + "  brown=4096, green=8192, red=16384, black=32768\n"
@@ -135,10 +136,7 @@ class WindowAPITest {
     @Test
     void getLineFreshWindowReturnsEmptyLine() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "_capture(w.getLine(1))");
+        run(buildMachine(cap), "local w = create(mockParent(), 1, 1, 10, 5)\n" + "_capture(w.getLine(1))");
         assertNotNull(cap.args);
         // Default text color = white ("0"), background = black ("f"), text = spaces
         assertEquals("          ", cap.args[0], "fresh line text must be 10 spaces");
@@ -151,9 +149,7 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "w.write('hello')\n"
-                + "_capture(w.getLine(1))");
+            "local w = create(mockParent(), 1, 1, 10, 5)\n" + "w.write('hello')\n" + "_capture(w.getLine(1))");
         assertNotNull(cap.args);
         assertEquals("hello     ", cap.args[0], "written text must appear padded to full width");
         assertEquals("0000000000", cap.args[1], "textColor must remain all white");
@@ -165,8 +161,7 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "w.setCursorPos(1, 3)\n"
+            "local w = create(mockParent(), 1, 1, 10, 5)\n" + "w.setCursorPos(1, 3)\n"
                 + "w.write('row3')\n"
                 + "_capture(w.getLine(3))");
         assertNotNull(cap.args);
@@ -178,8 +173,7 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "w.setCursorPos(1, 3)\n"
+            "local w = create(mockParent(), 1, 1, 10, 5)\n" + "w.setCursorPos(1, 3)\n"
                 + "w.write('row3')\n"
                 + "_capture(w.getLine(1))");
         assertNotNull(cap.args);
@@ -191,12 +185,14 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "local ok, err = pcall(function() w.getLine('x') end)\n"
+            "local w = create(mockParent(), 1, 1, 10, 5)\n" + "local ok, err = pcall(function() w.getLine('x') end)\n"
                 + "_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "getLine('x') must throw");
-        assertTrue(cap.args[1].toString().contains("expected number"), "error must mention 'expected number'");
+        assertTrue(
+            cap.args[1].toString()
+                .contains("expected number"),
+            "error must mention 'expected number'");
     }
 
     @Test
@@ -204,12 +200,14 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "local ok, err = pcall(function() w.getLine(6) end)\n"
+            "local w = create(mockParent(), 1, 1, 10, 5)\n" + "local ok, err = pcall(function() w.getLine(6) end)\n"
                 + "_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "getLine(6) on a height-5 window must throw");
-        assertTrue(cap.args[1].toString().contains("out of range"), "error must mention 'out of range'");
+        assertTrue(
+            cap.args[1].toString()
+                .contains("out of range"),
+            "error must mention 'out of range'");
     }
 
     @Test
@@ -217,12 +215,14 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 10, 5)\n"
-                + "local ok, err = pcall(function() w.getLine(0) end)\n"
+            "local w = create(mockParent(), 1, 1, 10, 5)\n" + "local ok, err = pcall(function() w.getLine(0) end)\n"
                 + "_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "getLine(0) must throw (lines are 1-indexed)");
-        assertTrue(cap.args[1].toString().contains("out of range"), "error must mention 'out of range'");
+        assertTrue(
+            cap.args[1].toString()
+                .contains("out of range"),
+            "error must mention 'out of range'");
     }
 
     // =========================================================================
@@ -232,10 +232,7 @@ class WindowAPITest {
     @Test
     void isVisibleTrueByDefault() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 5, 5)\n"
-                + "_capture(w.isVisible())");
+        run(buildMachine(cap), "local w = create(mockParent(), 1, 1, 5, 5)\n" + "_capture(w.isVisible())");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "window must be visible by default");
     }
@@ -243,10 +240,7 @@ class WindowAPITest {
     @Test
     void isVisibleFalseWhenCreatedHidden() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 5, 5, false)\n"
-                + "_capture(w.isVisible())");
+        run(buildMachine(cap), "local w = create(mockParent(), 1, 1, 5, 5, false)\n" + "_capture(w.isVisible())");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "window created with bStartVisible=false must not be visible");
     }
@@ -256,9 +250,7 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 5, 5, false)\n"
-                + "w.setVisible(true)\n"
-                + "_capture(w.isVisible())");
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n" + "w.setVisible(true)\n" + "_capture(w.isVisible())");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "isVisible() must return true after setVisible(true)");
     }
@@ -268,9 +260,7 @@ class WindowAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local w = create(mockParent(), 1, 1, 5, 5)\n"
-                + "w.setVisible(false)\n"
-                + "_capture(w.isVisible())");
+            "local w = create(mockParent(), 1, 1, 5, 5)\n" + "w.setVisible(false)\n" + "_capture(w.isVisible())");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "isVisible() must return false after setVisible(false)");
     }
@@ -286,8 +276,7 @@ class WindowAPITest {
         // All redraws must go to p1 since no new parent was supplied.
         run(
             buildMachine(cap),
-            "local calls = 0\n"
-                + "local p1 = {\n"
+            "local calls = 0\n" + "local p1 = {\n"
                 + "  isColor=function() return true end,\n"
                 + "  setCursorPos=function() end, setCursorBlink=function() end,\n"
                 + "  setTextColor=function() end,\n"
@@ -303,7 +292,9 @@ class WindowAPITest {
                 + "w.setVisible(true)\n"
                 + "_capture(calls)");
         assertNotNull(cap.args);
-        assertTrue(((Number) cap.args[0]).doubleValue() > 0, "p1 must receive redraws after reposition without new parent");
+        assertTrue(
+            ((Number) cap.args[0]).doubleValue() > 0,
+            "p1 must receive redraws after reposition without new parent");
     }
 
     @Test
@@ -312,8 +303,7 @@ class WindowAPITest {
         // Window starts hidden on p1. After reposition with p2, show triggers draw to p2 only.
         run(
             buildMachine(cap),
-            "local calls1, calls2 = 0, 0\n"
-                + "local p1 = {\n"
+            "local calls1, calls2 = 0, 0\n" + "local p1 = {\n"
                 + "  isColor=function() return true end,\n"
                 + "  setCursorPos=function() end, setCursorBlink=function() end,\n"
                 + "  setTextColor=function() end,\n"
@@ -354,7 +344,10 @@ class WindowAPITest {
                 + "_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "reposition with non-table newParent must throw");
-        assertTrue(cap.args[1].toString().contains("expected table"), "error must mention 'expected table'");
+        assertTrue(
+            cap.args[1].toString()
+                .contains("expected table"),
+            "error must mention 'expected table'");
     }
 
     @Test
@@ -369,4 +362,3 @@ class WindowAPITest {
         assertTrue((Boolean) cap.args[0], "reposition with explicit nil newParent must not throw");
     }
 }
-

@@ -24,14 +24,18 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
 /**
  * Tests for the {@code paintutils} Lua API ({@code rom/apis/paintutils}).
  *
- * <p>Covers all seven public functions:
+ * <p>
+ * Covers all seven public functions:
  * {@code parseImage}, {@code loadImage}, {@code drawPixel}, {@code drawLine},
- * {@code drawBox}, {@code drawFilledBox}, and {@code drawImage}.</p>
+ * {@code drawBox}, {@code drawFilledBox}, and {@code drawImage}.
+ * </p>
  *
- * <p>A mock {@code term} table records every {@code setCursorPos}/{@code write} pair
+ * <p>
+ * A mock {@code term} table records every {@code setCursorPos}/{@code write} pair
  * as an entry in {@code _pixels = {x, y, bgColor}}. A mock {@code fs}/{@code io}
  * pair allows {@code loadImage} to read from an in-memory string without touching
- * the real filesystem.</p>
+ * the real filesystem.
+ * </p>
  */
 class PaintutilsAPITest {
 
@@ -40,14 +44,13 @@ class PaintutilsAPITest {
     /**
      * Mock {@code term} preamble.
      * <ul>
-     *   <li>{@code _pixels} — sequential table of {@code {x, y, bgColor}} entries;
-     *       appended each time {@code term.write} is called.</li>
-     *   <li>{@code _bg} — current background color, mutated by
-     *       {@code term.setBackgroundColor}.</li>
+     * <li>{@code _pixels} — sequential table of {@code {x, y, bgColor}} entries;
+     * appended each time {@code term.write} is called.</li>
+     * <li>{@code _bg} — current background color, mutated by
+     * {@code term.setBackgroundColor}.</li>
      * </ul>
      */
-    private static final String TERM_MOCK = "_pixels = {}\n"
-        + "_last_x, _last_y, _bg = 1, 1, 1\n"
+    private static final String TERM_MOCK = "_pixels = {}\n" + "_last_x, _last_y, _bg = 1, 1, 1\n"
         + "term = {\n"
         + "  setCursorPos        = function(x, y) _last_x, _last_y = x, y end,\n"
         + "  setBackgroundColor  = function(c) _bg = c end,\n"
@@ -147,7 +150,7 @@ class PaintutilsAPITest {
 
     @Test
     void parseImageSingleRowParsesColors() {
-        // '0' → 2^0 = 1 (white),  '1' → 2^1 = 2 (orange)
+        // '0' → 2^0 = 1 (white), '1' → 2^1 = 2 (orange)
         ResultCapture cap = new ResultCapture();
         run(buildMachine(cap), "local img = parseImage('01')\n_capture(img[1][1], img[1][2])");
         assertNotNull(cap.args);
@@ -165,7 +168,7 @@ class PaintutilsAPITest {
 
     @Test
     void parseImageMultiRowParsesSecondRowColors() {
-        // 'a' → 2^10 = 1024,  '5' → 2^5 = 32
+        // 'a' → 2^10 = 1024, '5' → 2^5 = 32
         ResultCapture cap = new ResultCapture();
         run(buildMachine(cap), "local img = parseImage('00\\na5')\n_capture(img[2][1], img[2][2])");
         assertNotNull(cap.args);
@@ -196,8 +199,7 @@ class PaintutilsAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local img = parseImage('0123456789abcdef')\n"
-                + "_capture(img[1][1], img[1][2], img[1][9], img[1][16])");
+            "local img = parseImage('0123456789abcdef')\n" + "_capture(img[1][1], img[1][2], img[1][9], img[1][16])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "'0' must map to 1");
         assertEquals(2.0, ((Number) cap.args[1]).doubleValue(), "'1' must map to 2");
@@ -252,8 +254,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             FS_IO_MOCK,
-            "_mock_files['test.nfp'] = '0f\\na5'\n"
-                + "local img = loadImage('test.nfp')\n"
+            "_mock_files['test.nfp'] = '0f\\na5'\n" + "local img = loadImage('test.nfp')\n"
                 + "_capture(#img, img[1][1], img[1][2], img[2][1], img[2][2])");
         assertNotNull(cap.args);
         assertEquals(2.0, ((Number) cap.args[0]).doubleValue(), "Two-row file must produce two rows");
@@ -273,8 +274,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawPixel(3, 7, 1)\n"
-                + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
+            "drawPixel(3, 7, 1)\n" + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "Exactly one pixel must be drawn");
         assertEquals(3.0, ((Number) cap.args[1]).doubleValue(), "Pixel x must be 3");
@@ -287,8 +287,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "_bg = 1\n"
-                + "drawPixel(1, 1, 4)\n"  // 4 = yellow
+            "_bg = 1\n" + "drawPixel(1, 1, 4)\n" // 4 = yellow
                 + "_capture(_bg)");
         assertNotNull(cap.args);
         assertEquals(4.0, ((Number) cap.args[0]).doubleValue(), "Background color must be updated to 4");
@@ -300,8 +299,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "_bg = 8\n"
-                + "drawPixel(1, 1)\n"  // no color argument
+            "_bg = 8\n" + "drawPixel(1, 1)\n" // no color argument
                 + "_capture(_bg)");
         assertNotNull(cap.args);
         assertEquals(8.0, ((Number) cap.args[0]).doubleValue(), "Background color must not change when color is nil");
@@ -310,10 +308,7 @@ class PaintutilsAPITest {
     @Test
     void drawPixelErrorsOnInvalidArgs() {
         ResultCapture cap = new ResultCapture();
-        runWith(
-            buildMachine(cap),
-            TERM_MOCK,
-            "local ok, err = pcall(drawPixel, 'x', 1, 1)\n_capture(ok, err)");
+        runWith(buildMachine(cap), TERM_MOCK, "local ok, err = pcall(drawPixel, 'x', 1, 1)\n_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "drawPixel with non-number x must throw");
         assertTrue(((String) cap.args[1]).contains("Expected x, y"), "Error must mention expected args");
@@ -329,8 +324,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawLine(2, 3, 2, 3, 1)\n"
-                + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
+            "drawLine(2, 3, 2, 3, 1)\n" + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "Degenerate line must draw exactly one pixel");
         assertEquals(2.0, ((Number) cap.args[1]).doubleValue(), "Pixel x must be 2");
@@ -365,8 +359,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawBox(4, 5, 4, 5, 1)\n"
-                + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
+            "drawBox(4, 5, 4, 5, 1)\n" + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "Degenerate box must draw exactly one pixel");
         assertEquals(4.0, ((Number) cap.args[1]).doubleValue(), "Pixel x must be 4");
@@ -389,8 +382,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawBox(1, 1, 3, 3, 1)\n"
-                + "local hasCenter = false\n"
+            "drawBox(1, 1, 3, 3, 1)\n" + "local hasCenter = false\n"
                 + "for _, p in ipairs(_pixels) do\n"
                 + "  if p[1] == 2 and p[2] == 2 then hasCenter = true end\n"
                 + "end\n"
@@ -409,8 +401,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawFilledBox(2, 2, 2, 2, 1)\n"
-                + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
+            "drawFilledBox(2, 2, 2, 2, 1)\n" + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "Degenerate filled box must draw exactly one pixel");
         assertEquals(2.0, ((Number) cap.args[1]).doubleValue(), "Pixel x must be 2");
@@ -433,8 +424,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawFilledBox(1, 1, 3, 3, 1)\n"
-                + "local hasCenter = false\n"
+            "drawFilledBox(1, 1, 3, 3, 1)\n" + "local hasCenter = false\n"
                 + "for _, p in ipairs(_pixels) do\n"
                 + "  if p[1] == 2 and p[2] == 2 then hasCenter = true end\n"
                 + "end\n"
@@ -454,10 +444,12 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawImage({{0, 1}}, 1, 1)\n"
-                + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
+            "drawImage({{0, 1}}, 1, 1)\n" + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
         assertNotNull(cap.args);
-        assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "Only one pixel must be drawn (the non-transparent one)");
+        assertEquals(
+            1.0,
+            ((Number) cap.args[0]).doubleValue(),
+            "Only one pixel must be drawn (the non-transparent one)");
         assertEquals(2.0, ((Number) cap.args[1]).doubleValue(), "The drawn pixel must be at x=2 (second column)");
         assertEquals(1.0, ((Number) cap.args[2]).doubleValue(), "The drawn pixel must be at y=1");
     }
@@ -469,8 +461,7 @@ class PaintutilsAPITest {
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawImage({{1}}, 3, 5)\n"
-                + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
+            "drawImage({{1}}, 3, 5)\n" + "_capture(#_pixels, _pixels[1][1], _pixels[1][2])");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue(), "Exactly one pixel must be drawn");
         assertEquals(3.0, ((Number) cap.args[1]).doubleValue(), "Pixel x must respect xPos offset");
@@ -481,10 +472,7 @@ class PaintutilsAPITest {
     void drawImageSetsCorrectBackgroundColor() {
         // Pixel with value 4 (yellow) must cause background to be set to 4
         ResultCapture cap = new ResultCapture();
-        runWith(
-            buildMachine(cap),
-            TERM_MOCK,
-            "drawImage({{4}}, 1, 1)\n_capture(_pixels[1][3])");
+        runWith(buildMachine(cap), TERM_MOCK, "drawImage({{4}}, 1, 1)\n_capture(_pixels[1][3])");
         assertNotNull(cap.args);
         assertEquals(4.0, ((Number) cap.args[0]).doubleValue(), "Drawn pixel must carry the correct background color");
     }
@@ -492,10 +480,7 @@ class PaintutilsAPITest {
     @Test
     void drawImageErrorsOnInvalidArgs() {
         ResultCapture cap = new ResultCapture();
-        runWith(
-            buildMachine(cap),
-            TERM_MOCK,
-            "local ok, err = pcall(drawImage, 'notatable', 1, 1)\n_capture(ok, err)");
+        runWith(buildMachine(cap), TERM_MOCK, "local ok, err = pcall(drawImage, 'notatable', 1, 1)\n_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "drawImage with non-table first arg must throw");
         assertTrue(((String) cap.args[1]).contains("Expected image"), "Error must mention Expected image");
@@ -503,18 +488,16 @@ class PaintutilsAPITest {
 
     @Test
     void drawImageMultiRowPositionsAreCorrect() {
-        // Image: row1 = {1}, row2 = {2}  — drawn at (1,1)
+        // Image: row1 = {1}, row2 = {2} — drawn at (1,1)
         // row2 pixel → x + xPos - 1 = 1, y + yPos - 1 = 2
         ResultCapture cap = new ResultCapture();
         runWith(
             buildMachine(cap),
             TERM_MOCK,
-            "drawImage({{1},{2}}, 1, 1)\n"
-                + "_capture(#_pixels, _pixels[1][2], _pixels[2][2])");
+            "drawImage({{1},{2}}, 1, 1)\n" + "_capture(#_pixels, _pixels[1][2], _pixels[2][2])");
         assertNotNull(cap.args);
         assertEquals(2.0, ((Number) cap.args[0]).doubleValue(), "Two-row image must draw two pixels");
         assertEquals(1.0, ((Number) cap.args[1]).doubleValue(), "First pixel must be at y=1");
         assertEquals(2.0, ((Number) cap.args[2]).doubleValue(), "Second pixel must be at y=2");
     }
 }
-

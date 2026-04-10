@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
 
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -31,10 +30,12 @@ import dan200.computercraft.api.turtle.TurtleVerb;
  * Unit tests for the two new methods added to {@link TurtleAPI}:
  * {@code getEquippedLeft} (index 42) and {@code getEquippedRight} (index 43).
  *
- * <p>The success path that reads {@link net.minecraft.item.Item#itemRegistry} requires
+ * <p>
+ * The success path that reads {@link net.minecraft.item.Item#itemRegistry} requires
  * Minecraft class initialisation and is covered by in-game tests. The null-guard paths
  * (no upgrade equipped, or upgrade returns a {@code null} crafting item) are fully
- * exercisable here without a live Minecraft environment.</p>
+ * exercisable here without a live Minecraft environment.
+ * </p>
  */
 class TurtleAPITest {
 
@@ -162,7 +163,6 @@ class TurtleAPITest {
             public void setDirection(int dir) {
                 throw new UnsupportedOperationException();
             }
-
 
             @Override
             public void setSelectedSlot(int slot) {
@@ -302,7 +302,8 @@ class TurtleAPITest {
     void getMethodNamesContainsGetEquippedLeft() {
         TurtleAPI api = apiWith(null, null);
         assertTrue(
-            Arrays.asList(api.getMethodNames()).contains("getEquippedLeft"),
+            Arrays.asList(api.getMethodNames())
+                .contains("getEquippedLeft"),
             "getMethodNames() must include 'getEquippedLeft'");
     }
 
@@ -310,7 +311,8 @@ class TurtleAPITest {
     void getMethodNamesContainsGetEquippedRight() {
         TurtleAPI api = apiWith(null, null);
         assertTrue(
-            Arrays.asList(api.getMethodNames()).contains("getEquippedRight"),
+            Arrays.asList(api.getMethodNames())
+                .contains("getEquippedRight"),
             "getMethodNames() must include 'getEquippedRight'");
     }
 
@@ -470,14 +472,10 @@ class TurtleAPITest {
         // ItemStack, which requires Minecraft's item registry — verified by in-game tests.
         TurtleAPI api = apiWith(null, null);
 
-        Object[] withDetail    = api.callMethod(null, METHOD_GET_ITEM_DETAIL, new Object[] { 1, Boolean.TRUE });
+        Object[] withDetail = api.callMethod(null, METHOD_GET_ITEM_DETAIL, new Object[] { 1, Boolean.TRUE });
         Object[] withoutDetail = api.callMethod(null, METHOD_GET_ITEM_DETAIL, new Object[] { 1, Boolean.FALSE });
 
-        assertNull(withDetail[0],    "Empty slot with detailed=true must return nil");
+        assertNull(withDetail[0], "Empty slot with detailed=true must return nil");
         assertNull(withoutDetail[0], "Empty slot with detailed=false must return nil");
     }
 }
-
-
-
-

@@ -33,13 +33,13 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
  *
  * <h2>Coverage</h2>
  * <ul>
- *   <li>{@code shell.execute} — new CC:Tweaked method (1.87.0)</li>
- *   <li>{@code shell.run} — now delegates to execute; prints errors</li>
- *   <li>{@code shell.resolveProgram} — {@code .lua} extension fallback</li>
- *   <li>Per-program environment isolation (CC:Tweaked 1.80pr1)</li>
- *   <li>{@code arg} table injection (CC:Tweaked 1.83.0)</li>
- *   <li>Remaining shell methods: {@code dir/setDir}, {@code path/setPath},
- *       {@code resolve}, {@code getRunningProgram}, {@code setAlias/clearAlias/aliases}</li>
+ * <li>{@code shell.execute} — new CC:Tweaked method (1.87.0)</li>
+ * <li>{@code shell.run} — now delegates to execute; prints errors</li>
+ * <li>{@code shell.resolveProgram} — {@code .lua} extension fallback</li>
+ * <li>Per-program environment isolation (CC:Tweaked 1.80pr1)</li>
+ * <li>{@code arg} table injection (CC:Tweaked 1.83.0)</li>
+ * <li>Remaining shell methods: {@code dir/setDir}, {@code path/setPath},
+ * {@code resolve}, {@code getRunningProgram}, {@code setAlias/clearAlias/aliases}</li>
  * </ul>
  */
 class ShellAPITest {
@@ -110,20 +110,22 @@ class ShellAPITest {
     /**
      * Builds a Lua preamble that mocks all globals required by the shell:
      * <ul>
-     *   <li>{@code term} — headless stubs for {@code isColour/isColor} and {@code current}</li>
-     *   <li>{@code colours}/{@code colors} — numeric constants</li>
-     *   <li>{@code fs} — in-memory file set; only paths in {@code mockFiles} exist</li>
-     *   <li>{@code os.run} — records the last call ({@code _os_run_env},
-     *       {@code _os_run_path}, {@code _os_run_args}) and returns
-     *       {@code _os_run_result} (defaults to {@code true})</li>
-     *   <li>{@code printError} — records the last message in {@code _printError_last}</li>
-     *   <li>{@code table.unpack} polyfill for Lua 5.1 / Cobalt</li>
+     * <li>{@code term} — headless stubs for {@code isColour/isColor} and {@code current}</li>
+     * <li>{@code colours}/{@code colors} — numeric constants</li>
+     * <li>{@code fs} — in-memory file set; only paths in {@code mockFiles} exist</li>
+     * <li>{@code os.run} — records the last call ({@code _os_run_env},
+     * {@code _os_run_path}, {@code _os_run_args}) and returns
+     * {@code _os_run_result} (defaults to {@code true})</li>
+     * <li>{@code printError} — records the last message in {@code _printError_last}</li>
+     * <li>{@code table.unpack} polyfill for Lua 5.1 / Cobalt</li>
      * </ul>
      *
-     * <p>The default shell PATH is {@code ".:/rom/programs"} (set when
-     * {@code parentShell} is {@code nil}).  Tests that need files to be found
+     * <p>
+     * The default shell PATH is {@code ".:/rom/programs"} (set when
+     * {@code parentShell} is {@code nil}). Tests that need files to be found
      * should place them at {@code "rom/programs/<name>"} or as a bare name for
-     * the {@code "."} entry.</p>
+     * the {@code "."} entry.
+     * </p>
      *
      * @param mockFiles file paths that will be treated as existing regular files
      */
@@ -147,7 +149,9 @@ class ShellAPITest {
         // Mock filesystem — only paths listed in mockFiles exist
         sb.append("_mock_files = {");
         for (String file : mockFiles) {
-            sb.append(" [\"").append(file).append("\"]=true,");
+            sb.append(" [\"")
+                .append(file)
+                .append("\"]=true,");
         }
         sb.append(" }\n");
         sb.append("fs = {}\n");
@@ -188,7 +192,7 @@ class ShellAPITest {
 
     /**
      * Runs {@code testLua} with the shell definitions pre-loaded and the mock
-     * preamble injected.  The combined chunk is:
+     * preamble injected. The combined chunk is:
      * {@code preamble + shellDefs + testLua}.
      */
     private static void run(CobaltMachine machine, String testLua, String... mockFiles) {
@@ -232,9 +236,7 @@ class ShellAPITest {
     @Test
     void executeCallsOsRunWithNormalisedPath() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "shell.execute('/rom/programs/id')\n_capture(_os_run_path)",
-            "rom/programs/id");
+        run(buildMachine(cap), "shell.execute('/rom/programs/id')\n_capture(_os_run_path)", "rom/programs/id");
         assertNotNull(cap.args);
         assertEquals("rom/programs/id", cap.args[0], "leading slash must be stripped by fs.combine");
     }
@@ -242,7 +244,8 @@ class ShellAPITest {
     @Test
     void executeForwardsArgumentsToOsRun() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "shell.execute('/rom/programs/prog', 'alpha', 'beta')\n_capture(_os_run_args[1], _os_run_args[2])",
             "rom/programs/prog");
         assertNotNull(cap.args);
@@ -253,7 +256,8 @@ class ShellAPITest {
     @Test
     void executeReturnsTrueWhenOsRunSucceeds() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "_os_run_result = true\nlocal ok = shell.execute('/rom/programs/id')\n_capture(ok)",
             "rom/programs/id");
         assertNotNull(cap.args);
@@ -263,7 +267,8 @@ class ShellAPITest {
     @Test
     void executeReturnsFalseWhenOsRunFails() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "_os_run_result = false\nlocal ok = shell.execute('/rom/programs/id')\n_capture(ok)",
             "rom/programs/id");
         assertNotNull(cap.args);
@@ -294,7 +299,8 @@ class ShellAPITest {
     @Test
     void runTokenizesSpaceSeparatedArguments() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "shell.run('prog alpha beta')\n_capture(_os_run_args[1], _os_run_args[2])",
             "rom/programs/prog");
         assertNotNull(cap.args);
@@ -305,9 +311,7 @@ class ShellAPITest {
     @Test
     void runHandlesQuotedArgument() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "shell.run('prog \"hello world\"')\n_capture(_os_run_args[1])",
-            "rom/programs/prog");
+        run(buildMachine(cap), "shell.run('prog \"hello world\"')\n_capture(_os_run_args[1])", "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("hello world", cap.args[0], "quoted string must be a single token");
     }
@@ -315,7 +319,8 @@ class ShellAPITest {
     @Test
     void runReturnsTrueWhenProgramSucceeds() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "_os_run_result = true\nlocal ok = shell.run('prog')\n_capture(ok)",
             "rom/programs/prog");
         assertNotNull(cap.args);
@@ -337,9 +342,7 @@ class ShellAPITest {
     @Test
     void resolveProgramFindsFileOnPath() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "_capture(shell.resolveProgram('myprogram'))",
-            "rom/programs/myprogram");
+        run(buildMachine(cap), "_capture(shell.resolveProgram('myprogram'))", "rom/programs/myprogram");
         assertNotNull(cap.args);
         assertEquals("rom/programs/myprogram", cap.args[0]);
     }
@@ -347,9 +350,7 @@ class ShellAPITest {
     @Test
     void resolveProgramFindsLuaExtensionFallback() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "_capture(shell.resolveProgram('myscript'))",
-            "rom/programs/myscript.lua");
+        run(buildMachine(cap), "_capture(shell.resolveProgram('myscript'))", "rom/programs/myscript.lua");
         assertNotNull(cap.args);
         assertEquals(
             "rom/programs/myscript.lua",
@@ -360,10 +361,7 @@ class ShellAPITest {
     @Test
     void resolveProgramPrefersBareNameOverLuaExtension() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "_capture(shell.resolveProgram('prog'))",
-            "rom/programs/prog",
-            "rom/programs/prog.lua");
+        run(buildMachine(cap), "_capture(shell.resolveProgram('prog'))", "rom/programs/prog", "rom/programs/prog.lua");
         assertNotNull(cap.args);
         assertEquals(
             "rom/programs/prog",
@@ -374,9 +372,7 @@ class ShellAPITest {
     @Test
     void resolveProgramResolvesAbsolutePath() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "_capture(shell.resolveProgram('/rom/programs/edit'))",
-            "rom/programs/edit");
+        run(buildMachine(cap), "_capture(shell.resolveProgram('/rom/programs/edit'))", "rom/programs/edit");
         assertNotNull(cap.args);
         assertEquals("rom/programs/edit", cap.args[0]);
     }
@@ -392,7 +388,8 @@ class ShellAPITest {
     @Test
     void resolveProgramSubstitutesAlias() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "shell.setAlias('ll', 'list')\n_capture(shell.resolveProgram('ll'))",
             "rom/programs/list");
         assertNotNull(cap.args);
@@ -406,9 +403,9 @@ class ShellAPITest {
     @Test
     void eachExecuteCallReceivesADistinctEnvTable() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "local env1, env2\n"
-                + "local call = 0\n"
+        run(
+            buildMachine(cap),
+            "local env1, env2\n" + "local call = 0\n"
                 + "function os.run(env, path, ...)\n"
                 + "  call = call + 1\n"
                 + "  if call == 1 then env1 = env else env2 = env end\n"
@@ -425,9 +422,9 @@ class ShellAPITest {
     @Test
     void globalsMutatedInOneRunDoNotBleedToNextRun() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "local leaked\n"
-                + "local call = 0\n"
+        run(
+            buildMachine(cap),
+            "local leaked\n" + "local call = 0\n"
                 + "function os.run(env, path, ...)\n"
                 + "  call = call + 1\n"
                 + "  if call == 1 then\n"
@@ -448,9 +445,9 @@ class ShellAPITest {
     @Test
     void perRunEnvInheritsShellFromBaseEnv() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "function os.run(env, path, ...) _capture(type(env.shell)) end\n"
-                + "shell.execute('/rom/programs/prog')\n",
+        run(
+            buildMachine(cap),
+            "function os.run(env, path, ...) _capture(type(env.shell)) end\n" + "shell.execute('/rom/programs/prog')\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("table", cap.args[0], "per-run env must expose 'shell' via __index into the base tEnv");
@@ -463,9 +460,9 @@ class ShellAPITest {
     @Test
     void argTableIsInjectedIntoPerRunEnv() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "function os.run(env, path, ...) _capture(type(env.arg)) end\n"
-                + "shell.execute('/rom/programs/prog')\n",
+        run(
+            buildMachine(cap),
+            "function os.run(env, path, ...) _capture(type(env.arg)) end\n" + "shell.execute('/rom/programs/prog')\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("table", cap.args[0], "env.arg must be a table");
@@ -474,9 +471,9 @@ class ShellAPITest {
     @Test
     void argZeroIsResolvedProgramPath() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "function os.run(env, path, ...) _capture(env.arg[0]) end\n"
-                + "shell.execute('/rom/programs/prog')\n",
+        run(
+            buildMachine(cap),
+            "function os.run(env, path, ...) _capture(env.arg[0]) end\n" + "shell.execute('/rom/programs/prog')\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("rom/programs/prog", cap.args[0], "arg[0] must be the resolved program path");
@@ -485,7 +482,8 @@ class ShellAPITest {
     @Test
     void argOneIsFirstArgument() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
+        run(
+            buildMachine(cap),
             "function os.run(env, path, ...) _capture(env.arg[1]) end\n"
                 + "shell.execute('/rom/programs/prog', 'myarg')\n",
             "rom/programs/prog");
@@ -496,9 +494,9 @@ class ShellAPITest {
     @Test
     void argOneIsNilWhenCalledWithNoArguments() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "function os.run(env, path, ...) _capture(env.arg[1]) end\n"
-                + "shell.execute('/rom/programs/prog')\n",
+        run(
+            buildMachine(cap),
+            "function os.run(env, path, ...) _capture(env.arg[1]) end\n" + "shell.execute('/rom/programs/prog')\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertNull(cap.args[0], "arg[1] must be nil when program is called with no arguments");
@@ -580,9 +578,9 @@ class ShellAPITest {
     @Test
     void getRunningProgramReturnsPathDuringExecution() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "function os.run(env, path, ...)\n"
-                + "  _capture(shell.getRunningProgram())\n"
+        run(
+            buildMachine(cap),
+            "function os.run(env, path, ...)\n" + "  _capture(shell.getRunningProgram())\n"
                 + "  return true\n"
                 + "end\n"
                 + "shell.execute('/rom/programs/prog')\n",
@@ -609,10 +607,9 @@ class ShellAPITest {
     @Test
     void clearAliasRemovesAlias() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "shell.setAlias('ll', 'list')\n"
-                + "shell.clearAlias('ll')\n"
-                + "_capture(shell.aliases()['ll'])");
+        run(
+            buildMachine(cap),
+            "shell.setAlias('ll', 'list')\n" + "shell.clearAlias('ll')\n" + "_capture(shell.aliases()['ll'])");
         assertNotNull(cap.args);
         assertNull(cap.args[0]);
     }
@@ -620,13 +617,12 @@ class ShellAPITest {
     @Test
     void aliasesReturnsCopyThatDoesNotAffectInternalTable() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap),
-            "shell.setAlias('a', 'b')\n"
-                + "local copy = shell.aliases()\n"
+        run(
+            buildMachine(cap),
+            "shell.setAlias('a', 'b')\n" + "local copy = shell.aliases()\n"
                 + "copy['a'] = 'mutated'\n"
                 + "_capture(shell.aliases()['a'])");
         assertNotNull(cap.args);
         assertEquals("b", cap.args[0], "mutating the returned copy must not affect the internal aliases table");
     }
 }
-
