@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -462,6 +463,87 @@ public class FileSystem {
         }
     }
 
+    public synchronized IMountedFileReadWrite openForReadWrite(String path, boolean truncate)
+        throws FileSystemException {
+        path = sanitizePath(path);
+        MountWrapper mount = getMount(path);
+        final RandomAccessFile raf = mount.openForReadWrite(path, truncate);
+        if (raf == null) {
+            return null;
+        }
+        IMountedFileReadWrite file = new IMountedFileReadWrite() {
+
+            @Override
+            public byte[] readLine() throws IOException {
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+                int val;
+                while ((val = raf.read()) != -1) {
+                    if (val == '\r') {
+                        long pos = raf.getFilePointer();
+                        int next = raf.read();
+                        if (next != '\n' && next != -1) {
+                            raf.seek(pos);
+                        }
+                        return buffer.toByteArray();
+                    } else if (val == '\n') {
+                        return buffer.toByteArray();
+                    } else {
+                        buffer.write(val);
+                    }
+                }
+                return buffer.size() > 0 ? buffer.toByteArray() : null;
+            }
+
+            @Override
+            public byte[] readAll() throws IOException {
+                long remaining = raf.length() - raf.getFilePointer();
+                if (remaining <= 0) return new byte[0];
+                byte[] result = new byte[(int) remaining];
+                raf.readFully(result);
+                return result;
+            }
+
+            @Override
+            public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
+                raf.write(data, start, length);
+                if (newLine) raf.write('\n');
+            }
+
+            @Override
+            public long seek(String whence, long offset) throws IOException {
+                long newPos;
+                switch (whence) {
+                    case "set":
+                        newPos = offset;
+                        break;
+                    case "cur":
+                        newPos = raf.getFilePointer() + offset;
+                        break;
+                    case "end":
+                        newPos = raf.length() + offset;
+                        break;
+                    default:
+                        throw new IOException("Invalid whence value");
+                }
+                if (newPos < 0) throw new IOException("Cannot seek before the beginning of the file");
+                raf.seek(newPos);
+                return newPos;
+            }
+
+            @Override
+            public void flush() throws IOException {
+                // RandomAccessFile writes are unbuffered; nothing to flush
+            }
+
+            @Override
+            public void close() throws IOException {
+                removeFile(this, raf);
+            }
+        };
+        addFile(file);
+        return file;
+    }
+
     public long getFreeSpace(String path) throws FileSystemException {
         path = sanitizePath(path);
         FileSystem.MountWrapper mount = this.getMount(path);
@@ -840,6 +922,24 @@ public class FileSystem {
                 } catch (IOException var3) {
                     throw new FileSystemException(var3.getMessage());
                 }
+            }
+        }
+
+        public RandomAccessFile openForReadWrite(String path, boolean truncate) throws FileSystemException {
+            if (this.m_writableMount == null) {
+                throw new FileSystemException("Access Denied");
+            }
+            try {
+                path = this.toLocal(path);
+                if (!truncate && !this.m_mount.exists(path)) {
+                    throw new FileSystemException("No such file");
+                }
+                if (this.m_mount.exists(path) && this.m_mount.isDirectory(path)) {
+                    throw new FileSystemException("Cannot write to directory");
+                }
+                return this.m_writableMount.openForReadWrite(path, truncate);
+            } catch (IOException e) {
+                throw new FileSystemException(e.getMessage());
             }
         }
 

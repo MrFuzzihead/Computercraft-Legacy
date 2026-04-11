@@ -11,8 +11,10 @@ import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.filesystem.IMountedFileBinary;
 import dan200.computercraft.core.filesystem.IMountedFileNormal;
+import dan200.computercraft.core.filesystem.IMountedFileReadWrite;
 import dan200.computercraft.core.lua.binfs.ReaderObject;
 import dan200.computercraft.core.lua.binfs.WriterObject;
+import dan200.computercraft.core.lua.lib.BinaryConverter;
 
 public class FSAPI implements ILuaAPI {
 
@@ -204,6 +206,28 @@ public class FSAPI implements ILuaAPI {
                     && args[1] instanceof String) {
                     String path = (String) args[0];
                     String mode = (String) args[1];
+
+                    // r+ and w+ have their own error-return contract (nil, msg)
+                    // and must be handled before the general try-catch below.
+                    if (mode.equals("r+")) {
+                        try {
+                            IMountedFileReadWrite rwFile = this.m_fileSystem.openForReadWrite(path, false);
+                            if (rwFile == null) return new Object[] { null, "No such file" };
+                            return wrapReadWrite(rwFile);
+                        } catch (FileSystemException e) {
+                            return new Object[] { null, e.getMessage() };
+                        }
+                    }
+
+                    if (mode.equals("w+")) {
+                        try {
+                            IMountedFileReadWrite rwFile = this.m_fileSystem.openForReadWrite(path, true);
+                            if (rwFile == null) return new Object[] { null, "Failed to open file" };
+                            return wrapReadWrite(rwFile);
+                        } catch (FileSystemException e) {
+                            return new Object[] { null, e.getMessage() };
+                        }
+                    }
 
                     try {
                         if (mode.equals("r")) {
@@ -422,6 +446,75 @@ public class FSAPI implements ILuaAPI {
                     default:
                         assert false;
 
+                        return null;
+                }
+            }
+        } };
+    }
+
+    private static Object[] wrapReadWrite(final IMountedFileReadWrite file) {
+        return new Object[] { new ILuaObject() {
+
+            @Override
+            public String[] getMethodNames() {
+                return new String[] { "readLine", "readAll", "write", "seek", "flush", "close" };
+            }
+
+            @Override
+            public Object[] callMethod(ILuaContext context, int method, Object[] args) throws LuaException {
+                switch (method) {
+                    case 0: // readLine
+                        try {
+                            byte[] line = file.readLine();
+                            return line != null ? new Object[] { line } : null;
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    case 1: // readAll
+                        try {
+                            byte[] all = file.readAll();
+                            return all != null ? new Object[] { all } : null;
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    case 2: // write
+                        try {
+                            if (args.length > 0 && args[0] != null) {
+                                byte[] data = args[0] instanceof byte[] ? (byte[]) args[0]
+                                    : BinaryConverter.toBytes(args[0].toString());
+                                file.write(data, 0, data.length, false);
+                            }
+                            return null;
+                        } catch (IOException e) {
+                            throw new LuaException(e.getMessage());
+                        }
+                    case 3: // seek
+                        try {
+                            String whence = args.length > 0 && args[0] instanceof String ? (String) args[0] : "cur";
+                            long offset = args.length > 1 && args[1] instanceof Number
+                                ? ((Number) args[1]).longValue()
+                                : 0L;
+                            long pos = file.seek(whence, offset);
+                            return new Object[] { pos };
+                        } catch (IOException e) {
+                            return new Object[] { null, e.getMessage() };
+                        }
+                    case 4: // flush
+                        try {
+                            file.flush();
+                            return null;
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    case 5: // close
+                        try {
+                            file.close();
+                            return null;
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    default:
+                        assert false;
                         return null;
                 }
             }

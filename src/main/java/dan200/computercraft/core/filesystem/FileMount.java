@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
@@ -197,6 +198,37 @@ public class FileMount implements IWritableMount {
         } else {
             throw new IOException("No such file");
         }
+    }
+
+    @Override
+    public RandomAccessFile openForReadWrite(String path, boolean truncate) throws IOException {
+        this.create();
+        File file = this.getRealPath(path);
+        if (file.exists() && file.isDirectory()) {
+            throw new IOException("Cannot write to directory");
+        }
+        if (!truncate) {
+            // r+ mode: file must already exist
+            if (!file.exists()) {
+                throw new IOException("No such file");
+            }
+        } else {
+            // w+ mode: create if absent, or truncate if present
+            if (!file.exists()) {
+                if (this.getRemainingSpace() < MINIMUM_FILE_SIZE) {
+                    throw new IOException("Out of space");
+                }
+                this.m_usedSpace += MINIMUM_FILE_SIZE;
+            } else {
+                this.m_usedSpace -= Math.max(file.length(), (long) MINIMUM_FILE_SIZE);
+                this.m_usedSpace += MINIMUM_FILE_SIZE;
+            }
+        }
+        RandomAccessFile raf = new RandomAccessFile(file, "rw");
+        if (truncate) {
+            raf.setLength(0L);
+        }
+        return raf;
     }
 
     @Override

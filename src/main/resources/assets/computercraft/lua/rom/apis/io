@@ -23,8 +23,11 @@ local g_defaultOutput = {
 	bClosed = false,
 	close = function( self )
 	end,
-	write = function( self, _sText )
-		_G.write( _sText )
+	write = function( self, ... )
+		for i = 1, select( "#", ... ) do
+			_G.write( tostring( select( i, ... ) ) )
+		end
+		return self
 	end,
 	flush = function( self )
 	end,
@@ -63,15 +66,23 @@ end
 
 function open( _sPath, _sMode )
 	local sMode = _sMode or "r"
+
+	-- Validate mode before calling fs.open so unsupported modes
+	-- produce a proper nil, err rather than a thrown error.
+	local validModes = { r = true, w = true, a = true, rb = true, wb = true, ab = true, ["r+"] = true, ["w+"] = true }
+	if not validModes[sMode] then
+		return nil, "Unsupported mode"
+	end
+
 	local file = fs.open( _sPath, sMode )
 	if not file then
-		return nil
+		return nil, "Failed to open file"
 	end
-	
+
 	if sMode == "r"then
 		return {
 			bFileHandle = true,
-			bClosed = false,				
+			bClosed = false,
 			close = function( self )
 				file.close()
 				self.bClosed = true
@@ -101,23 +112,68 @@ function open( _sPath, _sMode )
 	elseif sMode == "w" or sMode == "a" then
 		return {
 			bFileHandle = true,
-			bClosed = false,				
+			bClosed = false,
 			close = function( self )
 				file.close()
 				self.bClosed = true
 			end,
-			write = function( self, _sText )
-				file.write( _sText )
+			write = function( self, ... )
+				for i = 1, select( "#", ... ) do
+					file.write( tostring( select( i, ... ) ) )
+				end
+				return self
 			end,
 			flush = function( self )
 				file.flush()
 			end,
 		}
-	
+
+	elseif sMode == "r+" or sMode == "w+" then
+		return {
+			bFileHandle = true,
+			bClosed = false,
+			close = function( self )
+				file.close()
+				self.bClosed = true
+			end,
+			read = function( self, _sFormat )
+				local sFormat = _sFormat or "*l"
+				if sFormat == "*l" then
+					return file.readLine()
+				elseif sFormat == "*a" then
+					return file.readAll()
+				else
+					error( "Unsupported format" )
+				end
+			end,
+			write = function( self, ... )
+				for i = 1, select( "#", ... ) do
+					file.write( tostring( select( i, ... ) ) )
+				end
+				return self
+			end,
+			seek = function( self, _sWhence, _nOffset )
+				return file.seek( _sWhence or "cur", _nOffset or 0 )
+			end,
+			lines = function( self )
+				return function()
+					local sLine = file.readLine()
+					if sLine == nil then
+						file.close()
+						self.bClosed = true
+					end
+					return sLine
+				end
+			end,
+			flush = function( self )
+				file.flush()
+			end,
+		}
+
 	elseif sMode == "rb" then
 		return {
 			bFileHandle = true,
-			bClosed = false,				
+			bClosed = false,
 			close = function( self )
 				file.close()
 				self.bClosed = true
@@ -126,11 +182,11 @@ function open( _sPath, _sMode )
 				return file.read()
 			end,
 		}
-		
+
 	elseif sMode == "wb" or sMode == "ab" then
 		return {
 			bFileHandle = true,
-			bClosed = false,				
+			bClosed = false,
 			close = function( self )
 				file.close()
 				self.bClosed = true
@@ -142,11 +198,7 @@ function open( _sPath, _sMode )
 				file.flush()
 			end,
 		}
-	
-	else
-		file.close()
-		error( "Unsupported mode" )
-		
+
 	end
 end
 
