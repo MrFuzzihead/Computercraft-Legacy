@@ -117,6 +117,7 @@ public class ComputerCraft {
     public static boolean timeoutError = false;
     public static boolean debug = false;
     public static boolean enableTurtles = true;
+    public static String cc_default_settings = "";
     public static final int terminalWidth_computer = 51;
     public static final int terminalHeight_computer = 19;
     public static final int terminalWidth_turtle = 39;
@@ -242,6 +243,9 @@ public class ComputerCraft {
         prop = config.get("general", "enableTurtles", enableTurtles);
         prop.comment = "Set to false to disable turtles entirely";
         enableTurtles = prop.getBoolean(enableTurtles);
+        prop = config.get("general", "cc_default_settings", cc_default_settings);
+        prop.comment = "A comma-separated list of default settings to apply when the settings API is loaded, e.g. \"shell.autocomplete=false,lua.autocomplete=false\". Populates the _CC_DEFAULT_SETTINGS Lua global.";
+        cc_default_settings = prop.getString();
         config.save();
         networkEventChannel = NetworkRegistry.INSTANCE.newEventDrivenChannel("CC");
         networkEventChannel.register(new PacketHandler());

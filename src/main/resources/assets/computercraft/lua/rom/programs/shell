@@ -19,6 +19,9 @@ local tEnv = {
 	[ "shell" ] = shell,
 	[ "multishell" ] = multishell,
 }
+-- Make standard globals (_G) reachable through the per-run env chain
+-- (tRunEnv → tEnv → _G) without os.run overwriting tRunEnv's metatable.
+setmetatable( tEnv, { __index = _G } )
 
 -- Colours
 local promptColour, textColour, bgColour
@@ -39,7 +42,9 @@ local function run( _sCommand, ... )
 		if multishell then
 		    multishell.setTitle( multishell.getCurrent(), fs.getName( sPath ) )
 		end
-   		local result = os.run( tEnv, sPath, ... )
+		local tRunEnv = setmetatable( {}, { __index = tEnv } )
+		tRunEnv.arg = { [0] = sPath, ... }
+   		local result = os.run( tRunEnv, sPath, ... )
 		tProgramStack[#tProgramStack] = nil
 		if multishell then
 		    if #tProgramStack > 0 then
@@ -50,8 +55,7 @@ local function run( _sCommand, ... )
 		end
 		return result
    	else
-    	printError( "No such program" )
-    	return false
+    	return false, "No such program"
     end
 end
 
@@ -73,11 +77,19 @@ local function tokenise( ... )
 end
 
 -- Install shell API
+function shell.execute( _sCommand, ... )
+	return run( _sCommand, ... )
+end
+
 function shell.run( ... )
 	local tWords = tokenise( ... )
 	local sCommand = tWords[1]
 	if sCommand then
-		return run( sCommand, table.unpack( tWords, 2 ) )
+		local ok, err = shell.execute( sCommand, table.unpack( tWords, 2 ) )
+		if not ok and err then
+			printError( err )
+		end
+		return ok
 	end
 	return false
 end
@@ -126,22 +138,27 @@ function shell.resolveProgram( _sCommand )
     	end
 		return nil
     end
-    
+
  	-- Otherwise, look on the path variable
     for sPath in string.gmatch(sPath, "[^:]+") do
     	sPath = fs.combine( shell.resolve( sPath ), _sCommand )
     	if fs.exists( sPath ) and not fs.isDir( sPath ) then
 			return sPath
     	end
+    	-- Also try with a .lua extension
+    	local sLuaPath = sPath .. ".lua"
+    	if fs.exists( sLuaPath ) and not fs.isDir( sLuaPath ) then
+    		return sLuaPath
+    	end
     end
-	
+
 	-- Not found
 	return nil
 end
 
 function shell.programs( _bIncludeHidden )
 	local tItems = {}
-	
+
 	-- Add programs from the path
     for sPath in string.gmatch(sPath, "[^:]+") do
     	sPath = shell.resolve( sPath )
@@ -155,7 +172,7 @@ function shell.programs( _bIncludeHidden )
 				end
 			end
 		end
-    end	
+    end
 
 	-- Sort and return
 	local tItemList = {}

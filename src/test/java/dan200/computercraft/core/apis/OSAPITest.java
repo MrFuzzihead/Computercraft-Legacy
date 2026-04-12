@@ -2,6 +2,8 @@ package dan200.computercraft.core.apis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Calendar;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
 
@@ -42,6 +44,8 @@ class OSAPITest {
     // Method indices must match the order declared in OSAPI.getMethodNames().
     private static final int METHOD_EPOCH = 15;
     private static final int METHOD_DATE = 16;
+    private static final int METHOD_TIME = 11;
+    private static final int METHOD_DAY = 12;
 
     private OSAPI api;
 
@@ -303,6 +307,216 @@ class OSAPITest {
         assertTrue(year.matches("\\d{4}"), "Year must be 4 digits, got: " + year);
         int y = Integer.parseInt(year);
         assertTrue(y >= 2020 && y < 2200, "Year must be in a plausible range, got: " + y);
+    }
+
+    // =========================================================================
+    // os.time — locale string support
+    // =========================================================================
+
+    @Test
+    void timeNoArgDefaultsToIngame() throws LuaException {
+        // Stub has m_time = 6.0 (in-game hours)
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] {});
+        assertNotNull(result);
+        assertEquals(6.0, ((Number) result[0]).doubleValue(), 1e-9, "os.time() must default to in-game time");
+    }
+
+    @Test
+    void timeIngameArgReturnsIngameTime() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] { "ingame" });
+        assertNotNull(result);
+        assertEquals(6.0, ((Number) result[0]).doubleValue(), 1e-9);
+    }
+
+    @Test
+    void timeCaseInsensitiveIngame() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] { "INGAME" });
+        assertNotNull(result);
+        assertEquals(6.0, ((Number) result[0]).doubleValue(), 1e-9, "os.time('INGAME') must be case-insensitive");
+    }
+
+    @Test
+    void timeUtcReturnsHourOfDay() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] { "utc" });
+        assertNotNull(result);
+        double t = ((Number) result[0]).doubleValue();
+        assertTrue(t >= 0.0 && t < 24.0, "os.time('utc') must return a value in [0, 24), got: " + t);
+    }
+
+    @Test
+    void timeLocalReturnsHourOfDay() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] { "local" });
+        assertNotNull(result);
+        double t = ((Number) result[0]).doubleValue();
+        assertTrue(t >= 0.0 && t < 24.0, "os.time('local') must return a value in [0, 24), got: " + t);
+    }
+
+    @Test
+    void timeCaseInsensitiveUtc() throws LuaException {
+        Object[] resultLower = api.callMethod(null, METHOD_TIME, new Object[] { "utc" });
+        Object[] resultUpper = api.callMethod(null, METHOD_TIME, new Object[] { "UTC" });
+        assertNotNull(resultLower);
+        assertNotNull(resultUpper);
+        // Both calls happen within the same second, so they should be equal or differ by at most one second's worth of
+        // fractional hours
+        assertEquals(
+            ((Number) resultLower[0]).doubleValue(),
+            ((Number) resultUpper[0]).doubleValue(),
+            1.0 / 3600.0,
+            "os.time('utc') and os.time('UTC') must return the same value");
+    }
+
+    @Test
+    void timeUnknownLocaleThrowsLuaException() {
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_TIME, new Object[] { "mars" }),
+            "An unknown locale string must throw LuaException");
+        assertTrue(
+            ex.getMessage()
+                .contains("mars"),
+            "Error message must include the invalid locale value");
+    }
+
+    // =========================================================================
+    // os.time — table argument (date table → UNIX timestamp)
+    // =========================================================================
+
+    @Test
+    void timeTableConvertsToLocalTimestamp() throws LuaException {
+        // Build the expected timestamp for 1970-01-01 00:00:00 in the local TZ
+        // using the same Calendar.getInstance() path as the implementation.
+        Calendar cal = Calendar.getInstance();
+        cal.set(1970, Calendar.JANUARY, 1, 0, 0, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        long expectedSeconds = cal.getTimeInMillis() / 1000L;
+
+        Map<String, Object> table = new HashMap<>();
+        table.put("year", 1970.0);
+        table.put("month", 1.0);
+        table.put("day", 1.0);
+        table.put("hour", 0.0);
+        table.put("min", 0.0);
+        table.put("sec", 0.0);
+
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] { table });
+        assertNotNull(result);
+        assertEquals(
+            expectedSeconds,
+            ((Number) result[0]).longValue(),
+            "os.time(table) must convert date fields to a UNIX timestamp");
+    }
+
+    @Test
+    void timeTableMissingRequiredFieldThrows() {
+        // "month" and "day" are required; omitting them must throw
+        Map<String, Object> table = new HashMap<>();
+        table.put("year", 2024.0);
+        // month and day intentionally missing
+        assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_TIME, new Object[] { table }),
+            "A table missing required fields must throw LuaException");
+    }
+
+    @Test
+    void timeTableOptionalHourDefaultsTwelve() throws LuaException {
+        // When 'hour' is absent, the implementation defaults to 12.
+        // Build expected timestamp for noon on 1970-01-01 in local TZ.
+        Calendar cal = Calendar.getInstance();
+        cal.set(1970, Calendar.JANUARY, 1, 12, 0, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        long expectedSeconds = cal.getTimeInMillis() / 1000L;
+
+        Map<String, Object> table = new HashMap<>();
+        table.put("year", 1970.0);
+        table.put("month", 1.0);
+        table.put("day", 1.0);
+        // hour, min, sec absent → should default to 12:00:00
+
+        Object[] result = api.callMethod(null, METHOD_TIME, new Object[] { table });
+        assertNotNull(result);
+        assertEquals(
+            expectedSeconds,
+            ((Number) result[0]).longValue(),
+            "os.time(table) must default 'hour' to 12 when absent");
+    }
+
+    // =========================================================================
+    // os.day — locale string support
+    // =========================================================================
+
+    @Test
+    void dayNoArgDefaultsToIngame() throws LuaException {
+        // Stub has m_day = 5
+        Object[] result = api.callMethod(null, METHOD_DAY, new Object[] {});
+        assertNotNull(result);
+        assertEquals(5, ((Number) result[0]).intValue(), "os.day() must default to in-game day");
+    }
+
+    @Test
+    void dayIngameArgReturnsIngameDay() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_DAY, new Object[] { "ingame" });
+        assertNotNull(result);
+        assertEquals(5, ((Number) result[0]).intValue());
+    }
+
+    @Test
+    void dayCaseInsensitiveIngame() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_DAY, new Object[] { "INGAME" });
+        assertNotNull(result);
+        assertEquals(5, ((Number) result[0]).intValue(), "os.day('INGAME') must be case-insensitive");
+    }
+
+    @Test
+    void dayUtcReturnsDaysSinceEpoch() throws LuaException {
+        // The current date is well past 1970, so the UTC day count must be > 0.
+        Object[] result = api.callMethod(null, METHOD_DAY, new Object[] { "utc" });
+        assertNotNull(result);
+        int d = ((Number) result[0]).intValue();
+        assertTrue(d > 365, "os.day('utc') must return a day count > 365 (i.e., past 1971), got: " + d);
+    }
+
+    @Test
+    void dayLocalReturnsDaysSinceEpoch() throws LuaException {
+        Object[] result = api.callMethod(null, METHOD_DAY, new Object[] { "local" });
+        assertNotNull(result);
+        int d = ((Number) result[0]).intValue();
+        assertTrue(d > 365, "os.day('local') must return a day count > 365, got: " + d);
+    }
+
+    @Test
+    void dayUtcAndLocalDifferByAtMostOne() throws LuaException {
+        // UTC and local days can differ by at most 1 (timezone boundary).
+        Object[] utcResult = api.callMethod(null, METHOD_DAY, new Object[] { "utc" });
+        Object[] localResult = api.callMethod(null, METHOD_DAY, new Object[] { "local" });
+        int utcDay = ((Number) utcResult[0]).intValue();
+        int localDay = ((Number) localResult[0]).intValue();
+        assertTrue(
+            Math.abs(utcDay - localDay) <= 1,
+            "os.day('utc') and os.day('local') must agree within 1 day (timezone boundary)");
+    }
+
+    @Test
+    void dayCaseInsensitiveUtc() throws LuaException {
+        Object[] lower = api.callMethod(null, METHOD_DAY, new Object[] { "utc" });
+        Object[] upper = api.callMethod(null, METHOD_DAY, new Object[] { "UTC" });
+        assertEquals(
+            ((Number) lower[0]).intValue(),
+            ((Number) upper[0]).intValue(),
+            "os.day('utc') and os.day('UTC') must return the same value");
+    }
+
+    @Test
+    void dayUnknownLocaleThrowsLuaException() {
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_DAY, new Object[] { "mars" }),
+            "An unknown locale string must throw LuaException");
+        assertTrue(
+            ex.getMessage()
+                .contains("mars"),
+            "Error message must include the invalid locale value");
     }
 
     // =========================================================================

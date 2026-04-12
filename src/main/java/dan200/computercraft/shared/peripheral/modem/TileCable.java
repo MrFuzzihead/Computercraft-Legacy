@@ -740,13 +740,15 @@ public class TileCable extends TileModemBase implements INetwork {
         @Override
         public String[] getMethodNames() {
             String[] methods = super.getMethodNames();
-            String[] newMethods = new String[methods.length + 5];
+            String[] newMethods = new String[methods.length + 7];
             System.arraycopy(methods, 0, newMethods, 0, methods.length);
             newMethods[methods.length] = "getNamesRemote";
             newMethods[methods.length + 1] = "isPresentRemote";
             newMethods[methods.length + 2] = "getTypeRemote";
             newMethods[methods.length + 3] = "getMethodsRemote";
             newMethods[methods.length + 4] = "callRemote";
+            newMethods[methods.length + 5] = "hasTypeRemote";
+            newMethods[methods.length + 6] = "getNameLocal";
             return newMethods;
         }
 
@@ -777,13 +779,14 @@ public class TileCable extends TileModemBase implements INetwork {
                 case 1:
                     String type = this.m_entity.getTypeRemote(this.parseString(arguments, 0));
                     return new Object[] { type != null };
-                case 2:
-                    String type2 = this.m_entity.getTypeRemote(this.parseString(arguments, 0));
-                    if (type2 != null) {
-                        return new Object[] { type2 };
-                    }
-
-                    return null;
+                case 2: {
+                    String fullType2 = this.m_entity.getTypeRemote(this.parseString(arguments, 0));
+                    if (fullType2 == null) return null;
+                    String[] typeParts = fullType2.split(";");
+                    Object[] typeResult = new Object[typeParts.length];
+                    System.arraycopy(typeParts, 0, typeResult, 0, typeParts.length);
+                    return typeResult;
+                }
                 case 3:
                     String[] methodNames = this.m_entity.getMethodNamesRemote(this.parseString(arguments, 0));
                     if (methodNames == null) {
@@ -803,6 +806,22 @@ public class TileCable extends TileModemBase implements INetwork {
                     Object[] methodArgs = new Object[arguments.length - 2];
                     System.arraycopy(arguments, 2, methodArgs, 0, arguments.length - 2);
                     return this.m_entity.callMethodRemote(remoteName, context, methodName, methodArgs);
+                case 5: {
+                    String remoteName5 = this.parseString(arguments, 0);
+                    String checkType5 = this.parseString(arguments, 1);
+                    String type5 = this.m_entity.getTypeRemote(remoteName5);
+                    if (type5 == null) {
+                        throw new LuaException("No peripheral: " + remoteName5);
+                    }
+                    for (String t : type5.split(";")) {
+                        if (t.equals(checkType5)) return new Object[] { true };
+                    }
+                    return new Object[] { false };
+                }
+                case 6: {
+                    String localName = this.m_entity.getConnectedPeripheralName();
+                    return localName != null ? new Object[] { localName } : null;
+                }
                 default:
                     return super.callMethod(computer, context, method, arguments);
             }

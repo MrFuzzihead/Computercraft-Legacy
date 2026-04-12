@@ -175,7 +175,7 @@ local g_tLuaKeywords = {
     [ "while" ] = true,
 }
 
-local function serializeImpl( t, tTracking, sIndent )
+local function serializeImpl( t, tTracking, sIndent, opts )
     local sType = type(t)
     if sType == "table" then
         if tTracking[t] ~= nil then
@@ -183,32 +183,42 @@ local function serializeImpl( t, tTracking, sIndent )
         end
         tTracking[t] = true
 
+        local sResult
         if next(t) == nil then
             -- Empty tables are simple
-            return "{}"
+            sResult = "{}"
         else
             -- Other tables take more work
-            local sResult = "{\n"
-            local sSubIndent = sIndent .. "  "
+            local sSubIndent = opts.compact and "" or (sIndent .. "  ")
+            sResult = opts.compact and "{" or "{\n"
             local tSeen = {}
             for k,v in ipairs(t) do
                 tSeen[k] = true
-                sResult = sResult .. sSubIndent .. serializeImpl( v, tTracking, sSubIndent ) .. ",\n"
+                sResult = sResult .. sSubIndent .. serializeImpl( v, tTracking, sSubIndent, opts )
+                sResult = sResult .. (opts.compact and "," or ",\n")
             end
             for k,v in pairs(t) do
                 if not tSeen[k] then
                     local sEntry
                     if type(k) == "string" and not g_tLuaKeywords[k] and string.match( k, "^[%a_][%a%d_]*$" ) then
-                        sEntry = k .. " = " .. serializeImpl( v, tTracking, sSubIndent ) .. ",\n"
+                        sEntry = k .. (opts.compact and "=" or " = ") .. serializeImpl( v, tTracking, sSubIndent, opts )
                     else
-                        sEntry = "[ " .. serializeImpl( k, tTracking, sSubIndent ) .. " ] = " .. serializeImpl( v, tTracking, sSubIndent ) .. ",\n"
+                        sEntry = "[" .. serializeImpl( k, tTracking, sSubIndent, opts ) .. "]" .. (opts.compact and "=" or " = ") .. serializeImpl( v, tTracking, sSubIndent, opts )
                     end
-                    sResult = sResult .. sSubIndent .. sEntry
+                    sResult = sResult .. sSubIndent .. sEntry .. (opts.compact and "," or ",\n")
                 end
             end
-            sResult = sResult .. sIndent .. "}"
-            return sResult
+            if opts.compact then
+                sResult = sResult .. "}"
+            else
+                sResult = sResult .. sIndent .. "}"
+            end
         end
+
+        if opts.allow_repetitions then
+            tTracking[t] = nil
+        end
+        return sResult
 
     elseif sType == "string" then
         return string.format( "%q", t )
@@ -223,7 +233,9 @@ local function serializeImpl( t, tTracking, sIndent )
 end
 
 -- Escape a string into a valid JSON string literal (double-quoted).
-local function serializeJSONString( s )
+-- When bUnicode is true, bytes >= 0x80 are also escaped as \uXXXX so the
+-- output is pure ASCII (matching the CC:Tweaked unicode_strings option).
+local function serializeJSONString( s, bUnicode )
     -- Replace special characters with JSON escape sequences
     s = string.gsub( s, '\\', '\\\\' )
     s = string.gsub( s, '"',  '\\"'  )
@@ -232,8 +244,9 @@ local function serializeJSONString( s )
     s = string.gsub( s, '\n', '\\n'  )
     s = string.gsub( s, '\r', '\\r'  )
     s = string.gsub( s, '\t', '\\t'  )
-    -- Escape remaining control characters as \uXXXX
-    s = string.gsub( s, '([%z\1-\31])', function( c )
+    -- Escape control characters (and, when bUnicode=true, all non-ASCII bytes)
+    local pattern = bUnicode and '([%z\1-\31\128-\255])' or '([%z\1-\31])'
+    s = string.gsub( s, pattern, function( c )
         return string.format( '\\u%04x', string.byte( c ) )
     end )
     return '"' .. s .. '"'
@@ -242,7 +255,7 @@ end
 empty_json_array = {}
 json_null = {}
 
-local function serializeJSONImpl( t, tTracking )
+local function serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
     local sType = type(t)
     if t == empty_json_array then
         return "[]"
@@ -253,9 +266,10 @@ local function serializeJSONImpl( t, tTracking )
         end
         tTracking[t] = true
 
+        local sResult
         if next(t) == nil then
             -- Empty tables are simple
-            return "{}"
+            sResult = "{}"
         else
             -- Other tables take more work
             local sObjectResult = "{"
@@ -264,7 +278,7 @@ local function serializeJSONImpl( t, tTracking )
             local nArraySize = 0
             for k,v in pairs(t) do
                 if type(k) == "string" then
-                    local sEntry = serializeJSONImpl( k, tTracking ) .. ":" .. serializeJSONImpl( v, tTracking )
+                    local sEntry = serializeJSONImpl( k, tTracking, bUnicode, bAllowRepetitions ) .. ":" .. serializeJSONImpl( v, tTracking, bUnicode, bAllowRepetitions )
                     if nObjectSize == 0 then
                         sObjectResult = sObjectResult .. sEntry
                     else
@@ -274,7 +288,7 @@ local function serializeJSONImpl( t, tTracking )
                 end
             end
             for n,v in ipairs(t) do
-                local sEntry = serializeJSONImpl( v, tTracking )
+                local sEntry = serializeJSONImpl( v, tTracking, bUnicode, bAllowRepetitions )
                 if nArraySize == 0 then
                     sArrayResult = sArrayResult .. sEntry
                 else
@@ -285,14 +299,19 @@ local function serializeJSONImpl( t, tTracking )
             sObjectResult = sObjectResult .. "}"
             sArrayResult = sArrayResult .. "]"
             if nObjectSize > 0 or nArraySize == 0 then
-                return sObjectResult
+                sResult = sObjectResult
             else
-                return sArrayResult
+                sResult = sArrayResult
             end
         end
 
+        if bAllowRepetitions then
+            tTracking[t] = nil
+        end
+        return sResult
+
     elseif sType == "string" then
-        return serializeJSONString( t )
+        return serializeJSONString( t, bUnicode )
 
     elseif sType == "number" or sType == "boolean" then
         return tostring(t)
@@ -303,9 +322,12 @@ local function serializeJSONImpl( t, tTracking )
     end
 end
 
-function serialize( t )
+function serialize( t, opts )
+    if opts ~= nil and type( opts ) ~= "table" then
+        error( "bad argument #2 (table expected, got " .. type( opts ) .. ")", 2 )
+    end
     local tTracking = {}
-    return serializeImpl( t, tTracking, "" )
+    return serializeImpl( t, tTracking, "", opts or {} )
 end
 
 function unserialize( s )
@@ -319,14 +341,16 @@ function unserialize( s )
     return nil
 end
 
-function serializeJSON( t )
+function serializeJSON( t, opts )
+    local bUnicode = type(opts) == "table" and opts.unicode_strings or false
+    local bAllowRepetitions = type(opts) == "table" and opts.allow_repetitions or false
     local tTracking = {}
-    return serializeJSONImpl( t, tTracking )
+    return serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
 end
 
 -- Parse a JSON string and return the corresponding Lua value.
 -- nullValue (optional) is the Lua value to use for JSON null (defaults to nil).
-local function parseJSON( sText, nullValue )
+local function parseJSON( sText, nullValue, parseEmptyArray )
     local nPos = 1
     local nLen = #sText
 
@@ -417,6 +441,12 @@ local function parseJSON( sText, nullValue )
         skipWhitespace()
         if sText:sub( nPos, nPos ) == ']' then
             nPos = nPos + 1
+            -- When parse_empty_array is true (the default), return the sentinel
+            -- empty_json_array so callers can distinguish [] from {} on round-trip.
+            -- When false, return a fresh empty table instead.
+            if parseEmptyArray then
+                return empty_json_array
+            end
             return tResult
         end
         while true do
@@ -518,10 +548,14 @@ end
 
 function unserializeJSON( sText, tOptions )
     local nullValue = nil
+    local parseEmptyArray = true
     if type( tOptions ) == "table" then
         nullValue = tOptions[ "null" ]
+        if tOptions[ "parse_empty_array" ] == false then
+            parseEmptyArray = false
+        end
     end
-    return parseJSON( sText, nullValue )
+    return parseJSON( sText, nullValue, parseEmptyArray )
 end
 
 function urlEncode( str )

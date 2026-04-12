@@ -281,10 +281,12 @@ class TextUtilsJsonTest {
     @Test
     void testUnserializeJsonEmptyArray() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "local t = unserializeJSON('[]')\n_capture(type(t), #t)");
+        // Default behavior (parse_empty_array=true): returns the empty_json_array sentinel
+        run(buildMachine(cap), "local t = unserializeJSON('[]')\n_capture(type(t), #t, t == empty_json_array)");
         assertNotNull(cap.args);
         assertEquals("table", cap.args[0]);
         assertEquals(0.0, cap.args[1], "Empty array should produce a table with length 0");
+        assertTrue((Boolean) cap.args[2], "Default unserializeJSON('[]') must return the empty_json_array sentinel");
     }
 
     @Test
@@ -394,5 +396,167 @@ class TextUtilsJsonTest {
         assertEquals(4.0, cap.args[0]);
         assertEquals(5.0, cap.args[1]);
         assertEquals(6.0, cap.args[2]);
+    }
+
+    // -------------------------------------------------------------------------
+    // unserializeJSON parse_empty_array option
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testUnserializeJsonEmptyArrayExplicitParseTrue() {
+        ResultCapture cap = new ResultCapture();
+        // parse_empty_array=true is the same as the default: returns the sentinel
+        run(
+            buildMachine(cap),
+            "local t = unserializeJSON('[]', {parse_empty_array=true})\n_capture(t == empty_json_array)");
+        assertNotNull(cap.args);
+        assertTrue((Boolean) cap.args[0], "parse_empty_array=true must return empty_json_array sentinel");
+    }
+
+    @Test
+    void testUnserializeJsonEmptyArrayParseFalseReturnsNewTable() {
+        ResultCapture cap = new ResultCapture();
+        // parse_empty_array=false: returns a fresh (non-sentinel) empty table
+        run(
+            buildMachine(cap),
+            "local t = unserializeJSON('[]', {parse_empty_array=false})\n"
+                + "_capture(type(t), #t, t == empty_json_array)");
+        assertNotNull(cap.args);
+        assertEquals("table", cap.args[0]);
+        assertEquals(0.0, cap.args[1]);
+        assertFalse((Boolean) cap.args[2], "parse_empty_array=false must NOT return the empty_json_array sentinel");
+    }
+
+    @Test
+    void testUnserializeJsonNonEmptyArrayUnaffectedByOption() {
+        ResultCapture cap = new ResultCapture();
+        // Non-empty arrays should behave identically regardless of parse_empty_array
+        run(
+            buildMachine(cap),
+            "local a = unserializeJSON('[1]', {parse_empty_array=false})\n"
+                + "local b = unserializeJSON('[1]', {parse_empty_array=true})\n"
+                + "_capture(a[1], b[1])");
+        assertNotNull(cap.args);
+        assertEquals(1.0, cap.args[0]);
+        assertEquals(1.0, cap.args[1]);
+    }
+
+    // -------------------------------------------------------------------------
+    // serializeJSON unicode_strings option
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testSerializeJsonUnicodeStringsEncodesNonAsciiBytes() {
+        ResultCapture cap = new ResultCapture();
+        // 0xC3 0xA9 is UTF-8 for 'é'; with unicode_strings each byte becomes \\uXXXX
+        run(
+            buildMachine(cap),
+            "local s = string.char(195, 169)\n" + "_capture(serializeJSON(s, {unicode_strings=true}))");
+        assertNotNull(cap.args);
+        assertEquals("\"\\u00c3\\u00a9\"", cap.args[0], "unicode_strings=true must escape non-ASCII bytes as \\uXXXX");
+    }
+
+    @Test
+    void testSerializeJsonUnicodeStringsLeavesAsciiUnchanged() {
+        ResultCapture cap = new ResultCapture();
+        run(buildMachine(cap), "_capture(serializeJSON(\"hello\", {unicode_strings=true}))");
+        assertNotNull(cap.args);
+        assertEquals("\"hello\"", cap.args[0], "unicode_strings=true must not affect plain ASCII characters");
+    }
+
+    @Test
+    void testSerializeJsonUnicodeStringsStillEscapesControl() {
+        ResultCapture cap = new ResultCapture();
+        // Newline (0x0A) and tab (0x09) must still be escaped even with unicode_strings
+        run(buildMachine(cap), "_capture(serializeJSON(\"a\\nb\", {unicode_strings=true}))");
+        assertNotNull(cap.args);
+        assertEquals("\"a\\nb\"", cap.args[0], "unicode_strings=true must still escape \\n as \\n");
+    }
+
+    @Test
+    void testSerializeJsonWithoutUnicodeStringPreservesUtf8Bytes() {
+        ResultCapture cap = new ResultCapture();
+        // Without unicode_strings, raw UTF-8 bytes should pass through unchanged
+        run(
+            buildMachine(cap),
+            "local s = string.char(195, 169)\n" + "local json = serializeJSON(s)\n"
+                + "local raw = '\"' .. s .. '\"'\n"
+                + "_capture(json == raw)");
+        assertNotNull(cap.args);
+        assertTrue((Boolean) cap.args[0], "Without unicode_strings, UTF-8 bytes should be preserved verbatim");
+    }
+
+    @Test
+    void testSerializeJsonUnicodeStringsInObject() {
+        ResultCapture cap = new ResultCapture();
+        // Keys and values inside objects must both be unicode-escaped
+        run(
+            buildMachine(cap),
+            "local t = { [\"k\"] = string.char(195, 169) }\n" + "_capture(serializeJSON(t, {unicode_strings=true}))");
+        assertNotNull(cap.args);
+        String result = (String) cap.args[0];
+        assertTrue(
+            result.contains("\\u00c3") && result.contains("\\u00a9"),
+            "unicode_strings=true must escape non-ASCII bytes in object values");
+    }
+
+    // -------------------------------------------------------------------------
+    // serializeJSON allow_repetitions option
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testSerializeJsonAllowRepetitionsPermitsSiblingTable() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "local inner = {1, 2}\n"
+                + "local ok, result = pcall(serializeJSON, {inner, inner}, {allow_repetitions=true})\n"
+                + "_capture(ok)");
+        assertNotNull(cap.args);
+        assertTrue((Boolean) cap.args[0], "allow_repetitions=true must not error on sibling duplicate tables");
+    }
+
+    @Test
+    void testSerializeJsonAllowRepetitionsSiblingOutput() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "local inner = {99}\n" + "_capture(serializeJSON({inner, inner}, {allow_repetitions=true}))");
+        assertNotNull(cap.args);
+        assertEquals("[[99],[99]]", cap.args[0], "allow_repetitions must serialise each sibling copy independently");
+    }
+
+    @Test
+    void testSerializeJsonWithoutAllowRepetitionsErrorsOnDuplicate() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "local inner = {1}\n" + "local ok, err = pcall(serializeJSON, {inner, inner})\n"
+                + "_capture(ok, type(err))");
+        assertNotNull(cap.args);
+        assertFalse((Boolean) cap.args[0], "Duplicate table reference must error without allow_repetitions");
+        assertEquals("string", cap.args[1]);
+    }
+
+    @Test
+    void testSerializeJsonAllowRepetitionsStillErrorsOnCycle() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "local t = {}\n" + "t[1] = t\n"
+                + "local ok, err = pcall(serializeJSON, t, {allow_repetitions=true})\n"
+                + "_capture(ok, type(err))");
+        assertNotNull(cap.args);
+        assertFalse((Boolean) cap.args[0], "allow_repetitions must still error on a self-referential cycle");
+        assertEquals("string", cap.args[1]);
+    }
+
+    @Test
+    void testSerializeJsonEmptyJsonArrayCanAppearMultipleTimes() {
+        ResultCapture cap = new ResultCapture();
+        // empty_json_array bypasses tracking entirely, so it can always appear multiple times
+        run(buildMachine(cap), "_capture(serializeJSON({empty_json_array, empty_json_array}))");
+        assertNotNull(cap.args);
+        assertEquals("[[],[]]", cap.args[0], "empty_json_array sentinel must always be serialisable multiple times");
     }
 }

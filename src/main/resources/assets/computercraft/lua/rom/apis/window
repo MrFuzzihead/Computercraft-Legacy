@@ -369,6 +369,16 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
         return parent.nativePaletteColour(colour)
     end
 
+    function window.getLine( y )
+        if type( y ) ~= "number" then
+            error( "bad argument #1 (expected number, got " .. type( y ) .. ")", 2 )
+        end
+        if y < 1 or y > nHeight then
+            error( "Line is out of range.", 2 )
+        end
+        return tLines[ y ].text, tLines[ y ].textColor, tLines[ y ].backgroundColor
+    end
+
     -- Other functions
     function window.setVisible( bVis )
         if bVisible ~= bVis then
@@ -377,6 +387,10 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
                 window.redraw()
             end
         end
+    end
+
+    function window.isVisible()
+        return bVisible
     end
 
     function window.redraw()
@@ -400,9 +414,13 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
         return nX, nY
     end
 
-    function window.reposition( nNewX, nNewY, nNewWidth, nNewHeight )
+    function window.reposition( nNewX, nNewY, nNewWidth, nNewHeight, newParent )
+        if newParent ~= nil and type( newParent ) ~= "table" then
+            error( "bad argument #5 (expected table, got " .. type( newParent ) .. ")", 2 )
+        end
         nX = nNewX
         nY = nNewY
+        if newParent ~= nil then parent = newParent end
         if nNewWidth and nNewHeight then
             local tNewLines = {}
             createEmptyLines( nNewWidth )

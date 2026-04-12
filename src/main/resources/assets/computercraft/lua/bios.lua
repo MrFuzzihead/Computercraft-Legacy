@@ -230,7 +230,7 @@ function printError( ... )
     end
 end
 
-function read( _sReplaceChar, _tHistory, _fnComplete )
+function read( _sReplaceChar, _tHistory, _fnComplete, _sDefault )
     term.setCursorBlink( true )
 
     local sLine = ""
@@ -238,6 +238,10 @@ function read( _sReplaceChar, _tHistory, _fnComplete )
     local nPos = 0
     if _sReplaceChar then
         _sReplaceChar = string.sub( _sReplaceChar, 1, 1 )
+    end
+    if _sDefault ~= nil then
+        sLine = tostring( _sDefault )
+        nPos = string.len( sLine )
     end
 
     local tCompletions
@@ -563,7 +567,14 @@ end
 function os.run( _tEnv, _sPath, ... )
     local tArgs = { ... }
     local tEnv = _tEnv
-    setmetatable( tEnv, { __index = _G } )
+    -- Only install the _G fallback when the caller has not already set up a
+    -- metatable on the env.  The shell creates a fresh per-run table with
+    -- __index pointing at its own tEnv (which contains 'shell', 'multishell',
+    -- etc.) and then chains _G from tEnv itself.  Overwriting that metatable
+    -- here would sever the shell chain and make 'shell' invisible to programs.
+    if getmetatable( tEnv ) == nil then
+        setmetatable( tEnv, { __index = _G } )
+    end
     local fnFile, err = loadfile( _sPath, tEnv )
     if fnFile then
         local ok, err = pcall( function()
@@ -851,8 +862,17 @@ if bAPIError then
     term.setCursorPos( 1,1 )
 end
 
--- Load persisted settings (silently succeeds when no .settings file exists yet)
+-- Load default settings from _CC_DEFAULT_SETTINGS (if set), then persisted settings
 if settings then
+    if type(_CC_DEFAULT_SETTINGS) == "string" then
+        for entry in _CC_DEFAULT_SETTINGS:gmatch("[^,]+") do
+            local key, value = entry:match("^(.-)=(.+)$")
+            if key then
+                local ok, parsed = pcall(textutils.unserialise, value)
+                settings.set(key, ok and parsed ~= nil and parsed or value)
+            end
+        end
+    end
     settings.load( ".settings" )
 end
 
