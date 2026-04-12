@@ -27,13 +27,17 @@ public interface IWritableMount extends IMount {
     /**
      * Open the file at {@code path} for simultaneous reading and writing.
      *
-     * <p>When {@code truncate} is {@code true} (i.e. {@code "w+"} mode) the file is created if it
+     * <p>
+     * When {@code truncate} is {@code true} (i.e. {@code "w+"} mode) the file is created if it
      * does not exist, and its contents are discarded if it does. When {@code truncate} is
      * {@code false} (i.e. {@code "r+"} mode) the file must already exist; an {@link IOException}
-     * is thrown if it does not.</p>
+     * is thrown if it does not.
+     * </p>
      *
-     * <p>The default implementation always throws {@link IOException} — mounts that do not back
-     * physical files on disk are not required to support this mode.</p>
+     * <p>
+     * The default implementation always throws {@link IOException} — mounts that do not back
+     * physical files on disk are not required to support this mode.
+     * </p>
      *
      * @param path     the mount-relative path to open
      * @param truncate {@code true} to create/truncate ({@code "w+"}), {@code false} to require an

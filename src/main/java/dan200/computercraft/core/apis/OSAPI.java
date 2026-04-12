@@ -207,7 +207,7 @@ public class OSAPI implements ILuaAPI {
                             return new Object[] { this.m_time };
                         }
                     default:
-                        throw new LuaException("Unsupported operation");
+                        throw new LuaException("Unsupported timezone '" + locale11 + "'");
                 }
             }
             case 12: { // day
@@ -225,7 +225,7 @@ public class OSAPI implements ILuaAPI {
                             return new Object[] { this.m_day };
                         }
                     default:
-                        throw new LuaException("Unsupported operation");
+                        throw new LuaException("Unsupported timezone '" + locale12 + "'");
                 }
             }
             case 13:

@@ -491,8 +491,7 @@ public class FSAPI implements ILuaAPI {
                     case 3: // seek
                         try {
                             String whence = args.length > 0 && args[0] instanceof String ? (String) args[0] : "cur";
-                            long offset = args.length > 1 && args[1] instanceof Number
-                                ? ((Number) args[1]).longValue()
+                            long offset = args.length > 1 && args[1] instanceof Number ? ((Number) args[1]).longValue()
                                 : 0L;
                             long pos = file.seek(whence, offset);
                             return new Object[] { pos };

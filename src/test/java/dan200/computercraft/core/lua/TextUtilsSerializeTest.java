@@ -254,6 +254,21 @@ class TextUtilsSerializeTest {
     }
 
     // -------------------------------------------------------------------------
+    // opts type validation
+    // -------------------------------------------------------------------------
+
+    @Test
+    void serializeNonTableOptsThrowsBadArgument() {
+        ResultCapture cap = new ResultCapture();
+        run(buildMachine(cap), "local ok, err = pcall(serialize, {1}, true)\n_capture(ok, err)");
+        assertNotNull(cap.args);
+        assertFalse((Boolean) cap.args[0], "Passing a non-table opts must throw");
+        String err = (String) cap.args[1];
+        assertTrue(err.contains("table expected"), "Error message must mention 'table expected', got: " + err);
+        assertTrue(err.contains("boolean"), "Error message must mention the actual type, got: " + err);
+    }
+
+    // -------------------------------------------------------------------------
     // serialise alias
     // -------------------------------------------------------------------------
 

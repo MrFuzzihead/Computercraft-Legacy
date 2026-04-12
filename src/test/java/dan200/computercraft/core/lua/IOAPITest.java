@@ -25,17 +25,17 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
  * Tests for the three CC:Tweaked io API improvements ported into io.lua:
  *
  * <ol>
- *   <li><b>Handle.write varargs</b> — a text-mode handle returned by
- *       {@code io.open(path, "w")} (or {@code "a"}) now accepts multiple
- *       string/number arguments and writes them all, returning {@code self}
- *       for chaining.</li>
- *   <li><b>io.write varargs</b> — {@code io.write("a","b","c")} writes every
- *       argument to the current output (through {@code g_defaultOutput.write},
- *       which is also updated); returns the current output handle.</li>
- *   <li><b>io.open unsupported modes</b> — passing {@code "r+"}, {@code "w+"},
- *       or any other unrecognised mode now returns {@code nil, "Unsupported mode"}
- *       instead of throwing a Lua error.  An unresolvable path returns
- *       {@code nil, "Failed to open file"}.</li>
+ * <li><b>Handle.write varargs</b> — a text-mode handle returned by
+ * {@code io.open(path, "w")} (or {@code "a"}) now accepts multiple
+ * string/number arguments and writes them all, returning {@code self}
+ * for chaining.</li>
+ * <li><b>io.write varargs</b> — {@code io.write("a","b","c")} writes every
+ * argument to the current output (through {@code g_defaultOutput.write},
+ * which is also updated); returns the current output handle.</li>
+ * <li><b>io.open unsupported modes</b> — passing {@code "r+"}, {@code "w+"},
+ * or any other unrecognised mode now returns {@code nil, "Unsupported mode"}
+ * instead of throwing a Lua error. An unresolvable path returns
+ * {@code nil, "Failed to open file"}.</li>
  * </ol>
  *
  * <h2>Test strategy</h2>
@@ -43,12 +43,12 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
  * Each test loads io.lua into a fresh {@link CobaltMachine} preceded by a
  * preamble that provides:
  * <ul>
- *   <li>A mock {@code fs} table whose {@code open} function returns in-memory
- *       handles for {@code "w"} and {@code "r"} modes and {@code nil} for any
- *       path named {@code "missing.txt"}.</li>
- *   <li>A stub {@code write} global (used by {@code g_defaultOutput.write} via
- *       {@code _G.write}) that appends each call's argument to {@code _writes}.</li>
- *   <li>A {@code _writes} table shared between the mock and test assertions.</li>
+ * <li>A mock {@code fs} table whose {@code open} function returns in-memory
+ * handles for {@code "w"} and {@code "r"} modes and {@code nil} for any
+ * path named {@code "missing.txt"}.</li>
+ * <li>A stub {@code write} global (used by {@code g_defaultOutput.write} via
+ * {@code _G.write}) that appends each call's argument to {@code _writes}.</li>
+ * <li>A {@code _writes} table shared between the mock and test assertions.</li>
  * </ul>
  * The {@code _capture(...)} helper (injected from Java) records the return
  * values of the expression under test.
@@ -65,23 +65,22 @@ class IOAPITest {
     /**
      * Sets up:
      * <ul>
-     *   <li>{@code _real_type} — saved copy of the built-in {@code type} function.</li>
-     *   <li>{@code _writes} — Lua array; every call to a mock {@code file.write}
-     *       or the stub {@code _G.write} appends the argument.</li>
-     *   <li>{@code fs.open} — returns:
-     *     <ul>
-     *       <li>a writable handle for modes {@code "w"} and {@code "a"},</li>
-     *       <li>a readable handle for mode {@code "r"},</li>
-     *       <li>a read-write handle with {@code seek} for modes {@code "r+"} and {@code "w+"},</li>
-     *       <li>{@code nil} for the path {@code "missing.txt"} when mode requires the file to
-     *           exist ({@code "r"}, {@code "r+"}), or for any completely unrecognised mode.</li>
-     *     </ul>
-     *   </li>
-     *   <li>{@code write} — stub for the global terminal {@code write}.</li>
+     * <li>{@code _real_type} — saved copy of the built-in {@code type} function.</li>
+     * <li>{@code _writes} — Lua array; every call to a mock {@code file.write}
+     * or the stub {@code _G.write} appends the argument.</li>
+     * <li>{@code fs.open} — returns:
+     * <ul>
+     * <li>a writable handle for modes {@code "w"} and {@code "a"},</li>
+     * <li>a readable handle for mode {@code "r"},</li>
+     * <li>a read-write handle with {@code seek} for modes {@code "r+"} and {@code "w+"},</li>
+     * <li>{@code nil} for the path {@code "missing.txt"} when mode requires the file to
+     * exist ({@code "r"}, {@code "r+"}), or for any completely unrecognised mode.</li>
+     * </ul>
+     * </li>
+     * <li>{@code write} — stub for the global terminal {@code write}.</li>
      * </ul>
      */
-    private static final String MOCK_PREAMBLE = "_real_type = type\n"
-        + "_writes = {}\n"
+    private static final String MOCK_PREAMBLE = "_real_type = type\n" + "_writes = {}\n"
         + "fs = {\n"
         + "  open = function(path, mode)\n"
         + "    if (mode == 'r' or mode == 'r+') and path == 'missing.txt' then return nil end\n"
@@ -185,8 +184,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'w')\n"
-                + "f:write('hello', ' ', 'world')\n"
+            "local f = open('test.txt', 'w')\n" + "f:write('hello', ' ', 'world')\n"
                 + "_capture(table.concat(_writes, ''))");
         assertNotNull(cap.args);
         assertEquals("hello world", cap.args[0]);
@@ -197,9 +195,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'w')\n"
-                + "f:write(1, 2, 3)\n"
-                + "_capture(table.concat(_writes, ''))");
+            "local f = open('test.txt', 'w')\n" + "f:write(1, 2, 3)\n" + "_capture(table.concat(_writes, ''))");
         assertNotNull(cap.args);
         assertEquals("123", cap.args[0]);
     }
@@ -220,9 +216,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'w')\n"
-                + "local ret = f:write('x')\n"
-                + "_capture(ret == f)");
+            "local f = open('test.txt', 'w')\n" + "local ret = f:write('x')\n" + "_capture(ret == f)");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "write() must return self for chaining");
     }
@@ -232,8 +226,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'w')\n"
-                + "f:write('a', 'b'):write('c', 'd')\n"
+            "local f = open('test.txt', 'w')\n" + "f:write('a', 'b'):write('c', 'd')\n"
                 + "_capture(table.concat(_writes, ''))");
         assertNotNull(cap.args);
         assertEquals("abcd", cap.args[0]);
@@ -244,9 +237,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'a')\n"
-                + "f:write('x', 'y', 'z')\n"
-                + "_capture(table.concat(_writes, ''))");
+            "local f = open('test.txt', 'a')\n" + "f:write('x', 'y', 'z')\n" + "_capture(table.concat(_writes, ''))");
         assertNotNull(cap.args);
         assertEquals("xyz", cap.args[0]);
     }
@@ -265,8 +256,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "type = _real_type\n"
-                + "local f = open('test.txt', 'w')\n"
+            "type = _real_type\n" + "local f = open('test.txt', 'w')\n"
                 + "output(f)\n"
                 + "write('x', 'y', 'z')\n"
                 + "_capture(table.concat(_writes, ''))");
@@ -281,8 +271,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "type = _real_type\n"
-                + "local f = open('test.txt', 'w')\n"
+            "type = _real_type\n" + "local f = open('test.txt', 'w')\n"
                 + "output(f)\n"
                 + "local ret = write('test')\n"
                 + "_capture(ret == f, f.bFileHandle)");
@@ -298,10 +287,7 @@ class IOAPITest {
     @Test
     void openWithUnknownModeReturnsNilAndError() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local f, err = open('test.txt', 'x')\n"
-                + "_capture(f, err)");
+        run(buildMachine(cap), "local f, err = open('test.txt', 'x')\n" + "_capture(f, err)");
         assertNotNull(cap.args);
         assertNull(cap.args[0]);
         assertEquals("Unsupported mode", cap.args[1]);
@@ -310,10 +296,7 @@ class IOAPITest {
     @Test
     void openWithMissingFileReturnsNilAndError() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local f, err = open('missing.txt', 'r')\n"
-                + "_capture(f, err)");
+        run(buildMachine(cap), "local f, err = open('missing.txt', 'r')\n" + "_capture(f, err)");
         assertNotNull(cap.args);
         assertNull(cap.args[0], "open for a missing file must return nil as first value");
         assertNotNull(cap.args[1], "open for a missing file must return an error string");
@@ -327,8 +310,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f, err = open('test.txt', 'w')\n"
-                + "_capture(f ~= nil, err, f.bFileHandle, f.bClosed)");
+            "local f, err = open('test.txt', 'w')\n" + "_capture(f ~= nil, err, f.bFileHandle, f.bClosed)");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "open('w') must return a non-nil handle");
         assertNull(cap.args[1], "err must be nil on success");
@@ -345,8 +327,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f, err = open('test.txt', 'r+')\n"
-                + "_capture(f ~= nil, err, f.bFileHandle, f.bClosed)");
+            "local f, err = open('test.txt', 'r+')\n" + "_capture(f ~= nil, err, f.bFileHandle, f.bClosed)");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "open('r+') must return a non-nil handle");
         assertNull(cap.args[1], "err must be nil on success");
@@ -359,8 +340,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f, err = open('test.txt', 'w+')\n"
-                + "_capture(f ~= nil, err, f.bFileHandle, f.bClosed)");
+            "local f, err = open('test.txt', 'w+')\n" + "_capture(f ~= nil, err, f.bFileHandle, f.bClosed)");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "open('w+') must return a non-nil handle");
         assertNull(cap.args[1], "err must be nil on success");
@@ -371,10 +351,7 @@ class IOAPITest {
     @Test
     void openWithRPlusOnMissingFileReturnsNilAndError() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local f, err = open('missing.txt', 'r+')\n"
-                + "_capture(f, err)");
+        run(buildMachine(cap), "local f, err = open('missing.txt', 'r+')\n" + "_capture(f, err)");
         assertNotNull(cap.args);
         assertNull(cap.args[0], "open('r+') on missing file must return nil");
         assertNotNull(cap.args[1], "open('r+') on missing file must return an error string");
@@ -385,8 +362,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'r+')\n"
-                + "f:write('hello', ' ', 'world')\n"
+            "local f = open('test.txt', 'r+')\n" + "f:write('hello', ' ', 'world')\n"
                 + "_capture(table.concat(_writes, ''))");
         assertNotNull(cap.args);
         assertEquals("hello world", cap.args[0]);
@@ -397,9 +373,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'r+')\n"
-                + "local ret = f:write('x')\n"
-                + "_capture(ret == f)");
+            "local f = open('test.txt', 'r+')\n" + "local ret = f:write('x')\n" + "_capture(ret == f)");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "write() must return self for chaining");
     }
@@ -407,11 +381,7 @@ class IOAPITest {
     @Test
     void rPlusHandleCanReadLine() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local f = open('test.txt', 'r+')\n"
-                + "local line = f:read('*l')\n"
-                + "_capture(line)");
+        run(buildMachine(cap), "local f = open('test.txt', 'r+')\n" + "local line = f:read('*l')\n" + "_capture(line)");
         assertNotNull(cap.args);
         // The mock readLine returns nil (EOF), so io read returns nil
         assertNull(cap.args[0], "read('*l') at EOF should return nil");
@@ -422,9 +392,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'r+')\n"
-                + "local pos = f:seek('set', 0)\n"
-                + "_capture(pos)");
+            "local f = open('test.txt', 'r+')\n" + "local pos = f:seek('set', 0)\n" + "_capture(pos)");
         assertNotNull(cap.args);
         assertNotNull(cap.args[0], "seek must return the new position");
     }
@@ -434,9 +402,7 @@ class IOAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local f = open('test.txt', 'w+')\n"
-                + "f:write('a', 'b', 'c')\n"
-                + "_capture(table.concat(_writes, ''))");
+            "local f = open('test.txt', 'w+')\n" + "f:write('a', 'b', 'c')\n" + "_capture(table.concat(_writes, ''))");
         assertNotNull(cap.args);
         assertEquals("abc", cap.args[0]);
     }
@@ -445,17 +411,9 @@ class IOAPITest {
     void openWithRPlusDoesNotThrow() {
         // pcall must succeed — open must not throw for r+, it should return a handle
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local ok, result = pcall(open, 'test.txt', 'r+')\n"
-                + "_capture(ok, result ~= nil)");
+        run(buildMachine(cap), "local ok, result = pcall(open, 'test.txt', 'r+')\n" + "_capture(ok, result ~= nil)");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0], "pcall must succeed — open must not throw for r+");
         assertTrue((Boolean) cap.args[1], "open('r+') must return a non-nil handle");
     }
 }
-
-
-
-
-

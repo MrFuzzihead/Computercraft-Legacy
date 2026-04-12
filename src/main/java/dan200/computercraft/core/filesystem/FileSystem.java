@@ -496,11 +496,13 @@ public class FileSystem {
 
             @Override
             public byte[] readAll() throws IOException {
-                long remaining = raf.length() - raf.getFilePointer();
-                if (remaining <= 0) return new byte[0];
-                byte[] result = new byte[(int) remaining];
-                raf.readFully(result);
-                return result;
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
+                int nRead;
+                byte[] data = new byte[1024];
+                while ((nRead = raf.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+                return buffer.toByteArray();
             }
 
             @Override

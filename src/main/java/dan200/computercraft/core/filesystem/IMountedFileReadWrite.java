@@ -19,4 +19,3 @@ public interface IMountedFileReadWrite extends IMountedFileNormal {
      */
     long seek(String whence, long offset) throws IOException;
 }
-

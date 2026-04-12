@@ -368,10 +368,14 @@ class OSAPITest {
 
     @Test
     void timeUnknownLocaleThrowsLuaException() {
-        assertThrows(
+        LuaException ex = assertThrows(
             LuaException.class,
             () -> api.callMethod(null, METHOD_TIME, new Object[] { "mars" }),
             "An unknown locale string must throw LuaException");
+        assertTrue(
+            ex.getMessage()
+                .contains("mars"),
+            "Error message must include the invalid locale value");
     }
 
     // =========================================================================
@@ -505,10 +509,14 @@ class OSAPITest {
 
     @Test
     void dayUnknownLocaleThrowsLuaException() {
-        assertThrows(
+        LuaException ex = assertThrows(
             LuaException.class,
             () -> api.callMethod(null, METHOD_DAY, new Object[] { "mars" }),
             "An unknown locale string must throw LuaException");
+        assertTrue(
+            ex.getMessage()
+                .contains("mars"),
+            "Error message must include the invalid locale value");
     }
 
     // =========================================================================

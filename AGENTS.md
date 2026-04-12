@@ -55,6 +55,33 @@ Entry point: `CobaltMachine` in `core/lua/lib/cobalt/`.
 - `COBALT_UPGRADE_PLAN.md` documents the completed 0.2 → 0.6.0 migration; consult it for
   Cobalt API change rationale.
 
+### Features available after upgrading to Java 17+ (Cobalt 0.7.x → 0.9.x)
+
+The latest published release is **`cc.tweaked:cobalt:0.9.7`** (note: group ID changed from
+`org.squiddev:Cobalt` to `cc.tweaked:cobalt` starting with 0.8.0). All versions 0.7.0 and above
+require **JVM 17**. The key gains over 0.6.0, grouped by release:
+
+| Version | Notable changes |
+|---|---|
+| **0.7.0** | Threadless coroutines — coroutines unwind/restore the stack instead of using one Java thread each; `DebugHandler` removed, replaced by `InterruptHandler`; debug hooks now inherited across coroutines; stdlib aligned toward Lua 5.4. |
+| **0.7.1** | Stricter number lexing (rejects previously-accepted malformed literals); most `LibFunction` subclasses replaced by lambdas in the Java API. |
+| **0.7.2** | Hex floating-point literals (`0x1p4`); hex floats in `string.format`; stricter `string.format` checks; fix Lua patterns misclassifying non-ASCII bytes as letters. |
+| **0.7.3** | String pattern fixes: `%g` frontier pattern added; `%p` fixed for upper character ranges. |
+| **0.8.0** | **Lua 5.2 language update** — `goto` and labels; updated stdlib semantics; `string.dump` removed by default; bytecode verifier removed; Cobalt published as a JPMS module. |
+| **0.8.1** | `math.random` now follows Lua 5.4-style seeding behavior. |
+| **0.8.2** | Table hash presizing and hash-size calculation fixes. |
+| **0.9.0** | Internal table storage changed to flat arrays (performance); `debug.getinfo` simplified and corrected; call/return hooks fire correctly. |
+| **0.9.2** | Fix yielding not handled in several edge-case paths. |
+| **0.9.3** | Better source positions in error messages; poll interrupted state when reading from `InputStream`s. |
+| **0.9.4** | Lua 5.3-style multi-argument `math.atan(y, x)`. |
+| **0.9.5** | Metatable cache invalidation fix; large-number handling fixes in `LuaDouble`. |
+
+**Java API impact** (beyond the `CobaltMachine` rewrites already documented in
+`COBALT_UPGRADE_PLAN.md`): the `LibFunction` convenience subclasses (`OneArgFunction`,
+`TwoArgFunction`, etc.) are fully gone by 0.7.1 — they must be replaced with `JavaFunction`
+lambdas. `BigIntegerValue`'s direct `LuaValue` subclassing may need to become a `LuaUserdata`
+or table-with-metatable approach.
+
 ---
 
 ## Adding a Lua API

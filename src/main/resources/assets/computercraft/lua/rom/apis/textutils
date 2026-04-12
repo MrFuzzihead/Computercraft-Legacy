@@ -323,6 +323,9 @@ local function serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
 end
 
 function serialize( t, opts )
+    if opts ~= nil and type( opts ) ~= "table" then
+        error( "bad argument #2 (table expected, got " .. type( opts ) .. ")", 2 )
+    end
     local tTracking = {}
     return serializeImpl( t, tTracking, "", opts or {} )
 end
