@@ -14,7 +14,7 @@
 | `fs` | `FSAPI.java` + `bios.lua` | `list`, `combine`, `getName`, `getSize`, `exists`, `isDir`, `isReadOnly`, `makeDir`, `move`, `copy`, `delete`, `open`, `getDrive`, `getFreeSpace`, `find`, `getDir`, `complete`, **`getCapacity`**, **`attributes`** |
 | `term` | `TermAPI.java` + `rom/apis/term` | `write`, `blit`, `scroll`, `clear`, `clearLine`, `setCursorPos`, `getCursorPos`, `setCursorBlink`, **`getCursorBlink`**, `getSize`, `setTextColor/Colour`, `setBackgroundColor/Colour`, `getTextColor/Colour`, `getBackgroundColor/Colour`, `isColor/Colour`, `redirect`, `current`, `native`, **`nativePaletteColor/Colour`**, **`setPaletteColor/Colour`**, **`getPaletteColor/Colour`** |
 | `redstone` / `rs` | `RedstoneAPI.java` | `getSides`, `setOutput`, `getOutput`, `getInput`, `setBundledOutput`, `getBundledOutput`, `getBundledInput`, `testBundledInput`, `setAnalogOutput/Analogue`, `getAnalogOutput/Analogue`, `getAnalogInput/Analogue` |
-| `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); response: `readLine`, `readAll`, `close`, `getResponseCode`; **`websocket`**, **`websocketAsync`**; handle: **`receive`**, **`send`**, **`close`** |
+| `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); **binary flag** (`get`/`post`/`request`); **table argument form** (`get`/`post`/`request`); **custom timeout** (seconds, table or positional); **PATCH** verb; response: `readLine`, `readAll`, `read`, `close`, `getResponseCode`, **`getResponseHeaders`**; **response handle on error**; **raw bytes** (1.109.0); **`websocket`**, **`websocketAsync`**; handle: **`receive`**, **`send`**, **`close`** |
 | `turtle` | `TurtleAPI.java` | All movement, dig, place, drop, suck, detect, compare, attack, fuel, inspect, equip, `getItemDetail` |
 | `commands` | `CommandAPI.java` | `exec`, `execAsync`, `list`, `getBlockPosition`, `getBlockInfo` |
 | `bit` | `BitAPI.java` | `bnot`, `band`, `bor`, `bxor`, `brshift`, `blshift`, `blogic_rshift` |
@@ -89,7 +89,7 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 
 ---
 
-### 5. `http` — ~~Missing response method gaps~~ ✅ Done ~~(WebSocket planned)~~ ✅ Done
+### 5. `http` — ~~Missing response method gaps~~ ✅ Done ~~(WebSocket planned)~~ ✅ Done ~~(1.80–1.109 feature set)~~ ✅ Done
 
 | Feature | Notes |
 |---|---|
@@ -98,7 +98,13 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 | `Response.read([count])` | ✅ Now returns a Lua string (`byte[]`) instead of a raw number, and accepts an optional `count` to read multiple bytes at once. |
 | `Response.readAll()` | ✅ Already correct — returns the remaining body as a string. |
 | `Response.close()` | ✅ Already correct. |
-| `Response.getResponseCode()` | ✅ Already correct. |
+| `Response.getResponseCode()` | ✅ Now returns two values: `(code, message)` — the numeric HTTP status code and the HTTP status message string (e.g. `200, "OK"` or `404, "Not Found"`). `HTTPRequest` captures `HttpURLConnection.getResponseMessage()` and passes it through to `HTTPResponse`. A `null` message (unusual but possible) is normalised to `""`. |
+| Response handle returned on error (1.80pr1) | ✅ `wrapRequest` now captures the third event argument from `http_failure` and returns it as the third return value: `nil, errMsg, responseHandle`. The Java `advance()` method already emitted the handle as the third event arg; only the Lua side needed updating. |
+| Binary handle flag (1.80pr1) | ✅ `http.get(url, headers, binary)`, `http.post(url, body, headers, binary)`, `http.request(url, body, headers, method, timeout, binary)` all accept a boolean `binary` parameter forwarded to the native as arg[6]. `HTTPRequest` stores it for future text/binary mode differentiation; `HTTPResponse` already returns raw bytes regardless. |
+| Table argument form (1.80pr1.6) | ✅ All three functions accept a table as the first argument. Fields: `url`, `body` (post only), `headers`, `method` (request only), `timeout`, `binary`. |
+| PATCH verb (1.86.0) | ⚠️ Added `"PATCH"` to the allowed-methods validation array in `HTTPRequest.java` so the Lua layer accepts the verb. However, Java 8's `HttpURLConnection.setRequestMethod("PATCH")` throws `ProtocolException: Invalid HTTP method: PATCH` — PATCH was not added to `HttpURLConnection`'s allowed-methods set until **Java 11**. On Java 8 (e.g. 1.8.0_202) the connection setup fails silently (caught as `IOException`), `wasSuccessful()` returns `false`, and `http_failure` is queued instead of `http_success`. The in-game smoke test (`test_http_all_changes`) skips the live PATCH round-trip on Java 8 and logs a `[SKIP]` note. **Fix**: a reflection fallback in `HTTPRequest.java` (`Field#set(connection, verb)` after catching `ProtocolException`) is the only viable solution; deferred until Java upgrade or explicit approval. |
+| Custom timeouts (1.105.0) | ✅ `timeout` (seconds) accepted as positional arg[5] or table field. `HTTPAPI` converts to milliseconds and `HTTPRequest` calls `connection.setConnectTimeout` / `connection.setReadTimeout` when non-zero. |
+| Raw bytes (1.109.0) | ✅ `HTTPResponse` already returns `byte[]` for all read operations; no change needed. |
 | `http.websocket(url [, headers])` | ✅ Implemented — synchronous Lua wrapper in `bios.lua`; returns handle on success, `false, err` on failure. |
 | `http.websocketAsync(url [, headers])` | ✅ Implemented — async Lua wrapper in `bios.lua`; queues `websocket_failure` on immediate rejection. |
 | `http.checkURLAsync(url)` | ✅ Implemented in `bios.lua` — calls the native synchronous `http.checkURL` (whitelist + format check) and queues `check_url_success(url)` or `check_url_failure(url, err)`. No Java changes needed since the check is already instant. |
@@ -107,9 +113,10 @@ The WebSocket handle returned by `websocket_success` is a Java `ILuaObject` (`We
 
 | Method | Notes |
 |---|---|
-| `handle.receive([timeout])` | Loops on `ILuaContext.pullEventRaw` filtering for `websocket_message(url, msg, isBinary)` and `websocket_closed(url)` events. Optional wall-clock deadline; returns `nil` on timeout or close. |
-| `handle.send(message [, binary])` | Sends a text frame by default; `binary = true` sends a binary frame (`ByteBuffer`). Throws `LuaException` if the connection is closed. |
+| `handle.receive([timeout])` | Loops on `ILuaContext.pullEventRaw` filtering for `websocket_message(url, msg, isBinary)` and `websocket_closed(url)` events. Returns `(message, isBinary)` on success (1.80pr1.13). Optional wall-clock deadline (1.87.0). On connection close returns `nil, nil, "Connection closed"`; on timeout returns `nil, nil, "Timeout"` (1.117.0). |
+| `handle.send(message [, binary])` | Sends a text frame by default; `binary = true` sends a binary frame (`ByteBuffer`) (1.81.0). Throws `LuaException` if the connection is closed. |
 | `handle.close()` | Initiates a WebSocket close handshake. Safe to call multiple times. |
+| `handle.getResponseHeaders()` | ✅ Returns a flat `{string: string}` map of the HTTP response headers received during the WebSocket opening handshake. Headers are captured in `WebSocketRequest.onOpen` from the `ServerHandshake` object provided by the Java-WebSocket library. |
 
 Background events queued by `WebSocketRequest` (extends `org.java_websocket.client.WebSocketClient`):
 - `websocket_message(url, message, isBinary)` — fired on `onMessage(String)` / `onMessage(ByteBuffer)`.
@@ -120,7 +127,7 @@ URL validation uses `HTTPRequest.checkWebSocketURL(String)` — permits `ws`/`ws
 
 The WebSocket library (`org.java-websocket:Java-WebSocket:1.5.6`) is added as a `shadowImplementation` dependency, bundled into the mod JAR exactly like Cobalt.
 
-**Tests**: `src/test/java/dan200/computercraft/core/apis/WebSocketHandleTest.java` — 16 cases, all green.
+**Tests**: `src/test/java/dan200/computercraft/core/apis/WebSocketHandleTest.java` — 18 cases, all green.
 
 ---
 

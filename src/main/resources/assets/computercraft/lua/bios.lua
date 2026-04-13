@@ -661,31 +661,56 @@ end
 if http then
     local nativeHTTPRequest = http.request
 
-    local function wrapRequest( _url, _post, _headers )
-        local ok, err = nativeHTTPRequest( _url, _post, _headers )
+    -- wrapRequest: performs a synchronous HTTP request and waits for the result.
+    -- args: url, post body, headers, method verb, timeout (seconds), binary flag
+    -- Returns: response on success; nil, errMsg, [responseOnError] on failure.
+    local function wrapRequest( _url, _post, _headers, _method, _timeout, _binary )
+        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary )
         if ok then
             while true do
-                local event, param1, param2 = os.pullEvent()
+                local event, param1, param2, param3 = os.pullEvent()
                 if event == "http_success" and param1 == _url then
                     return param2
                 elseif event == "http_failure" and param1 == _url then
-                    return nil, param2
+                    return nil, param2, param3
                 end
             end
         end
         return nil, err
     end
 
-    http.get = function( _url, _headers )
-        return wrapRequest( _url, nil, _headers )
+    -- http.get(url [, headers [, binary]])
+    -- http.get({ url=, headers=, binary=, timeout= })
+    http.get = function( _url, _headers, _binary )
+        if type( _url ) == "table" then
+            local opts = _url
+            return wrapRequest( opts.url, nil, opts.headers, nil, opts.timeout, opts.binary )
+        end
+        return wrapRequest( _url, nil, _headers, nil, nil, _binary )
     end
 
-    http.post = function( _url, _post, _headers )
-        return wrapRequest( _url, _post or "", _headers )
+    -- http.post(url, body [, headers [, binary]])
+    -- http.post({ url=, body=, headers=, method=, binary=, timeout= })
+    http.post = function( _url, _post, _headers, _binary )
+        if type( _url ) == "table" then
+            local opts = _url
+            return wrapRequest( opts.url, opts.body or "", opts.headers, opts.method, opts.timeout, opts.binary )
+        end
+        return wrapRequest( _url, _post or "", _headers, nil, nil, _binary )
     end
 
-    http.request = function( _url, _post, _headers )
-        local ok, err = nativeHTTPRequest( _url, _post, _headers )
+    -- http.request(url [, body [, headers [, method [, timeout [, binary]]]]])
+    -- http.request({ url=, body=, headers=, method=, timeout=, binary= })
+    http.request = function( _url, _post, _headers, _method, _timeout, _binary )
+        if type( _url ) == "table" then
+            local opts = _url
+            local ok, err = nativeHTTPRequest( opts.url, opts.body, opts.headers, opts.method, opts.timeout, opts.binary )
+            if not ok then
+                os.queueEvent( "http_failure", opts.url, err )
+            end
+            return ok, err
+        end
+        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary )
         if not ok then
             os.queueEvent( "http_failure", _url, err )
         end

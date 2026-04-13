@@ -6,7 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +42,7 @@ class WebSocketHandleTest {
     private static final int METHOD_RECEIVE = 0;
     private static final int METHOD_SEND = 1;
     private static final int METHOD_CLOSE = 2;
+    private static final int METHOD_GETRESPONSEHEADERS = 3;
 
     // =========================================================================
     // Test infrastructure
@@ -51,6 +55,7 @@ class WebSocketHandleTest {
         final List<byte[]> binarySent = new ArrayList<>();
         boolean closed = false;
         boolean open = true;
+        Map<String, String> responseHeaders = Collections.emptyMap();
 
         @Override
         public void sendText(String message) {
@@ -71,6 +76,11 @@ class WebSocketHandleTest {
         @Override
         public boolean isConnectionOpen() {
             return open;
+        }
+
+        @Override
+        public Map<String, String> getResponseHeaders() {
+            return responseHeaders;
         }
     }
 
@@ -260,10 +270,11 @@ class WebSocketHandleTest {
     @Test
     void getMethodNamesContainsExpectedEntries() {
         String[] names = handle(new StubConnection()).getMethodNames();
-        assertEquals(3, names.length);
+        assertEquals(4, names.length);
         assertEquals("receive", names[0]);
         assertEquals("send", names[1]);
         assertEquals("close", names[2]);
+        assertEquals("getResponseHeaders", names[3]);
     }
 
     // =========================================================================
@@ -379,7 +390,12 @@ class WebSocketHandleTest {
 
         Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
 
-        assertNull(result);
+        // 1.117.0: returns {nil, nil, reason} instead of bare nil
+        assertNotNull(result, "result array must not be null");
+        assertEquals(3, result.length, "must return three values on close");
+        assertNull(result[0], "message must be nil");
+        assertNull(result[1], "binary flag must be nil");
+        assertEquals("Connection closed", result[2], "reason must be 'Connection closed'");
     }
 
     // =========================================================================
@@ -429,7 +445,12 @@ class WebSocketHandleTest {
 
         Object[] result = h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 0.0 });
 
-        assertNull(result);
+        // 1.117.0: returns {nil, nil, "Timeout"} instead of bare nil
+        assertNotNull(result, "result array must not be null");
+        assertEquals(3, result.length, "must return three values on timeout");
+        assertNull(result[0], "message must be nil");
+        assertNull(result[1], "binary flag must be nil");
+        assertEquals("Timeout", result[2], "reason must be 'Timeout'");
     }
 
     @Test
@@ -446,5 +467,41 @@ class WebSocketHandleTest {
 
         assertNotNull(result);
         assertEquals("hi", result[0]);
+    }
+
+    // =========================================================================
+    // getResponseHeaders
+    // =========================================================================
+
+    @Test
+    void getResponseHeadersReturnsEmptyMapByDefault() throws LuaException, InterruptedException {
+        StubConnection conn = new StubConnection();
+        Object[] result = handle(conn).callMethod(null, METHOD_GETRESPONSEHEADERS, new Object[0]);
+
+        assertNotNull(result);
+        assertEquals(1, result.length);
+        assertTrue(result[0] instanceof Map);
+        assertTrue(((Map<?, ?>) result[0]).isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getResponseHeadersReturnsFlatStringMap() throws LuaException, InterruptedException {
+        StubConnection conn = new StubConnection();
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Upgrade", "websocket");
+        headers.put("Connection", "Upgrade");
+        headers.put("Sec-WebSocket-Accept", "abc123");
+        conn.responseHeaders = Collections.unmodifiableMap(headers);
+
+        Object[] result = handle(conn).callMethod(null, METHOD_GETRESPONSEHEADERS, new Object[0]);
+
+        assertNotNull(result);
+        assertEquals(1, result.length);
+        Map<String, String> returned = (Map<String, String>) result[0];
+        assertEquals("websocket", returned.get("Upgrade"));
+        assertEquals("Upgrade", returned.get("Connection"));
+        assertEquals("abc123", returned.get("Sec-WebSocket-Accept"));
+        assertEquals(3, returned.size());
     }
 }

@@ -10,13 +10,15 @@ import dan200.computercraft.api.lua.LuaException;
 public class HTTPResponse implements ILuaObject {
 
     private final int responseCode;
+    private final String m_responseMessage;
     private final byte[] result;
     private final Map<String, String> headers;
     private int index = 0;
     private boolean closed = false;
 
-    public HTTPResponse(int responseCode, byte[] result, Map<String, String> headers) {
+    public HTTPResponse(int responseCode, String responseMessage, byte[] result, Map<String, String> headers) {
         this.responseCode = responseCode;
+        this.m_responseMessage = responseMessage != null ? responseMessage : "";
         this.result = result;
         this.headers = headers;
     }
@@ -99,7 +101,7 @@ public class HTTPResponse implements ILuaObject {
                 closed = true;
                 break;
             case 4:
-                return new Object[] { responseCode };
+                return new Object[] { responseCode, m_responseMessage };
             case 5:
                 return new Object[] { headers };
         }

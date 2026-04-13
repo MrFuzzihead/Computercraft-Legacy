@@ -38,7 +38,7 @@ class HTTPResponseTest {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "text/plain");
         headers.put("X-Custom", "foo, bar");
-        return new HTTPResponse(200, body.getBytes(StandardCharsets.UTF_8), headers);
+        return new HTTPResponse(200, "OK", body.getBytes(StandardCharsets.UTF_8), headers);
     }
 
     private static String str(Object[] result) {
@@ -61,12 +61,36 @@ class HTTPResponseTest {
 
     @Test
     void getResponseCodeReturnsCode() throws LuaException, InterruptedException {
-        HTTPResponse resp = new HTTPResponse(404, new byte[0], new HashMap<>());
+        HTTPResponse resp = new HTTPResponse(404, "Not Found", new byte[0], new HashMap<>());
 
         Object[] result = resp.callMethod(null, METHOD_GET_RESPONSE_CODE, new Object[0]);
 
         assertNotNull(result);
-        assertEquals(404, result[0]);
+        assertEquals(2, result.length, "getResponseCode must return exactly two values");
+        assertEquals(404, result[0], "first return value must be the numeric status code");
+        assertEquals("Not Found", result[1], "second return value must be the status message");
+    }
+
+    @Test
+    void getResponseCodeReturnsBothValuesFor200() throws LuaException, InterruptedException {
+        HTTPResponse resp = new HTTPResponse(200, "OK", new byte[0], new HashMap<>());
+
+        Object[] result = resp.callMethod(null, METHOD_GET_RESPONSE_CODE, new Object[0]);
+
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertEquals(200, result[0]);
+        assertEquals("OK", result[1]);
+    }
+
+    @Test
+    void getResponseCodeMessageIsEmptyStringWhenNull() throws LuaException, InterruptedException {
+        HTTPResponse resp = new HTTPResponse(200, null, new byte[0], new HashMap<>());
+
+        Object[] result = resp.callMethod(null, METHOD_GET_RESPONSE_CODE, new Object[0]);
+
+        assertNotNull(result);
+        assertEquals("", result[1], "null message must be normalised to empty string");
     }
 
     // =========================================================================
@@ -88,7 +112,7 @@ class HTTPResponseTest {
 
     @Test
     void getResponseHeadersIsEmptyWhenNoHeaders() throws LuaException, InterruptedException {
-        HTTPResponse resp = new HTTPResponse(200, new byte[0], new HashMap<>());
+        HTTPResponse resp = new HTTPResponse(200, "", new byte[0], new HashMap<>());
 
         Object[] result = resp.callMethod(null, METHOD_GET_RESPONSE_HEADERS, new Object[0]);
 
@@ -111,7 +135,7 @@ class HTTPResponseTest {
 
     @Test
     void readAllReturnsEmptyStringForEmptyBody() throws LuaException, InterruptedException {
-        HTTPResponse resp = new HTTPResponse(200, new byte[0], new HashMap<>());
+        HTTPResponse resp = new HTTPResponse(200, "", new byte[0], new HashMap<>());
 
         Object[] result = resp.callMethod(null, METHOD_READ_ALL, new Object[0]);
 
@@ -167,7 +191,7 @@ class HTTPResponseTest {
 
     @Test
     void readLineReturnsNilAtEOF() throws LuaException, InterruptedException {
-        HTTPResponse resp = new HTTPResponse(200, new byte[0], new HashMap<>());
+        HTTPResponse resp = new HTTPResponse(200, "", new byte[0], new HashMap<>());
 
         Object[] result = resp.callMethod(null, METHOD_READ_LINE, new Object[0]);
 
@@ -207,7 +231,7 @@ class HTTPResponseTest {
 
     @Test
     void readReturnsNilAtEOF() throws LuaException, InterruptedException {
-        HTTPResponse resp = new HTTPResponse(200, new byte[0], new HashMap<>());
+        HTTPResponse resp = new HTTPResponse(200, "", new byte[0], new HashMap<>());
 
         Object[] result = resp.callMethod(null, METHOD_READ, new Object[0]);
 
