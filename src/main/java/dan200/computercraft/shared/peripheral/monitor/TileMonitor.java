@@ -290,6 +290,10 @@ public class TileMonitor extends TilePeripheralBase implements ITerminalTile {
     }
 
     public float getTextScale() {
+        TileMonitor origin = this.getOrigin();
+        if (origin != null) {
+            return origin.m_textScale * 0.5F;
+        }
         return this.m_textScale * 0.5F;
     }
 

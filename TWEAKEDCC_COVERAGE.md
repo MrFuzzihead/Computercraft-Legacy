@@ -169,6 +169,8 @@ implemented in `bios.lua` and resolves paths under `rom/modules/main/`.
 |---|---|---|
 | `cc.expect` | ✅ Done | `rom/modules/main/cc/expect.lua` — `expect`, `field`, `range` |
 | `cc.completion` | ✅ Done | `rom/modules/main/cc/completion.lua` — `choice`, `peripheral`, `side`, `file`, `dir`, `program`, `setting` |
+| `cc.audio.dfpwm` | ✅ Done | `rom/modules/main/cc/audio/dfpwm.lua` — `make_encoder`, `make_decoder`, `encode`, `decode` |
+| `cc.shell.completion` | ✅ Done | `rom/modules/main/cc/shell/completion.lua` — `file`, `dir`, `dirOrFile`, `program`, `programWithArgs`, `help`, `choice`, `peripheral`, `side`, `setting`, `command`, `build` |
 | `cc.strings` | ✅ Done | `rom/modules/main/cc/strings.lua` — `wrap`, `ensure_width`, `split` |
 | `cc.pretty` | ✅ Done | `rom/modules/main/cc/pretty.lua` — full port of CC:Tweaked's pretty-printer |
 | `cc.image.nft` | ✅ Done | `rom/modules/main/cc/image/nft.lua` — `parse`, `load`, `draw` |
@@ -186,6 +188,57 @@ this environment.
 
 **Tests**: `src/test/java/dan200/computercraft/core/lua/CcPrettyTest.java` — 35 cases, all green.
 **Tests**: `src/test/java/dan200/computercraft/core/lua/CcImageNftTest.java` — 22 cases, all green.
+
+---
+
+### 8b. `cc.audio.dfpwm` — ✅ Done
+
+Pure-Lua port of CC:Tweaked's DFPWM audio codec module.
+
+| Function | Notes |
+|---|---|
+| `make_encoder()` | Returns a stateful encoder function. Each call accepts a `{number...}` table of signed 8-bit PCM samples ([-128, 127]) and returns a `{number...}` table of DFPWM bytes. Filter state (predictor `q`, strength `s`, low-pass charge) is preserved across calls, enabling incremental encoding of a stream. |
+| `make_decoder()` | Returns a stateful decoder function. Each call accepts a `{number...}` table of DFPWM bytes and returns a `{number...}` table of signed 8-bit PCM samples. Filter state is preserved across calls. |
+| `encode(input)` | Convenience wrapper: creates a fresh encoder, encodes `input` in one call, returns the result. |
+| `decode(input)` | Convenience wrapper: creates a fresh decoder, decodes `input` in one call, returns the result. |
+
+Algorithm constants match upstream exactly: `PREC_SHIFT = 10`, `PREC_CEIL = 1024`,
+`LPF_STRENGTH = 140`. Predictor strength adapts on each sample using the same decay
+(`floor(s * (PREC_CEIL - LPF_STRENGTH) / PREC_CEIL)`) and error-floor rules as CC:Tweaked.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/CcAudioDfpwmTest.java` — 22 cases, all green.
+
+---
+
+### 8c. `cc.shell.completion` — ✅ Done
+
+Pure-Lua module at `rom/modules/main/cc/shell/completion.lua`.  Provides
+completion functions whose signature (`shell, index, text, previous`) matches
+the contract of [`shell.setCompletionFunction`].  Each function delegates to
+[`fs.complete`] (implemented in `bios.lua`) using legacy parameter semantics:
+
+| Parameter 3 (`bIncludeFiles`) | Parameter 4 (`bIncludeDirs`) | Meaning in this codebase |
+|---|---|---|
+| `true` | — | Include regular files in results |
+| — | `false` | Directories appear **with** trailing `"/"` only |
+| — | `true` | Directories appear **both** with `"/"` and as bare names |
+
+| Function | `bIncludeFiles` | `bIncludeDirs` | Notes |
+|---|---|---|---|
+| `file(shell, index, text, previous)` | `true` | `false` | Files + dirs (with `"/"` only). Matches `completeFile` in `startup`. |
+| `dir(shell, index, text, previous)` | `false` | `true` | Directories only, shown with `"/"` and as bare names. Matches `completeDir` in `startup`. |
+| `dirOrFile(shell, index, text, previous)` | `true` | `true` | Files + directories (both forms). Matches `completeEither` in `startup`. |
+| `program(shell, index, text, previous)` | — | — | Calls `shell.completeProgram(text)` at index 1; returns `nil` otherwise. Mirrors the local `completeProgram` in `startup`. |
+| `programWithArgs(shell, index, text, previous)` | — | — | Index 1 = program name completion via `shell.completeProgram`. Index > 1 = resolves `previous[2]` as a program, looks up `shell.getCompletionInfo()[resolved]`, and delegates to its `fnComplete` with `index-1` and a shifted `previous` table (nested program name at `[1]`). Returns `nil` if the sub-program is unresolvable or has no registered completion. |
+| `help(shell, index, text, previous)` | — | — | Calls `help.completeTopic(text)` at index 1; returns `nil` otherwise. The global `help` API is captured as `_help_api` before the local function is declared to avoid a Lua naming-collision bug. |
+| `choice(choices [, add_space])` | — | — | **Factory** — returns a completion function that calls `cc.completion.choice(text, choices, add_space)`. Validates args with `cc.expect`. |
+| `peripheral(shell, index, text, previous)` | — | — | Delegates to `cc.completion.peripheral(text)`. |
+| `side(shell, index, text, previous)` | — | — | Delegates to `cc.completion.side(text)`. |
+| `setting(shell, index, text, previous)` | — | — | Delegates to `cc.completion.setting(text)`. |
+| `command(shell, index, text, previous)` | — | — | Delegates to `cc.completion.command(text)`. |
+| `build(...)` | — | — | **Factory** — takes per-argument specs (nil / function / `{fn}` / `{factory, arg…}`), resolves factory specs once at call time, returns a dispatch function. The dispatch normalises index to 1 before calling the stored completion function so all single-argument helpers work correctly inside `build`. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/CcShellCompletionTest.java` — 63 cases, all green.
 
 ---
 
@@ -342,6 +395,8 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `os.epoch` / `os.date`                                          | Small | Java |
 | ✅ Done | `fs.attributes` / `fs.getCapacity`                              | Medium | Java |
 | ✅ Done | `cc.completion` module                                          | Small | Lua |
+| ✅ Done | `cc.audio.dfpwm` module                                         | Small | Lua |
+| ✅ Done | `cc.shell.completion` module (`file`, `dir`, `dirOrFile`, `program`, `programWithArgs`, `help`, `choice`, `peripheral`, `side`, `setting`, `command`, `build`) | Small | Lua |
 | ✅ Done | `cc.strings` module                                             | Small | Lua |
 | ✅ Done | `term.setPaletteColor/getPaletteColor/nativePaletteColor`       | Large | Java + Client |
 | ✅ Done | HTTP WebSocket support                                          | Large | Java + Lua |

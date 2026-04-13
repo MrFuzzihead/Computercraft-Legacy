@@ -143,14 +143,16 @@ public class TermAPI implements ILuaAPI {
                 }
             case 8:
             case 9:
-                int colour = parseColour(args, this.m_environment.isColour());
+                // All 16 colors are accepted; non-color screens render them as greyscale.
+                int colour = parseColour(args, true);
                 synchronized (this.m_terminal) {
                     this.m_terminal.setTextColour(colour);
                     return null;
                 }
             case 10:
             case 11:
-                int colour11 = parseColour(args, this.m_environment.isColour());
+                // All 16 colors are accepted; non-color screens render them as greyscale.
+                int colour11 = parseColour(args, true);
                 synchronized (this.m_terminal) {
                     this.m_terminal.setBackgroundColour(colour11);
                     return null;

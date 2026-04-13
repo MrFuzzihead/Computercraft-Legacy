@@ -28,6 +28,10 @@ import dan200.computercraft.core.terminal.Terminal;
 class TermAPITest {
 
     // Method indices must match the order declared in TermAPI.getMethodNames().
+    private static final int METHOD_SET_TEXT_COLOUR = 8;
+    private static final int METHOD_SET_TEXT_COLOR = 9;
+    private static final int METHOD_SET_BG_COLOUR = 10;
+    private static final int METHOD_SET_BG_COLOR = 11;
     private static final int METHOD_SET_CURSOR_BLINK = 3;
     private static final int METHOD_GET_CURSOR_BLINK = 19;
     private static final int METHOD_NATIVE_PALETTE_COLOR = 20;
@@ -48,6 +52,76 @@ class TermAPITest {
     void setUp() {
         terminal = new Terminal(51, 19);
         api = new TermAPI(new StubEnv(terminal));
+    }
+
+    // =========================================================================
+    // term.setTextColor / setBackgroundColor — all 16 colors on any computer
+    // =========================================================================
+
+    @Test
+    void setTextColorAcceptsChromaticColorOnNonColorComputer() {
+        // StubEnv returns isColour()=false; orange (bitmask 2) was previously rejected.
+        assertDoesNotThrow(
+            () -> api.callMethod(null, METHOD_SET_TEXT_COLOR, new Object[] { 2.0 }),
+            "setTextColor(orange) must succeed on a non-color computer");
+    }
+
+    @Test
+    void setTextColourAcceptsChromaticColorOnNonColorComputer() {
+        assertDoesNotThrow(
+            () -> api.callMethod(null, METHOD_SET_TEXT_COLOUR, new Object[] { 2.0 }),
+            "setTextColour(orange) must succeed on a non-color computer");
+    }
+
+    @Test
+    void setBackgroundColorAcceptsChromaticColorOnNonColorComputer() {
+        assertDoesNotThrow(
+            () -> api.callMethod(null, METHOD_SET_BG_COLOR, new Object[] { 2.0 }),
+            "setBackgroundColor(orange) must succeed on a non-color computer");
+    }
+
+    @Test
+    void setBackgroundColourAcceptsChromaticColorOnNonColorComputer() {
+        assertDoesNotThrow(
+            () -> api.callMethod(null, METHOD_SET_BG_COLOUR, new Object[] { 2.0 }),
+            "setBackgroundColour(orange) must succeed on a non-color computer");
+    }
+
+    @Test
+    void setTextColorAcceptsAllSixteenColors() {
+        for (int n = 0; n < 16; n++) {
+            double bitmask = Math.pow(2, n);
+            assertDoesNotThrow(
+                () -> api.callMethod(null, METHOD_SET_TEXT_COLOR, new Object[] { bitmask }),
+                "setTextColor must accept bitmask 2^" + n);
+        }
+    }
+
+    @Test
+    void setBackgroundColorAcceptsAllSixteenColors() {
+        for (int n = 0; n < 16; n++) {
+            double bitmask = Math.pow(2, n);
+            assertDoesNotThrow(
+                () -> api.callMethod(null, METHOD_SET_BG_COLOR, new Object[] { bitmask }),
+                "setBackgroundColor must accept bitmask 2^" + n);
+        }
+    }
+
+    @Test
+    void setTextColorStillRejectsInvalidColor() {
+        // Out-of-range colors must still be rejected regardless of the isColour change.
+        assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_SET_TEXT_COLOR, new Object[] { 0.0 }),
+            "setTextColor(0) must still throw 'Colour out of range'");
+    }
+
+    @Test
+    void setBackgroundColorStillRejectsInvalidColor() {
+        assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_SET_BG_COLOR, new Object[] { 0.0 }),
+            "setBackgroundColor(0) must still throw 'Colour out of range'");
     }
 
     // =========================================================================

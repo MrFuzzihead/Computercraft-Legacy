@@ -129,6 +129,137 @@ class WindowAPITest {
         machine.unload();
     }
 
+    /**
+     * A preamble variant whose {@code mockParent()} returns a <em>non-color</em>
+     * terminal surface ({@code isColor = false}). Used to verify that
+     * {@code window.setTextColor} and {@code window.setBackgroundColor} now accept
+     * all 16 colors even on greyscale screens.
+     */
+    private static final String PREAMBLE_NON_COLOR = "colors = {\n" + "  white=1, orange=2, magenta=4, lightBlue=8,\n"
+        + "  yellow=16, lime=32, pink=64, gray=128,\n"
+        + "  lightGray=256, cyan=512, purple=1024, blue=2048,\n"
+        + "  brown=4096, green=8192, red=16384, black=32768\n"
+        + "}\n"
+        + "term = {}\n"
+        + "function mockParent()\n"
+        + "  return {\n"
+        + "    isColor            = function() return false end,\n"
+        + "    setCursorPos       = function(x, y) end,\n"
+        + "    setCursorBlink     = function(b) end,\n"
+        + "    setTextColor       = function(c) end,\n"
+        + "    blit               = function(t, tc, bc) end,\n"
+        + "    setPaletteColor    = function(c, r, g, b) end,\n"
+        + "    setPaletteColour   = function(c, r, g, b) end,\n"
+        + "    getPaletteColor    = function(c) return 1, 1, 1 end,\n"
+        + "    getPaletteColour   = function(c) return 1, 1, 1 end,\n"
+        + "    nativePaletteColor  = function(c) return 1, 1, 1 end,\n"
+        + "    nativePaletteColour = function(c) return 1, 1, 1 end,\n"
+        + "  }\n"
+        + "end\n";
+
+    private static void runNonColor(CobaltMachine machine, String testLua) {
+        String combined = PREAMBLE_NON_COLOR + windowSource + "\n" + testLua;
+        machine.loadBios(new ByteArrayInputStream(combined.getBytes(StandardCharsets.UTF_8)));
+        for (int i = 0; i < 50 && !machine.isFinished(); i++) {
+            machine.handleEvent(null, null);
+        }
+        machine.unload();
+    }
+
+    // =========================================================================
+    // window.setTextColor / setBackgroundColor — all 16 colors on non-color parent
+    // =========================================================================
+
+    @Test
+    void setTextColorAcceptsChromaticColorOnNonColorParent() {
+        ResultCapture cap = new ResultCapture();
+        runNonColor(
+            buildMachine(cap),
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n"
+                + "local ok, err = pcall(function() w.setTextColor(colors.orange) end)\n"
+                + "_capture(ok, err)");
+        assertNotNull(cap.args);
+        assertTrue(
+            (Boolean) cap.args[0],
+            "setTextColor(orange) must succeed on non-color parent; error: " + cap.args[1]);
+    }
+
+    @Test
+    void setTextColourAcceptsChromaticColorOnNonColorParent() {
+        ResultCapture cap = new ResultCapture();
+        runNonColor(
+            buildMachine(cap),
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n"
+                + "local ok, err = pcall(function() w.setTextColour(colors.orange) end)\n"
+                + "_capture(ok, err)");
+        assertNotNull(cap.args);
+        assertTrue(
+            (Boolean) cap.args[0],
+            "setTextColour(orange) must succeed on non-color parent; error: " + cap.args[1]);
+    }
+
+    @Test
+    void setBackgroundColorAcceptsChromaticColorOnNonColorParent() {
+        ResultCapture cap = new ResultCapture();
+        runNonColor(
+            buildMachine(cap),
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n"
+                + "local ok, err = pcall(function() w.setBackgroundColor(colors.orange) end)\n"
+                + "_capture(ok, err)");
+        assertNotNull(cap.args);
+        assertTrue(
+            (Boolean) cap.args[0],
+            "setBackgroundColor(orange) must succeed on non-color parent; error: " + cap.args[1]);
+    }
+
+    @Test
+    void setBackgroundColourAcceptsChromaticColorOnNonColorParent() {
+        ResultCapture cap = new ResultCapture();
+        runNonColor(
+            buildMachine(cap),
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n"
+                + "local ok, err = pcall(function() w.setBackgroundColour(colors.orange) end)\n"
+                + "_capture(ok, err)");
+        assertNotNull(cap.args);
+        assertTrue(
+            (Boolean) cap.args[0],
+            "setBackgroundColour(orange) must succeed on non-color parent; error: " + cap.args[1]);
+    }
+
+    @Test
+    void setTextColorWriteProducesCorrectBlitCharForOrange() {
+        // After setTextColor(orange), write("X") — the text-color blit char must be "1"
+        // (orange maps to "1" in tHex).
+        ResultCapture cap = new ResultCapture();
+        runNonColor(
+            buildMachine(cap),
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n" + "w.setTextColor(colors.orange)\n"
+                + "w.write('X')\n"
+                + "local _, tc, _ = w.getLine(1)\n"
+                + "_capture(tc)");
+        assertNotNull(cap.args);
+        assertEquals(
+            "10000",
+            cap.args[0].toString(),
+            "text-color blit for orange must be '1' at position 1, '0' elsewhere (default white)");
+    }
+
+    @Test
+    void setBackgroundColorWriteProducesCorrectBlitCharForOrange() {
+        ResultCapture cap = new ResultCapture();
+        runNonColor(
+            buildMachine(cap),
+            "local w = create(mockParent(), 1, 1, 5, 5, false)\n" + "w.setBackgroundColor(colors.orange)\n"
+                + "w.write('X')\n"
+                + "local _, _, bc = w.getLine(1)\n"
+                + "_capture(bc)");
+        assertNotNull(cap.args);
+        assertEquals(
+            "1ffff",
+            cap.args[0].toString(),
+            "background-color blit for orange must be '1' at position 1, 'f' elsewhere (default black)");
+    }
+
     // =========================================================================
     // window.getLine
     // =========================================================================
