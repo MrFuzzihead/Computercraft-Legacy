@@ -2,11 +2,13 @@ package dan200.computercraft.shared.peripheral.common;
 
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
+import net.minecraftforge.fluids.IFluidHandler;
 
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.api.peripheral.IPeripheralProvider;
 import dan200.computercraft.shared.computer.blocks.ComputerPeripheral;
 import dan200.computercraft.shared.computer.blocks.TileComputerBase;
+import dan200.computercraft.shared.peripheral.generic.GenericFluidPeripheral;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 
 public class DefaultPeripheralProvider implements IPeripheralProvider {
@@ -29,6 +31,10 @@ public class DefaultPeripheralProvider implements IPeripheralProvider {
                 if (!((TileTurtle) tile).hasMoved()) {
                     return new ComputerPeripheral("turtle", computerTile.createServerComputer());
                 }
+            }
+
+            if (tile instanceof IFluidHandler) {
+                return new GenericFluidPeripheral((IFluidHandler) tile);
             }
         }
 

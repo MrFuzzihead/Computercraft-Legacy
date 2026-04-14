@@ -451,7 +451,56 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
+| ✅ Done | `fluid_storage` generic peripheral (`tanks`, `pushFluid`, `pullFluid`)          | Medium | Java |
 | Deferred | Speaker peripheral                                              | Large | Java + Client |
+
+---
+
+### 21. `fluid_storage` generic peripheral — ✅ Done (2026-04-14)
+
+Upstream reference: [tweaked.cc/generic_peripheral/fluid_storage](https://tweaked.cc/generic_peripheral/fluid_storage.html),
+[`AbstractFluidMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/common/src/main/java/dan200/computercraft/shared/peripheral/generic/methods/AbstractFluidMethods.java)
+
+Wraps any tile entity that implements Forge 1.7.10's `net.minecraftforge.fluids.IFluidHandler`
+(the 1.7.10 equivalent of the 1.12+ capability system) and exposes it as a peripheral of type
+`"fluid_storage"` with three methods.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `tanks()` | `tanks()` → `{ { name, amount, capacity }, … }` | Calls `getTankInfo(ForgeDirection.UNKNOWN)`. Each `FluidTankInfo` becomes a table with `capacity` (int→double). If the tank is non-empty, `name` (`Fluid.getName()`) and `amount` are also included. Empty-tank entries have only `capacity`. |
+| `pushFluid()` | `pushFluid(toName [, limit [, fluidName]])` → `number` | Resolves `toName` to an `IFluidHandler` via `computer.getAvailablePeripheral(toName)`. Transfers up to `limit` mB of `fluidName` (or any fluid if omitted). Returns the number of mB actually moved. Runs on the main thread. |
+| `pullFluid()` | `pullFluid(fromName [, limit [, fluidName]])` → `number` | Mirror of `pushFluid` with source and destination swapped. |
+
+#### Design decisions
+
+| # | Decision |
+|---|---|
+| 1 | **Fluid name format**: `Fluid.getName()` as-is (raw Forge fluid name, e.g. `"water"`). |
+| 2 | **Mixed `IPeripheralTile` + `IFluidHandler`**: `IPeripheralTile` check takes priority in `DefaultPeripheralProvider`; those tiles keep their own peripheral. Only "plain" `IFluidHandler` tiles without a custom peripheral are wrapped. |
+| 3 | **`ForgeDirection` for transfer**: `ForgeDirection.UNKNOWN` for both source and target (omnidirectional). Consistent with CC:Tweaked. |
+
+#### Files added / modified
+
+| File | Change |
+|---|---|
+| `api/peripheral/IComputerAccess.java` | Added `default IPeripheral getAvailablePeripheral(String name)` (returns `null`). |
+| `core/apis/PeripheralAPI.java` | `PeripheralWrapper` overrides `getAvailablePeripheral` — scans 6-side array by `m_side`. |
+| `shared/peripheral/modem/TileCable.java` | `RemotePeripheralWrapper` gains a `TileCable m_entity` field; overrides `getAvailablePeripheral` via `m_peripheralsByName.get(name)`. |
+| `shared/util/FluidUtil.java` | New. Static `moveFluid` helper implementing simulate-drain → simulate-fill → execute-drain → execute-fill. |
+| `shared/peripheral/generic/GenericFluidPeripheral.java` | New. `IPeripheral` implementation wrapping `IFluidHandler`. |
+| `shared/peripheral/common/DefaultPeripheralProvider.java` | Added `IFluidHandler` fallback after `TileComputerBase` check. |
+
+#### Test note
+
+`FluidStack(Fluid, int)` calls `FluidRegistry.makeDelegate()`, which triggers
+`FluidRegistry.<clinit>` and crashes outside a running Minecraft server (requires
+`Blocks.water` to be initialized). Unit tests therefore cover method surface, empty-tank
+`tanks()`, all error paths, and end-to-end zero-transfer smoke tests (empty tank → drain
+returns `null` → `FluidUtil.moveFluid` returns 0 without constructing any `FluidStack`).
+Actual fluid transfer, fluid-name filtering, and multi-tank scenarios are verified by the
+in-game test script `run/saves/Test World/computer/37/test_fluid_storage.lua`.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/generic/GenericFluidPeripheralTest.java` — **20 cases**, all green.
 
 ---
 

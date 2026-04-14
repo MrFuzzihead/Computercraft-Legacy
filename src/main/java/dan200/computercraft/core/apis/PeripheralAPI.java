@@ -476,5 +476,17 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                 return this.m_side;
             }
         }
+
+        @Override
+        public IPeripheral getAvailablePeripheral(String name) {
+            synchronized (PeripheralAPI.this.m_peripherals) {
+                for (PeripheralWrapper wrapper : PeripheralAPI.this.m_peripherals) {
+                    if (wrapper != null && name.equals(wrapper.m_side)) {
+                        return wrapper.m_peripheral;
+                    }
+                }
+            }
+            return null;
+        }
     }
 }
