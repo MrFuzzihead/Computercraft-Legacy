@@ -48,4 +48,28 @@ public interface IWritableMount extends IMount {
     default RandomAccessFile openForReadWrite(String path, boolean truncate) throws IOException {
         throw new IOException("Read-write mode not supported by this mount");
     }
+
+    /**
+     * Open the file at {@code path} for seekable writing only.
+     *
+     * <p>
+     * When {@code append} is {@code false} (i.e. {@code "w"} mode) the file is created if it
+     * does not exist and its contents are discarded if it does. When {@code append} is
+     * {@code true} (i.e. {@code "a"} mode) the file is created if it does not exist, and
+     * the returned handle is positioned at the end of any existing content.
+     * </p>
+     *
+     * <p>
+     * The default implementation always throws {@link IOException} — mounts that do not back
+     * physical files on disk are not required to support this mode.
+     * </p>
+     *
+     * @param path   the mount-relative path to open
+     * @param append {@code true} to append ({@code "a"}), {@code false} to create/truncate ({@code "w"})
+     * @return an open {@link RandomAccessFile} positioned appropriately
+     * @throws IOException if the operation is unsupported or an I/O error occurs
+     */
+    default RandomAccessFile openForWriteRandom(String path, boolean append) throws IOException {
+        throw new IOException("seek not supported by this mount");
+    }
 }

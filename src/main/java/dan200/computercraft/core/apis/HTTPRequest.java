@@ -184,7 +184,7 @@ public class HTTPRequest {
                         responseSuccess = false;
                         if (is == null) {
                             // Server returned an error code with no body (e.g. a bare
-                            // 404 with Content-Length: 0).  Substitute an empty stream
+                            // 404 with Content-Length: 0). Substitute an empty stream
                             // so asResponse() always returns a non-null handle — which
                             // is required by the 1.80pr1 "response handle on error" contract.
                             is = new ByteArrayInputStream(new byte[0]);

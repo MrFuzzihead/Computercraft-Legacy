@@ -11,7 +11,7 @@
 | API / Peripheral | Source | Methods Covered |
 |---|---|---|
 | `os` | `OSAPI.java` + `bios.lua` | `queueEvent`, `startTimer`, `cancelTimer`, `setAlarm`, `cancelAlarm`, `shutdown`, `reboot`, `computerID`, `getComputerID`, `setComputerLabel`, `computerLabel`, `getComputerLabel`, `clock`, **`time`** (locale string + table→timestamp), **`day`** (locale string), `version`, `pullEvent`, `pullEventRaw`, `run`, `loadAPI`, `unloadAPI`, `sleep`, **`epoch`**, **`date`** |
-| `fs` | `FSAPI.java` + `bios.lua` | `list`, `combine`, `getName`, `getSize`, `exists`, `isDir`, `isReadOnly`, `makeDir`, `move`, `copy`, `delete`, `open`, `getDrive`, `getFreeSpace`, `find`, `getDir`, `complete`, **`getCapacity`**, **`attributes`** |
+| `fs` | `FSAPI.java` + `bios.lua` | `list`, `combine` (variadic), `getName`, `getSize`, `exists`, `isDir`, `isReadOnly`, `makeDir`, `move`, `copy`, `delete`, `open` (modes `r`/`w`/`a`/`rb`/`wb`/`ab`/`r+`/`w+`), `getDrive`, `getFreeSpace`, `find` (`*` + `?` wildcards), `getDir`, `complete` (options table), **`getCapacity`**, **`attributes`**, **`isDriveRoot`**; all text handles: **`read([count])`**, **`readLine([withTrailing])`**, **`seek`** |
 | `term` | `TermAPI.java` + `rom/apis/term` | `write`, `blit`, `scroll`, `clear`, `clearLine`, `setCursorPos`, `getCursorPos`, `setCursorBlink`, **`getCursorBlink`**, `getSize`, `setTextColor/Colour`, `setBackgroundColor/Colour`, `getTextColor/Colour`, `getBackgroundColor/Colour`, `isColor/Colour`, `redirect`, `current`, `native`, **`nativePaletteColor/Colour`**, **`setPaletteColor/Colour`**, **`getPaletteColor/Colour`** |
 | `redstone` / `rs` | `RedstoneAPI.java` | `getSides`, `setOutput`, `getOutput`, `getInput`, `setBundledOutput`, `getBundledOutput`, `getBundledInput`, `testBundledInput`, `setAnalogOutput/Analogue`, `getAnalogOutput/Analogue`, `getAnalogInput/Analogue` |
 | `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); **binary flag** (`get`/`post`/`request`); **table argument form** (`get`/`post`/`request`); **custom timeout** (seconds, table or positional); **PATCH** verb; response: `readLine`, `readAll`, `read`, `close`, `getResponseCode`, **`getResponseHeaders`**; **response handle on error**; **raw bytes** (1.109.0); **`websocket`**, **`websocketAsync`**; handle: **`receive`**, **`send`**, **`close`** |
@@ -84,14 +84,26 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 
 ---
 
-### 4. `fs` — ~~Missing 2 methods~~ ✅ Done
+### 4. `fs` — ~~Missing 2 methods~~ ✅ Done → ~~FS parity gaps~~ ✅ Done (2026-04-13)
 
-| Method                 | Notes |
-|------------------------|---|
-| `fs.attributes(path)`  | ✅ Implemented in `FSAPI.java` (method index 17); returns `{size, isDir, isReadOnly, created, modified, modification}`. Timestamps use `java.nio.file.attribute.BasicFileAttributes` on `FileMount` paths (falls back to `File.lastModified()`); read-only mounts return `0`. |
-| `fs.getCapacity(path)` | ✅ Implemented in `FSAPI.java` (method index 16); returns total drive capacity in bytes, or `nil` for read-only / unlimited mounts. `FileMount` overrides `IWritableMount.getCapacity()` to expose `m_capacity`; read-only `IMount` implementations inherit the default `-1` sentinel which is translated to `nil` in Lua. |
+| Method / Feature | Notes |
+|---|---|
+| `fs.attributes(path)` | ✅ Implemented in `FSAPI.java` (method index 17); returns `{size, isDir, isReadOnly, created, modified, modification}`. Timestamps use `java.nio.file.attribute.BasicFileAttributes` on `FileMount` paths (falls back to `File.lastModified()`); read-only mounts return `0`. |
+| `fs.getCapacity(path)` | ✅ Implemented in `FSAPI.java` (method index 16); returns total drive capacity in bytes, or `nil` for read-only / unlimited mounts. |
+| `fs.isDriveRoot(path)` | ✅ Implemented in `FSAPI.java` (method index 18); delegates to `FileSystem.isDriveRoot()` which checks `m_mounts.containsKey(sanitizedPath)`. Root `""` always returns `true`. (CC:Tweaked 1.87.0) |
+| `fs.combine(path, ...)` variadic | ✅ Case 1 now accepts 2+ string arguments and folds each through `FileSystem.combine()`. Previously required exactly 2 args. (CC:Tweaked 1.80pr1) |
+| `fs.find` `?` wildcard | ✅ `sanitizePath(path, true)` no longer strips `?`; `find()` pattern now converts `?` → `[^\\/]` (exactly one non-separator char). (CC:Tweaked 1.80pr1) |
+| `ReadHandle.read([count])` | ✅ `ReaderObject` case 0 now accepts optional count (default 1); backed by `IMountedFileNormal.read(int)` which is properly implemented in both the RAF-backed (`openForReadSeekable`) and stream-based fallback paths. |
+| `ReadHandle.readLine([withTrailing])` | ✅ `ReaderObject` case 1 now accepts optional boolean; backed by `IMountedFileNormal.readLine(boolean)`. When `true`, the terminating `\n` byte is included (normalised from `\r\n`). |
+| `ReadHandle.seek([whence[, offset]])` | ✅ `ReaderObject` case 4. `FileMount`-backed files use a `RandomAccessFile`; non-seekable mounts (JarMount/ROM) use stream fallback and return `nil, "seek not supported..."`. |
+| `WriteHandle.seek([whence[, offset]])` | ✅ `WriterObject` case 4. Modes `"w"` and `"a"` now use `openForWriteSeekable` (RAF-backed via `FileMount.openForWriteRandom`). |
+| `ReadWriteHandle.read([count])` | ✅ `wrapReadWrite` case 0 (new); delegates to `IMountedFileReadWrite.read(int)` implemented in `FileSystem.openForReadWrite` anonymous class. |
+| `ReadWriteHandle.readLine([withTrailing])` | ✅ `wrapReadWrite` case 1 updated; delegates to `IMountedFileReadWrite.readLine(boolean)`. |
+| `fs.complete` options table | ✅ `bios.lua` `fs.complete` now accepts arg 3 as either a boolean (legacy) or an options table with `include_files` / `include_dirs` keys (CC:Tweaked 1.101.0). |
 
-**Tests**: `src/test/java/dan200/computercraft/core/apis/FSAPITest.java` — 10 cases, all green.
+**Tests**: `src/test/java/dan200/computercraft/core/apis/FSAPITest.java` — **34 cases**, all green.
+
+**In-game test**: `run/saves/Test World/computer/37/test_fs_parity.lua`
 
 ---
 

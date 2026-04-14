@@ -377,14 +377,10 @@ class SettingsAPITest {
     @Test
     void defineWithInvalidTypeErrors() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "local ok, err = pcall(define, 'k', {type='invalid'})\n" + "_capture(ok, err)");
+        run(buildMachine(cap), "local ok, err = pcall(define, 'k', {type='invalid'})\n" + "_capture(ok, err)");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "define with unknown type must error");
-        assertTrue(
-            ((String) cap.args[1]).contains("invalid"),
-            "Error message must include the bad type name");
+        assertTrue(((String) cap.args[1]).contains("invalid"), "Error message must include the bad type name");
     }
 
     @Test
@@ -392,8 +388,7 @@ class SettingsAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local ok1 = pcall(define, 'a', {type='number'})\n"
-                + "local ok2 = pcall(define, 'b', {type='string'})\n"
+            "local ok1 = pcall(define, 'a', {type='number'})\n" + "local ok2 = pcall(define, 'b', {type='string'})\n"
                 + "local ok3 = pcall(define, 'c', {type='boolean'})\n"
                 + "local ok4 = pcall(define, 'd', {type='table'})\n"
                 + "_capture(ok1, ok2, ok3, ok4)");
@@ -414,10 +409,7 @@ class SettingsAPITest {
         runWithMocks(
             buildMachine(cap),
             null,
-            "local t = {x = 1}\n"
-                + "set('t', t)\n"
-                + "t.x = 99\n"
-                + "_capture(get('t').x)");
+            "local t = {x = 1}\n" + "set('t', t)\n" + "t.x = 99\n" + "_capture(get('t').x)");
         assertNotNull(cap.args);
         assertEquals(
             1.0,
@@ -431,10 +423,7 @@ class SettingsAPITest {
         runWithMocks(
             buildMachine(cap),
             null,
-            "local t = {x = 1}\n"
-                + "define('k', {default = t})\n"
-                + "t.x = 99\n"
-                + "_capture(get('k').x)");
+            "local t = {x = 1}\n" + "define('k', {default = t})\n" + "t.x = 99\n" + "_capture(get('k').x)");
         assertNotNull(cap.args);
         assertEquals(
             1.0,
@@ -452,10 +441,7 @@ class SettingsAPITest {
         runWithMocks(
             buildMachine(cap),
             null,
-            "set('t', {x = 1})\n"
-                + "local v = get('t')\n"
-                + "v.x = 99\n"
-                + "_capture(get('t').x)");
+            "set('t', {x = 1})\n" + "local v = get('t')\n" + "v.x = 99\n" + "_capture(get('t').x)");
         assertNotNull(cap.args);
         assertEquals(
             1.0,
@@ -469,10 +455,7 @@ class SettingsAPITest {
         runWithMocks(
             buildMachine(cap),
             null,
-            "set('t', {x = 1})\n"
-                + "local d = getDetails('t')\n"
-                + "d.value.x = 99\n"
-                + "_capture(get('t').x)");
+            "set('t', {x = 1})\n" + "local d = getDetails('t')\n" + "d.value.x = 99\n" + "_capture(get('t').x)");
         assertNotNull(cap.args);
         assertEquals(
             1.0,
@@ -486,8 +469,7 @@ class SettingsAPITest {
         runWithMocks(
             buildMachine(cap),
             null,
-            "define('k', {default = {x = 1}})\n"
-                + "local d = getDetails('k')\n"
+            "define('k', {default = {x = 1}})\n" + "local d = getDetails('k')\n"
                 + "d.default.x = 99\n"
                 + "_capture(get('k').x)");
         assertNotNull(cap.args);

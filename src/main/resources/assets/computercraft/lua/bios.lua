@@ -751,8 +751,15 @@ end
 -- Install the lua part of the FS api
 local tEmpty = {}
 function fs.complete( sPath, sLocation, bIncludeFiles, bIncludeDirs )
-    bIncludeFiles = (bIncludeFiles ~= false)
-    bIncludeDirs = (bIncludeDirs ~= false)
+    -- Allow arg 3 to be an options table (CC:Tweaked 1.101.0 compat)
+    if type(bIncludeFiles) == "table" then
+        local opts = bIncludeFiles
+        bIncludeFiles = (opts.include_files ~= false)
+        bIncludeDirs  = (opts.include_dirs  ~= false)
+    else
+        bIncludeFiles = (bIncludeFiles ~= false)
+        bIncludeDirs  = (bIncludeDirs  ~= false)
+    end
     local sDir = sLocation
     local nStart = 1
     local nSlash = string.find( sPath, "[/\\]", nStart )

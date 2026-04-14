@@ -22,7 +22,7 @@ public class WriterObject implements ILuaObjectWithArguments {
 
     @Override
     public String[] getMethodNames() {
-        return new String[] { "write", "writeLine", "close", "flush" };
+        return new String[] { "write", "writeLine", "close", "flush", "seek" };
     }
 
     private void write(Object[] args, boolean newLine) throws LuaException {
@@ -64,6 +64,16 @@ public class WriterObject implements ILuaObjectWithArguments {
                 } catch (IOException ignored) {
                     return null;
                 }
+            case 4: { // seek([whence[, offset]])
+                String whence = ReaderObject.extractWhence(args, 0, "cur");
+                long offset = args.length > 1 && args[1] instanceof Number ? ((Number) args[1]).longValue() : 0L;
+                try {
+                    long pos = stream.seek(whence, offset);
+                    return new Object[] { pos };
+                } catch (IOException e) {
+                    return new Object[] { null, e.getMessage() };
+                }
+            }
             default:
                 return null;
         }
