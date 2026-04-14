@@ -49,7 +49,13 @@
 All ten methods are implemented as a pure-Lua file at `rom/apis/settings`.
 Settings are auto-loaded from `.settings` at boot via `bios.lua`.
 
-**Tests**: `src/test/java/dan200/computercraft/core/lua/SettingsAPITest.java` — 33 cases, all green.
+Behavioral fidelity fixes applied:
+- `define` now validates `options.type` against the allowed-type set (`"number"`, `"string"`, `"boolean"`, `"table"`); passing any other string throws a descriptive error.
+- `set` and `define` default both call `reserialize` (serialize → unserialize round-trip) on table values, ensuring the stored copy is independent of the caller's table.
+- `get` and `getDetails` both return a `copy` (lightweight recursive clone) of table values, preventing callers from mutating stored state through the returned reference.
+- `load` intentionally returns `true` for a missing file (fresh-install behaviour); upstream CC:Tweaked returns `false, msg` here. This divergence is by design — `bios.lua` ignores the return value either way.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/SettingsAPITest.java` — 40 cases, all green.
 
 ---
 
