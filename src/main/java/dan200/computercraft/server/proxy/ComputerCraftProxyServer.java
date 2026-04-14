@@ -78,4 +78,14 @@ public class ComputerCraftProxyServer extends ComputerCraftProxyCommon {
     }
 
     private void registerForgeHandlers() {}
+
+    @Override
+    public void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume) {
+        // No-op on server side; audio is played client-side only.
+    }
+
+    @Override
+    public void stopSpeaker(int x, int y, int z) {
+        // No-op on server side.
+    }
 }

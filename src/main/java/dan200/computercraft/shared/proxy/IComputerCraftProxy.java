@@ -44,4 +44,8 @@ public interface IComputerCraftProxy {
     File getWorldDir(World var1);
 
     void handlePacket(ComputerCraftPacket var1, EntityPlayer var2);
+
+    void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume);
+
+    void stopSpeaker(int x, int y, int z);
 }

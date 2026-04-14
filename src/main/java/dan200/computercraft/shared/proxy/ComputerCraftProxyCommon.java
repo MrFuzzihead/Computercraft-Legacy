@@ -9,6 +9,7 @@ import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemRecord;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -71,6 +72,8 @@ import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.peripheral.printer.ContainerPrinter;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
+import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
+import dan200.computercraft.shared.peripheral.speaker.TileSpeaker;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
@@ -178,6 +181,21 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                     Packet description = generic.getDescriptionPacket();
                     ((EntityPlayerMP) player).playerNetServerHandler.sendPacket(description);
                 }
+                break;
+            case ComputerCraftPacket.SpeakerAudio: {
+                int sx = packet.m_dataInt[0];
+                int sy = packet.m_dataInt[1];
+                int sz = packet.m_dataInt[2];
+                float vol = packet.m_dataInt[3] / 1000.0f;
+                byte[] dfpwm = (packet.m_dataByte != null && packet.m_dataByte.length > 0
+                    && packet.m_dataByte[0] != null) ? packet.m_dataByte[0] : new byte[0];
+                ComputerCraft.proxy.playSpeakerAudio(sx, sy, sz, dfpwm, vol);
+                break;
+            }
+            case ComputerCraftPacket.SpeakerStop: {
+                ComputerCraft.proxy.stopSpeaker(packet.m_dataInt[0], packet.m_dataInt[1], packet.m_dataInt[2]);
+                break;
+            }
         }
     }
 
@@ -344,6 +362,21 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         ItemStack cloudyHead = new ItemStack(Items.skull, 1, 3);
         cloudyHead.setTagCompound(tag);
         GameRegistry.addShapelessRecipe(cloudyHead, monitor, new ItemStack(Items.skull, 1, 1));
+        // Speaker block + crafting recipe
+        ComputerCraft.Blocks.speaker = new BlockSpeaker();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.speaker, ItemBlock.class, "speaker");
+        ItemStack speakerStack = new ItemStack(ComputerCraft.Blocks.speaker);
+        GameRegistry.addRecipe(
+            speakerStack,
+            "SSS",
+            "SNS",
+            "SRS",
+            'S',
+            Blocks.stone,
+            'N',
+            Blocks.noteblock,
+            'R',
+            Items.redstone);
     }
 
     private void registerTileEntities() {
@@ -354,6 +387,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TilePrinter.class, "ccprinter");
         GameRegistry.registerTileEntity(TileCable.class, "wiredmodem");
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
+        GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
         ComputerCraftAPI.registerPeripheralProvider(new DefaultPeripheralProvider());
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());

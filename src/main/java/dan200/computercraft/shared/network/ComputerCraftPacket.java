@@ -22,6 +22,8 @@ public class ComputerCraftPacket implements IMessage {
     public static final byte RequestTileEntityUpdate = 9;
     public static final byte ComputerChanged = 7;
     public static final byte ComputerDeleted = 8;
+    public static final byte SpeakerAudio = 10;
+    public static final byte SpeakerStop = 11;
     public byte m_packetType = 0;
     public String[] m_dataString = null;
     public int[] m_dataInt = null;
@@ -142,7 +144,7 @@ public class ComputerCraftPacket implements IMessage {
                 int length = buffer.readInt();
                 if (length > 0) {
                     this.m_dataByte[kx] = new byte[length];
-                    buffer.getBytes(buffer.readerIndex(), this.m_dataByte[kx]);
+                    buffer.readBytes(this.m_dataByte[kx]);
                 }
             }
         }

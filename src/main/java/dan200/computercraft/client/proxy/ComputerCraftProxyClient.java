@@ -32,6 +32,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.ClientTickEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.client.audio.SpeakerManager;
 import dan200.computercraft.client.gui.FixedWidthFontRenderer;
 import dan200.computercraft.client.gui.GuiComputer;
 import dan200.computercraft.client.gui.GuiDiskDrive;
@@ -80,6 +81,7 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
         ComputerCraft.Blocks.peripheral.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
         ComputerCraft.Blocks.cable.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
         ComputerCraft.Blocks.commandComputer.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
+        // Speaker uses the standard cube renderer; no custom blockRenderID needed.
         ClientRegistry.bindTileEntitySpecialRenderer(TileMonitor.class, new TileEntityMonitorRenderer());
         this.registerForgeHandlers();
     }
@@ -157,6 +159,16 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
             ComputerCraft.getBaseDir(),
             "saves/" + world.getSaveHandler()
                 .getWorldDirectoryName());
+    }
+
+    @Override
+    public void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume) {
+        SpeakerManager.INSTANCE.playAudio(x, y, z, dfpwm, volume);
+    }
+
+    @Override
+    public void stopSpeaker(int x, int y, int z) {
+        SpeakerManager.INSTANCE.stop(x, y, z);
     }
 
     private void registerForgeHandlers() {

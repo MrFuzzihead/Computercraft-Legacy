@@ -39,6 +39,7 @@
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
 | Drive peripheral | `DiskDrivePeripheral.java` | `isDiskPresent`, `getDiskLabel`, `setDiskLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `ejectDisk`, `getDiskID` |
+| Speaker peripheral | `SpeakerPeripheral.java` | `playNote`, `playSound`, `playAudio`, `stop` |
 
 ---
 
@@ -291,8 +292,10 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 - `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
 - `speaker.stop()`
 
-**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to
-Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
+**Implementation plan**: See **[SPEAKER_PLAN.md](SPEAKER_PLAN.md)** for the full implementation
+plan. Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`; `playNote`/`playSound`
+via `world.playSoundEffect`; `playAudio` via a new `SpeakerAudio` CC network packet decoded
+client-side with `javax.sound.sampled.SourceDataLine`.
 
 ---
 
@@ -427,9 +430,40 @@ consistently accept both string sides and wrapped tables.
 
 ---
 
-## Prioritized Implementation Roadmap
+### 21. ~~Speaker peripheral~~ ✅ Done
 
-| Priority | Item                                                            | Effort | Type |
+Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`.  Full design rationale in
+[SPEAKER_PLAN.md](SPEAKER_PLAN.md).
+
+| Method | Implementation | Notes |
+|---|---|---|
+| `playNote(instrument[, volume[, pitch]])` | Non-blocking; queues a `PendingNote` in `TileSpeaker.m_pendingNotes`; flushed to `world.playSoundEffect` in `updateEntity()`. Rate-limited to `speaker_max_notes_per_tick` (default 8) per tick. | All 16 CC:Tweaked instrument names accepted; 11 post-1.7.10 ones are silent in vanilla 1.7.10 but activate with a resource pack. |
+| `playSound(name[, volume[, pitch]])` | Non-blocking; queues a `PendingSound`; `world.playSoundEffect` called in `updateEntity()`. | Rejected while audio stream is active. |
+| `playAudio(audio[, volume])` | Non-blocking; validates and DFPWM-encodes the PCM table; sends a `SpeakerAudio` packet from `updateEntity()`. Back-pressure via nanosecond timer (500 ms `CLIENT_BUFFER`). | `speaker_audio_empty` is queued on attached computers after each batch dispatch. |
+| `stop()` | Sets `m_shouldStop` flag; `updateEntity()` clears state and sends `SpeakerStop` to all players. | Does not queue `speaker_audio_empty`. |
+
+**Network packets**: `SpeakerAudio = 10` (DFPWM bytes + volume×1000 as int), `SpeakerStop = 11`
+(coordinates only) — both added to `ComputerCraftPacket`.
+
+**Client audio**: `SpeakerManager` (`@SideOnly(CLIENT)`) decodes DFPWM → PCM via `DfpwmDecoder`
+(same PREC_SHIFT/PREC_CEIL/LPF_STRENGTH constants as the server encoder) and plays via
+`javax.sound.sampled.SourceDataLine` at 48 kHz / 8-bit signed mono.  Volume is applied by
+linearly scaling PCM sample values.
+
+**Config keys**: `speaker_max_notes_per_tick` (default 8) and `speaker_audio_range` (default
+256 blocks ≈ 16-chunk view distance, approximating upstream's `sendToAllTracking`).
+
+**Bug fixed**: `ComputerCraftPacket.fromBytes` previously used `getBytes` (non-advancing) to
+read `m_dataByte` entries; replaced with `readBytes` so the reader index advances correctly.
+This was required for the new `SpeakerAudio` packet to deserialize its payload.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/speaker/SpeakerPeripheralTest.java`
+— 26 cases, all green (covers all argument-validation paths, rate-limit / buffer-full false
+returns, and the `shouldStop` flag).
+
+---
+
+## Prioritized Implementation Roadmap
 |---|-----------------------------------------------------------------|---|---|
 | ✅ Done | `settings` API                                                  | Small | Lua |
 | ✅ Done | `colors.packRGB/unpackRGB/toBlit/fromBlit`                      | Small | Lua |
@@ -451,7 +485,7 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
-| Deferred | Speaker peripheral                                              | Large | Java + Client |
+| ✅ Done  | Speaker peripheral — see [SPEAKER_PLAN.md](SPEAKER_PLAN.md)    | Large | Java + Client |
 
 ---
 
@@ -461,6 +495,5 @@ consistently accept both string sides and wrapped tables.
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
    approach is correct — no change needed.
 
-2. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired
-   to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless
-   explicitly requested.
+2. **Speaker**: ✅ Implemented — see `### 21` above and [SPEAKER_PLAN.md](SPEAKER_PLAN.md) for
+   full design rationale.  Advanced speaker (streaming synthesis) is deferred.

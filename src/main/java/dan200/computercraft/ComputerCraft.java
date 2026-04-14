@@ -64,6 +64,7 @@ import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
+import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.proxy.ICCTurtleProxy;
 import dan200.computercraft.shared.proxy.IComputerCraftProxy;
@@ -128,6 +129,8 @@ public class ComputerCraft {
     public static int modem_highAltitudeRange = 384;
     public static int modem_rangeDuringStorm = 16;
     public static int modem_highAltitudeRangeDuringStorm = 96;
+    public static int speaker_max_notes_per_tick = 8;
+    public static int speaker_audio_range = 256;
     public static int computerSpaceLimit = 1000000;
     public static int floppySpaceLimit = 125000;
     public static int treasureDiskLootFrequency = 1;
@@ -178,6 +181,12 @@ public class ComputerCraft {
         prop = config.get("general", "modem_highAltitudeRangeDuringStorm", modem_highAltitudeRangeDuringStorm);
         prop.comment = "The range of Wireless Modems at maximum altitude in stormy weather, in meters";
         modem_highAltitudeRangeDuringStorm = Math.min(prop.getInt(), 100000);
+        prop = config.get("general", "speaker_max_notes_per_tick", speaker_max_notes_per_tick);
+        prop.comment = "The maximum number of notes a Speaker can play per game tick";
+        speaker_max_notes_per_tick = Math.max(1, prop.getInt());
+        prop = config.get("general", "speaker_audio_range", speaker_audio_range);
+        prop.comment = "The range (in blocks) over which Speaker audio packets are sent; approximates chunk-tracking (default 256 ≈ 16 chunks)";
+        speaker_audio_range = Math.max(1, prop.getInt());
         prop = config.get("general", "computerSpaceLimit", computerSpaceLimit);
         prop.comment = "The disk space limit for computers and turtles, in bytes";
         computerSpaceLimit = prop.getInt();
@@ -362,6 +371,13 @@ public class ComputerCraft {
 
     public static void sendToAllPlayers(ComputerCraftPacket packet) {
         networkEventChannel.sendToAll(encode(packet));
+    }
+
+    public static void sendToAllAround(ComputerCraftPacket packet, net.minecraft.world.World world, double x, double y,
+        double z, double range) {
+        networkEventChannel.sendToAllAround(
+            encode(packet),
+            new NetworkRegistry.TargetPoint(world.provider.dimensionId, x, y, z, range));
     }
 
     public static void sendToServer(ComputerCraftPacket packet) {
@@ -635,6 +651,7 @@ public class ComputerCraft {
         public static BlockTurtle turtleExpanded;
         public static BlockTurtle turtleAdvanced;
         public static BlockCommandComputer commandComputer;
+        public static BlockSpeaker speaker;
     }
 
     public static class Items {
