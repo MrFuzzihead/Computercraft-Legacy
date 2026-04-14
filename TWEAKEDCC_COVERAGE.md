@@ -16,7 +16,7 @@
 | `redstone` / `rs` | `RedstoneAPI.java` | `getSides`, `setOutput`, `getOutput`, `getInput`, `setBundledOutput`, `getBundledOutput`, `getBundledInput`, `testBundledInput`, `setAnalogOutput/Analogue`, `getAnalogOutput/Analogue`, `getAnalogInput/Analogue` |
 | `http` | `HTTPAPI.java` + `bios.lua` | `request`, `checkURL`, `get` (sync), `post` (sync); **binary flag** (`get`/`post`/`request`); **table argument form** (`get`/`post`/`request`); **custom timeout** (seconds, table or positional); **PATCH** verb; response: `readLine`, `readAll`, `read`, `close`, `getResponseCode`, **`getResponseHeaders`**; **response handle on error**; **raw bytes** (1.109.0); **`websocket`**, **`websocketAsync`**; handle: **`receive`**, **`send`**, **`close`** |
 | `turtle` | `TurtleAPI.java` | All movement, dig, place, drop, suck, detect, compare, attack, fuel, inspect, equip, `getItemDetail` |
-| `commands` | `CommandAPI.java` | `exec`, `execAsync`, `list`, `getBlockPosition`, `getBlockInfo` |
+| `commands` | `CommandAPI.java` | `exec` (+ affected count), `execAsync`, `list` (+ prefix filter), `getBlockPosition`, `getBlockInfo` (+ `state`, `nbt`, dimension arg), `getBlockInfos` |
 | `bit` | `BitAPI.java` | `bnot`, `band`, `bor`, `bxor`, `brshift`, `blshift`, `blogic_rshift` |
 | `buffer` | `BufferAPI.java` | `new` |
 | `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test`, **`packRGB`**, **`unpackRGB`**, **`toBlit`**, **`fromBlit`** |
@@ -267,7 +267,23 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
-### 9. Speaker peripheral — **Not implemented**
+### 20. ~~`commands` — Method parity gaps~~ ✅ Done (2026-04-14)
+
+| Method / Feature | Notes |
+|---|---|
+| `exec(command)` 3rd return value | ✅ `doCommand` now returns `(boolean success, { string } output, number affected)`. `affected` is the raw integer returned by `ICommandManager.executeCommand`. All three return paths (success, caught exception, disabled server) consistently return three values. |
+| `list([prefix...])` prefix filter | ✅ Accepts zero or more string arguments. When at least one is provided, only commands whose name starts with any of the given prefixes are included. Non-string arguments are silently ignored (consistent with CC:Tweaked leniency). |
+| `getBlockInfo(x, y, z [, dimension])` — `state` table | ✅ The returned table now includes a `state` sub-table with key `metadata` (the raw 1.7.10 block metadata). The old `metadata` top-level key is removed; callers use `result.state.metadata`. |
+| `getBlockInfo` — `nbt` field | ✅ If a tile entity exists at the coordinates, its NBT is serialized via `TileEntity.writeToNBT` and converted to a Lua table using the new `NBTUtil.toObject`. Numeric types become `double`; strings stay as-is; lists and arrays become 1-indexed tables; nested compounds become nested maps. |
+| `getBlockInfo` — optional `dimension` argument | ✅ 4th argument (integer) selects the target world via `MinecraftServer.getServer().worldServerForDimension(dim)`. Omitting it uses the command computer's own world. Throws `"No server available"` / `"Unknown dimension"` on lookup failure. |
+| `getBlockInfos(minX, minY, minZ, maxX, maxY, maxZ [, dimension])` | ✅ New method (case 5). Validates 6 coordinate arguments; normalises min/max so either corner-order is accepted. Throws `"Too many blocks"` if the region volume exceeds 4096 (matching CC:Tweaked's cap). Returns a 1-indexed array of block-info tables (same shape as `getBlockInfo`). Y-coordinates outside the world's height range return an `"minecraft:air"` entry with no `nbt` key. Optional 7th dimension argument uses same lookup as `getBlockInfo`. |
+| `NBTUtil.toObject(NBTTagCompound)` | ✅ New public utility method in `NBTUtil`. Recursively converts an arbitrary `NBTTagCompound` to a `Map<Object,Object>`. Handles all standard NBT types; list element types without a public MCP getter (byte, short, int, long) are silently omitted. |
+
+**Tests**: `src/test/java/dan200/computercraft/shared/computer/apis/CommandAPITest.java` — **30 cases**, all green.
+
+---
+
+
 
 CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 - `speaker.playNote(instrument, volume, pitch)`
@@ -434,6 +450,7 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `peripheral.getType` wrapped-table support                      | Small | Lua |
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
+| ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
 | Deferred | Speaker peripheral                                              | Large | Java + Client |
 
 ---
