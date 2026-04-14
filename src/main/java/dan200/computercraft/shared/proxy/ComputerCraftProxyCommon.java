@@ -66,6 +66,8 @@ import dan200.computercraft.shared.peripheral.common.ItemPeripheral;
 import dan200.computercraft.shared.peripheral.common.PeripheralItemFactory;
 import dan200.computercraft.shared.peripheral.diskdrive.ContainerDiskDrive;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
+import dan200.computercraft.shared.peripheral.generic.GenericPeripheralProvider;
+import dan200.computercraft.shared.peripheral.generic.energy.rf.RFIntegration;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
@@ -358,6 +360,12 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
         }
+
+        GenericPeripheralProvider genericProvider = new GenericPeripheralProvider();
+        try {
+            RFIntegration.register(genericProvider);
+        } catch (NoClassDefFoundError ignored) {}
+        ComputerCraftAPI.registerPeripheralProvider(genericProvider);
 
         ComputerCraftAPI.registerBundledRedstoneProvider(new DefaultBundledRedstoneProvider());
         ComputerCraftAPI.registerMediaProvider(new DefaultMediaProvider());

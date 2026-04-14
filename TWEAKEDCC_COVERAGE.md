@@ -451,7 +451,116 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
+| **✅ Done** | `energy_storage` generic peripheral (`getEnergy`, `getEnergyCapacity`) | Medium | Java |
 | Deferred | Speaker peripheral                                              | Large | Java + Client |
+
+---
+
+### 21. ~~`energy_storage` generic peripheral~~ ✅ Done (2026-04-14)
+
+Implements CC:Tweaked's [`energy_storage`](https://tweaked.cc/generic_peripheral/energy_storage.html)
+generic peripheral module for 1.7.10 using CoFH's RF API as the primary backend.
+Upstream reference:
+[`AbstractEnergyMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/common/src/main/java/dan200/computercraft/shared/peripheral/generic/methods/AbstractEnergyMethods.java).
+
+#### Methods
+
+| Method | Returns | Notes |
+|---|---|---|
+| `getEnergy()` | `number` | Current energy stored in RF (delegates to `IEnergyHandler.getEnergyStored(ForgeDirection.UNKNOWN)` or `IEnergyStorage.getEnergyStored()`) |
+| `getEnergyCapacity()` | `number` | Maximum energy capacity in RF (delegates to `IEnergyHandler.getMaxEnergyStored(ForgeDirection.UNKNOWN)` or `IEnergyStorage.getMaxEnergyStored()`) |
+
+#### Design
+
+**Abstraction layer** — all peripheral logic is decoupled from the CoFH RF API through two
+internal interfaces, allowing future energy systems (IC² EU, Mekanism Joules, …) to be added
+without touching the peripheral or provider code:
+
+```
+shared/peripheral/generic/
+│
+├── IEnergyAdapterFactory.java       — tryAdapt(TileEntity) → IEnergyStorageAdapter | null
+├── IEnergyStorageAdapter.java       — getEnergy() : int; getEnergyCapacity() : int
+├── EnergyStoragePeripheral.java     — IPeripheral wrapper; type = "energy_storage";
+│                                      methods = { "getEnergy", "getEnergyCapacity" }
+├── GenericPeripheralProvider.java   — IPeripheralProvider; holds List<IEnergyAdapterFactory>;
+│                                      addFactory(f) for external extensibility
+└── energy/
+    └── rf/
+        ├── RFEnergyStorageAdapter.java  — IEnergyStorageAdapter backed by IEnergyHandler
+        │                                  (preferred, ForgeDirection.UNKNOWN) or IEnergyStorage
+        ├── RFEnergyAdapterFactory.java  — IEnergyAdapterFactory; checks instanceof
+        │                                  IEnergyHandler first, then IEnergyStorage
+        └── RFIntegration.java           — static register(GenericPeripheralProvider);
+                                           isolates all cofh.api.energy imports so the JVM
+                                           never loads this class if CoFH is absent
+```
+
+**Dependency** — `compileOnly(rfg.deobf("curse.maven:cofh-core-69162:2388751"))` in
+`dependencies.gradle`. CoFH Core is always present in GTNH at runtime; `compileOnly` avoids
+publishing it as a hard Maven dependency.
+
+**Registration** — in `ComputerCraftProxyCommon.registerTileEntities()`, after the existing
+`DefaultPeripheralProvider` registration:
+
+```java
+GenericPeripheralProvider genericProvider = new GenericPeripheralProvider();
+try {
+    RFIntegration.register(genericProvider);   // no-op if CoFH absent at runtime
+} catch (NoClassDefFoundError ignored) {}
+ComputerCraftAPI.registerPeripheralProvider(genericProvider);
+```
+
+No reflection is used. The `try/catch (NoClassDefFoundError)` is a standard 1.7.10
+class-load guard — `RFIntegration` is a separate compilation unit so the JVM defers
+loading its CoFH imports until `register()` is actually called.
+
+**Peripheral type disambiguation** — `GenericPeripheralProvider.getPeripheral()` does NOT
+check `IPeripheralTile`; it only matches blocks that no earlier provider claimed. CC's own
+blocks are always returned by `DefaultPeripheralProvider` first and are never re-wrapped.
+
+**`IEnergyHandler` vs. `IEnergyStorage` priority** — in GTNH 1.7.10, most machines
+(Thermal Expansion, EnderIO, …) implement `IEnergyHandler` (directional). The factory
+checks `IEnergyHandler` first with `ForgeDirection.UNKNOWN`, falling back to
+`IEnergyStorage`. Blocks that implement only `IEnergyStorage` are handled correctly by
+the fallback path.
+
+#### Files to create
+
+| File | Description |
+|---|---|
+| `shared/peripheral/generic/IEnergyAdapterFactory.java` | Factory interface |
+| `shared/peripheral/generic/IEnergyStorageAdapter.java` | Energy abstraction |
+| `shared/peripheral/generic/EnergyStoragePeripheral.java` | `IPeripheral` implementation |
+| `shared/peripheral/generic/GenericPeripheralProvider.java` | `IPeripheralProvider` implementation |
+| `shared/peripheral/generic/energy/rf/RFEnergyStorageAdapter.java` | CoFH RF adapter |
+| `shared/peripheral/generic/energy/rf/RFEnergyAdapterFactory.java` | CoFH RF factory |
+| `shared/peripheral/generic/energy/rf/RFIntegration.java` | CoFH class-load isolation shim |
+
+#### Files to modify
+
+| File | Change |
+|---|---|
+| `dependencies.gradle` | Add `compileOnly(rfg.deobf("curse.maven:cofh-core-69162:2388751"))` |
+| `shared/proxy/ComputerCraftProxyCommon.java` | Register `GenericPeripheralProvider` after `DefaultPeripheralProvider` |
+
+#### Tests
+
+`src/test/java/dan200/computercraft/shared/peripheral/generic/EnergyStoragePeripheralTest.java` —
+unit-tests via anonymous `IEnergyStorageAdapter` stub (no Minecraft world required):
+
+| Test | Verifies |
+|---|---|
+| `peripheralTypeIsEnergyStorage` | `getType()` returns `"energy_storage"` |
+| `methodCountIsTwo` | `getMethodNames().length == 2` |
+| `getEnergyAtIndexZero` | `getMethodNames()[0].equals("getEnergy")` |
+| `getEnergyCapacityAtIndexOne` | `getMethodNames()[1].equals("getEnergyCapacity")` |
+| `getEnergyReturnsAdapterValue` | `callMethod(…, 0, …)` returns `{ adapterValue }` |
+| `getEnergyCapacityReturnsAdapterValue` | `callMethod(…, 1, …)` returns `{ adapterValue }` |
+| `equalsReturnsTrueForSameAdapter` | same adapter → `equals()` true |
+| `equalsReturnsFalseForDifferentAdapter` | different adapter → `equals()` false |
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/generic/EnergyStoragePeripheralTest.java` — **8 cases**, all green.
 
 ---
 
