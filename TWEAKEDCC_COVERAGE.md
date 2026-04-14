@@ -39,6 +39,7 @@
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
 | Drive peripheral | `DiskDrivePeripheral.java` | `isDiskPresent`, `getDiskLabel`, `setDiskLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `ejectDisk`, `getDiskID` |
+| `inventory` generic peripheral | `InventoryPeripheral.java` | `size`, `list`, `getItemDetail`, `getItemLimit`, `pushItems`, `pullItems` |
 
 ---
 
@@ -417,13 +418,38 @@ consistently accept both string sides and wrapped tables.
 ### 19. ~~`textutils` — `serialize` opts + `serializeJSON` opts + `unserializeJSON` opts~~ ✅ Done
 
 | Feature | Notes |
-|---|---|
 | `textutils.serialize(t, opts?)` | ✅ `opts.compact` (boolean) — when `true`, emits no indentation, newlines, or spaces around `=`/`,`. Array output: `{1,2,3,}`. Key-value output: `{key=value,}`. Nested tables collapse to a single line. `opts.allow_repetitions` (boolean) — when `true`, the duplicate-table guard is relaxed: after a table is fully serialised its tracking entry is cleared (`tTracking[t] = nil`), so the same table may appear in multiple sibling positions. True cycles (a table that contains itself at any depth) still always error. |
 | `textutils.serializeJSON(t, opts?)` | ✅ `opts.unicode_strings` (boolean, default `false`) — when `true`, all bytes ≥ 0x80 in string values are escaped as `\uXXXX`, producing pure-ASCII JSON output. ASCII control characters (`\b`, `\f`, `\n`, `\r`, `\t`, and `\0`–`\31`) are always escaped regardless of this flag. `opts.allow_repetitions` (boolean, default `false`) — when `true`, the same table reference may appear in multiple sibling positions without error; true self-referential cycles still always error. British alias `serialiseJSON` is provided. |
 | `textutils.unserializeJSON(s, opts?)` | ✅ `opts.parse_empty_array` (boolean, default `true`) — when `true` (or omitted), an empty JSON array `[]` returns the `empty_json_array` sentinel, matching the CC:Tweaked round-trip contract. When `false`, `[]` returns a fresh empty table `{}`. Non-empty arrays are unaffected. Existing `opts.null` handling is unchanged. British alias `unserialiseJSON` is provided. |
 
 **Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsSerializeTest.java` — 14 cases, all green.
 **Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsJsonTest.java` — 42 cases, all green.
+
+---
+
+### 20. ~~`inventory` generic peripheral~~ ✅ Done
+
+Wraps any `IInventory` tile entity as an `"inventory"` peripheral exposing the six CC:Tweaked methods.
+Auto-registered by `DefaultPeripheralProvider` for any tile entity that implements `IInventory` and
+does not already have a more specific peripheral (printers, computers, turtles take priority).
+
+| Method | Notes |
+|---|---|
+| `size()` | Returns `getSizeInventory()`. Dispatches to main thread. |
+| `list()` | Returns a 1-indexed table of `{name, count, damage}` maps, skipping empty slots. Dispatches to main thread. |
+| `getItemDetail(slot)` | Returns `null` for an empty slot; otherwise `{name, count, damage, maxCount, displayName}`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `getItemLimit(slot)` | Returns `getInventoryStackLimit()`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `pushItems(toName, fromSlot [, limit [, toSlot]])` | Moves items from this inventory to a named modem-network inventory. Throws if the target does not exist or is not an inventory. Dispatches to main thread. |
+| `pullItems(fromName, fromSlot [, limit [, toSlot]])` | Moves items from a named modem-network inventory to this one. Throws if the source does not exist or is not an inventory. Dispatches to main thread. |
+
+`IComputerAccess.getAvailablePeripherals()` was added as a `default` method returning
+`Collections.emptyMap()` (backward-compatible). `TileCable.RemotePeripheralWrapper` overrides it
+to return a snapshot of the cable network's peripheral name map.
+
+**Double-chest support**: `InventoryUtil.getInventory` is called on every main-thread task so
+adjacent double-chest halves automatically merge to a 54-slot view.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/inventory/InventoryPeripheralTest.java` — 20 cases, all green.
 
 ---
 
@@ -451,6 +477,7 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
+| ✅ Done | `inventory` generic peripheral                                  | Medium | Java |
 | Deferred | Speaker peripheral                                              | Large | Java + Client |
 
 ---

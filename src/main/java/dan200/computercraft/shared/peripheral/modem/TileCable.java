@@ -1,6 +1,7 @@
 package dan200.computercraft.shared.peripheral.modem;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -436,7 +437,8 @@ public class TileCable extends TileModemBase implements INetwork {
             TileCable.RemotePeripheralWrapper wrapper = new TileCable.RemotePeripheralWrapper(
                 peripheral,
                 this.m_modem.getComputer(),
-                periphName);
+                periphName,
+                this);
             this.m_peripheralWrappersByName.put(periphName, wrapper);
             wrapper.attach();
         }
@@ -870,11 +872,14 @@ public class TileCable extends TileModemBase implements INetwork {
         private String m_type;
         private String[] m_methods;
         private Map<String, Integer> m_methodMap;
+        private TileCable m_entity;
 
-        public RemotePeripheralWrapper(IPeripheral peripheral, IComputerAccess computer, String name) {
+        public RemotePeripheralWrapper(IPeripheral peripheral, IComputerAccess computer, String name,
+            TileCable entity) {
             this.m_peripheral = peripheral;
             this.m_computer = computer;
             this.m_name = name;
+            this.m_entity = entity;
             this.m_type = peripheral.getType();
             this.m_methods = peripheral.getMethodNames();
 
@@ -957,6 +962,13 @@ public class TileCable extends TileModemBase implements INetwork {
         @Override
         public String getAttachmentName() {
             return this.m_name;
+        }
+
+        @Override
+        public Map<String, IPeripheral> getAvailablePeripherals() {
+            synchronized (m_entity.m_peripheralsByName) {
+                return Collections.unmodifiableMap(new HashMap<>(m_entity.m_peripheralsByName));
+            }
         }
     }
 
