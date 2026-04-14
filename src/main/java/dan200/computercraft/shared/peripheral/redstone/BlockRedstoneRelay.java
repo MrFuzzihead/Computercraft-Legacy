@@ -65,6 +65,6 @@ public class BlockRedstoneRelay extends BlockDirectional {
     @Override
     public void onBlockPlacedBy(World world, int x, int y, int z, EntityLivingBase player, ItemStack itemstack) {
         int dir = DirectionUtil.fromEntityRot(player);
-        setDirection(world, x, y, z, dir);
+        setDirection(world, x, y, z, DirectionUtil.rotate180(dir));
     }
 }
