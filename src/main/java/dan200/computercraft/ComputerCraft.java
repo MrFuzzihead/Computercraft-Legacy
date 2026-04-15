@@ -65,6 +65,7 @@ import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
 import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
+import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.proxy.ICCTurtleProxy;
 import dan200.computercraft.shared.proxy.IComputerCraftProxy;
@@ -652,6 +653,7 @@ public class ComputerCraft {
         public static BlockTurtle turtleAdvanced;
         public static BlockCommandComputer commandComputer;
         public static BlockSpeaker speaker;
+        public static BlockRedstoneRelay redstoneRelay;
     }
 
     public static class Items {

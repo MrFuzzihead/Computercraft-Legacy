@@ -9,5 +9,6 @@ public enum PeripheralType {
     WiredModem,
     Cable,
     WiredModemWithCable,
+    RedstoneRelay,
     Speaker;
 }
