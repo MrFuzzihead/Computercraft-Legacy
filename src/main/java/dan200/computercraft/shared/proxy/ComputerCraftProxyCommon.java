@@ -144,6 +144,12 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
     public abstract File getWorldDir(World var1);
 
     @Override
+    public abstract void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume);
+
+    @Override
+    public abstract void stopSpeaker(int x, int y, int z);
+
+    @Override
     public void handlePacket(ComputerCraftPacket packet, EntityPlayer player) {
         switch (packet.m_packetType) {
             case 1:

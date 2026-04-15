@@ -99,6 +99,26 @@ public class SpeakerManager {
         }
     }
 
+    /**
+     * Stops playback for all speakers and releases every tracked audio line.
+     *
+     * <p>
+     * Must be called on client disconnect and world unload, because those
+     * transitions do not deliver per-speaker {@code SpeakerStop} packets.
+     * </p>
+     */
+    public void stopAll() {
+        for (SourceDataLine line : m_lines.values()) {
+            if (line != null) {
+                line.stop();
+                line.flush();
+                line.close();
+            }
+        }
+        m_lines.clear();
+        m_decoders.clear();
+    }
+
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------

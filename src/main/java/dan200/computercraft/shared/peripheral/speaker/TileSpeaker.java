@@ -118,6 +118,25 @@ public class TileSpeaker extends TileGeneric implements IPeripheralTile {
     // -------------------------------------------------------------------------
 
     @Override
+    public void destroy() {
+        if (worldObj == null || worldObj.isRemote) return;
+        // Clear all pending state so updateEntity() cannot race and send a second stop.
+        synchronized (this) {
+            m_audioState = null;
+            m_pendingSound = null;
+            m_pendingNotes.clear();
+            m_shouldStop = false;
+        }
+        // Always broadcast SpeakerStop unconditionally: the client may still be draining
+        // its SourceDataLine write buffer from a previously delivered SpeakerAudio packet
+        // even when m_audioState was already null on the server.
+        ComputerCraftPacket stopPacket = new ComputerCraftPacket();
+        stopPacket.m_packetType = ComputerCraftPacket.SpeakerStop;
+        stopPacket.m_dataInt = new int[] { xCoord, yCoord, zCoord };
+        ComputerCraft.sendToAllPlayers(stopPacket);
+    }
+
+    @Override
     public IIcon getTexture(int side) {
         return BlockSpeaker.getSpeakerIcon(side, m_direction);
     }

@@ -44,6 +44,15 @@ public class SpeakerAudioState {
     private long clientEndTime = 0L;
 
     /**
+     * Returns {@code true} if a new buffer can be accepted right now
+     * (i.e. no batch is waiting to be dispatched). Use as a cheap O(1)
+     * back-pressure probe before doing any expensive sample extraction.
+     */
+    public boolean canAcceptBuffer() {
+        return pendingAudio == null;
+    }
+
+    /**
      * Encodes {@code samples} (8-bit signed PCM, −128..127) to DFPWM and
      * stores the result as pending.
      *

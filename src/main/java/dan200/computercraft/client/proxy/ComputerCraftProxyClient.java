@@ -31,6 +31,7 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.ClientTickEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.Phase;
+import cpw.mods.fml.common.network.FMLNetworkEvent;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.client.audio.SpeakerManager;
 import dan200.computercraft.client.gui.FixedWidthFontRenderer;
@@ -405,6 +406,11 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
             if (event.phase == Phase.START) {
                 ComputerCraftProxyClient.this.m_tickCount++;
             }
+        }
+
+        @SubscribeEvent
+        public void onClientDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
+            SpeakerManager.INSTANCE.stopAll();
         }
     }
 

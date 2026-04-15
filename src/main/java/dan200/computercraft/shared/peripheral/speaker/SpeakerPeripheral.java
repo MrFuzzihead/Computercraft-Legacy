@@ -220,6 +220,16 @@ public class SpeakerPeripheral implements IPeripheral {
             throw new LuaException("Audio too large");
         }
 
+        // Fast back-pressure check — avoids O(n) sample extraction when the
+        // previous batch has not yet been dispatched. pushBuffer() re-checks
+        // under the same lock, so a TOCTOU race here only causes rare redundant
+        // work, never a correctness issue.
+        synchronized (m_tile) {
+            if (m_tile.m_audioState != null && !m_tile.m_audioState.canAcceptBuffer()) {
+                return new Object[] { false };
+            }
+        }
+
         // Extract and validate samples (1-based Lua array → 0-based Java array).
         int[] samples = new int[audioLength];
         for (int i = 0; i < audioLength; i++) {
