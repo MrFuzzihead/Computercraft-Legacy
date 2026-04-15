@@ -34,7 +34,7 @@ public class BlockRedstoneRelay extends BlockDirectional {
 
     @Override
     protected int getDefaultMetadata(int damage, int placedSide) {
-        return placedSide >= 2 ? placedSide : 2;
+        return Math.max(placedSide, 2);
     }
 
     @Override
