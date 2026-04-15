@@ -283,7 +283,50 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
+### 21. ~~`redstone_relay` peripheral~~ ✅ Done (2026-04-14)
 
+New standalone block that exposes the full redstone API surface as an `IPeripheral`, letting
+computers interact with redstone through wired or wireless modems without the computer block
+itself needing to be adjacent to the circuit.
+
+**Reference**: [tweaked.cc/peripheral/redstone_relay](https://tweaked.cc/peripheral/redstone_relay.html)
+and upstream [`RedstoneMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/core/src/main/java/dan200/computercraft/core/apis/RedstoneMethods.java).
+
+#### Peripheral methods (same surface as `redstone` / `rs` global API)
+
+| Method | Notes |
+|---|---|
+| `getSides()` | Returns a table of the six side-name strings. |
+| `setOutput(side, bool)` | Digital write: sets the specified side to signal strength 15 (true) or 0 (false). |
+| `getOutput(side)` | Returns `true` if the current output on `side` is > 0. |
+| `getInput(side)` | Returns `true` if the current redstone input on `side` is > 0. |
+| `setBundledOutput(side, number)` | Sets the 16-bit bundled-cable output mask on `side`. |
+| `getBundledOutput(side)` | Returns the current bundled output mask on `side`. |
+| `getBundledInput(side)` | Returns the current bundled input mask on `side`. |
+| `testBundledInput(side, mask)` | Returns `true` if all bits of `mask` are set in the bundled input on `side`. |
+| `setAnalogOutput(side, level)` / `setAnalogueOutput` | Sets analog output (0–15) on `side`. British alias shares the same case body. |
+| `getAnalogOutput(side)` / `getAnalogueOutput` | Returns the analog output level (0–15) on `side`. |
+| `getAnalogInput(side)` / `getAnalogueInput` | Returns the analog input level (0–15) on `side`. |
+
+Sides are in local coordinates (relative to the relay's facing direction): `"bottom"`, `"top"`,
+`"back"`, `"front"`, `"right"`, `"left"`. This mirrors the computer-block `redstone` API exactly.
+
+Input changes (detected on neighbor-change and processed on the next server tick) fire a
+`"redstone"` event on all computers attached to the relay via modem.
+
+Output state is persisted in NBT (`"output"` and `"bundledOutput"` int arrays). Direction is
+stored in block metadata (2–5) and propagated to the client via `writeDescription`.
+
+Recipe: 4 × stone (corners) + 4 × redstone dust (cardinal sides) + 1 × wired modem (centre),
+shaped 3×3 (`S R S / R W R / S R S` where S=stone, R=redstone, W=wired modem).
+
+**Textures**: four PNGs already present under `assets/computercraft/textures/blocks/`:
+`redstoneRelayTop.png`, `redstoneRelayBottom.png`, `redstoneRelayFront.png`,
+`redstoneRelaySide.png`.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/redstone/RedstoneRelayPeripheralTest.java` — 21 cases, all green.
+
+---
 
 CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 - `speaker.playNote(instrument, volume, pitch)`
@@ -451,6 +494,7 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
+| ✅ Done | `redstone_relay` peripheral                                     | Medium | Java |
 | Deferred | Speaker peripheral                                              | Large | Java + Client |
 
 ---

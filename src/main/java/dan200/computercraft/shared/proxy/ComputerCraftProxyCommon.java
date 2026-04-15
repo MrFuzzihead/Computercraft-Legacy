@@ -71,6 +71,8 @@ import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.peripheral.printer.ContainerPrinter;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
+import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
+import dan200.computercraft.shared.peripheral.redstone.TileRedstoneRelay;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
@@ -191,6 +193,8 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerBlock(ComputerCraft.Blocks.cable, ItemCable.class, "CC-Cable");
         ComputerCraft.Blocks.commandComputer = BlockCommandComputer.createComputerBlock();
         GameRegistry.registerBlock(ComputerCraft.Blocks.commandComputer, ItemCommandComputer.class, "command_computer");
+        ComputerCraft.Blocks.redstoneRelay = new BlockRedstoneRelay();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.redstoneRelay, "CC-RedstoneRelay");
         ComputerCraft.Items.disk = new ItemDiskLegacy();
         GameRegistry.registerItem(ComputerCraft.Items.disk, "disk");
         ComputerCraft.Items.diskExpanded = new ItemDiskExpanded();
@@ -344,6 +348,19 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         ItemStack cloudyHead = new ItemStack(Items.skull, 1, 3);
         cloudyHead.setTagCompound(tag);
         GameRegistry.addShapelessRecipe(cloudyHead, monitor, new ItemStack(Items.skull, 1, 1));
+        ItemStack redstoneRelayItem = new ItemStack(ComputerCraft.Blocks.redstoneRelay, 1);
+        ItemStack wiredModemForRelay = PeripheralItemFactory.create(PeripheralType.WiredModem, null, 1);
+        GameRegistry.addRecipe(
+            redstoneRelayItem,
+            "XRX",
+            "RWR",
+            "XRX",
+            'X',
+            Blocks.stone,
+            'R',
+            Items.redstone,
+            'W',
+            wiredModemForRelay);
     }
 
     private void registerTileEntities() {
@@ -354,6 +371,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TilePrinter.class, "ccprinter");
         GameRegistry.registerTileEntity(TileCable.class, "wiredmodem");
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
+        GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         ComputerCraftAPI.registerPeripheralProvider(new DefaultPeripheralProvider());
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
