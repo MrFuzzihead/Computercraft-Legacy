@@ -473,6 +473,39 @@ consistently accept both string sides and wrapped tables.
 
 ---
 
+### 21. ~~Speaker peripheral~~ ✅ Done
+
+Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`.  Full design rationale in
+[SPEAKER_PLAN.md](SPEAKER_PLAN.md).
+
+| Method | Implementation | Notes |
+|---|---|---|
+| `playNote(instrument[, volume[, pitch]])` | Non-blocking; queues a `PendingNote` in `TileSpeaker.m_pendingNotes`; flushed to `world.playSoundEffect` in `updateEntity()`. Rate-limited to `speaker_max_notes_per_tick` (default 8) per tick. | All 16 CC:Tweaked instrument names accepted; 11 post-1.7.10 ones are silent in vanilla 1.7.10 but activate with a resource pack. |
+| `playSound(name[, volume[, pitch]])` | Non-blocking; queues a `PendingSound`; `world.playSoundEffect` called in `updateEntity()`. | Rejected while audio stream is active. |
+| `playAudio(audio[, volume])` | Non-blocking; validates and DFPWM-encodes the PCM table; sends a `SpeakerAudio` packet from `updateEntity()`. Back-pressure via nanosecond timer (500 ms `CLIENT_BUFFER`). | `speaker_audio_empty` is queued on attached computers after each batch dispatch. |
+| `stop()` | Sets `m_shouldStop` flag; `updateEntity()` clears state and sends `SpeakerStop` to all players. | Does not queue `speaker_audio_empty`. |
+
+**Network packets**: `SpeakerAudio = 10` (DFPWM bytes + volume×1000 as int), `SpeakerStop = 11`
+(coordinates only) — both added to `ComputerCraftPacket`.
+
+**Client audio**: `SpeakerManager` (`@SideOnly(CLIENT)`) decodes DFPWM → PCM via `DfpwmDecoder`
+(same PREC_SHIFT/PREC_CEIL/LPF_STRENGTH constants as the server encoder) and plays via
+`javax.sound.sampled.SourceDataLine` at 48 kHz / 8-bit signed mono.  Volume is applied by
+linearly scaling PCM sample values.
+
+**Config keys**: `speaker_max_notes_per_tick` (default 8) and `speaker_audio_range` (default
+256 blocks ≈ 16-chunk view distance, approximating upstream's `sendToAllTracking`).
+
+**Bug fixed**: `ComputerCraftPacket.fromBytes` previously used `getBytes` (non-advancing) to
+read `m_dataByte` entries; replaced with `readBytes` so the reader index advances correctly.
+This was required for the new `SpeakerAudio` packet to deserialize its payload.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/speaker/SpeakerPeripheralTest.java`
+— 26 cases, all green (covers all argument-validation paths, rate-limit / buffer-full false
+returns, and the `shouldStop` flag).
+
+---
+
 ## Prioritized Implementation Roadmap
 
 | Priority | Item                                                            | Effort | Type |
