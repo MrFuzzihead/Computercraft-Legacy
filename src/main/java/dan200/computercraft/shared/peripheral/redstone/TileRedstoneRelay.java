@@ -112,9 +112,6 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
             dir = 2;
         }
         m_dir = dir;
-        if (worldObj != null) {
-            setMetadata(dir);
-        }
     }
 
     // =========================================================================
@@ -172,7 +169,6 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
             m_output[localSide] = level;
             if (worldObj != null && !worldObj.isRemote) {
                 RedstoneUtil.propogateRedstoneOutput(worldObj, xCoord, yCoord, zCoord, localToWorldSide(localSide));
-                updateBlock();
             }
             markDirty();
         }
@@ -183,7 +179,6 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
             m_bundledOutput[localSide] = mask;
             if (worldObj != null && !worldObj.isRemote) {
                 RedstoneUtil.propogateRedstoneOutput(worldObj, xCoord, yCoord, zCoord, localToWorldSide(localSide));
-                updateBlock();
             }
             markDirty();
         }
@@ -335,10 +330,12 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
         }
 
         if (changed) {
+            Set<IComputerAccess> computers;
             synchronized (this) {
-                for (IComputerAccess computer : m_computers) {
-                    computer.queueEvent("redstone", new Object[0]);
-                }
+                computers = new HashSet<>(m_computers);
+            }
+            for (IComputerAccess computer : computers) {
+                computer.queueEvent("redstone", new Object[0]);
             }
         }
     }

@@ -40,7 +40,7 @@ public class RedstoneRelayPeripheral implements IPeripheralTargeted {
 
     @Override
     public String[] getMethodNames() {
-        return METHOD_NAMES;
+        return METHOD_NAMES.clone();
     }
 
     @Override
