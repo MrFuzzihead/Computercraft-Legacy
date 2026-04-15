@@ -279,6 +279,41 @@ class InventoryPeripheralTest {
     }
 
     @Test
+    void pushItemsCanResolveTargetBySideName() throws Exception {
+        // Regression: PeripheralWrapper.getAvailablePeripherals() previously returned an empty
+        // map, causing "Target 'top' does not exist" when the target was a directly-attached
+        // side peripheral rather than a wired-modem peripheral.
+        StubInventoryTile fromTile = new StubInventoryTile(9); // slot 1 is empty
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithSideTarget = makeComputerWithPeripheral("top", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        Object[] result = p
+            .callMethod(computerWithSideTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "top", 1 });
+
+        assertNotNull(result);
+        assertEquals(0, ((Number) result[0]).intValue(), "Moving from an empty slot to a side peripheral should return 0, not throw");
+    }
+
+    @Test
+    void pullItemsCanResolveSourceBySideName() throws Exception {
+        // Regression: same root cause as pushItemsCanResolveTargetBySideName.
+        StubInventoryTile fromTile = new StubInventoryTile(9); // slot 1 is empty
+        InventoryPeripheral fromPeripheral = new InventoryPeripheral(fromTile);
+        IComputerAccess computerWithSideSource = makeComputerWithPeripheral("top", fromPeripheral);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral p = new InventoryPeripheral(toTile);
+
+        Object[] result = p
+            .callMethod(computerWithSideSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "top", 1 });
+
+        assertNotNull(result);
+        assertEquals(0, ((Number) result[0]).intValue(), "Pulling from an empty side peripheral slot should return 0, not throw");
+    }
+
+    @Test
     void pullItemsReturnsZeroForEmptySourceSlot() throws Exception {
         StubInventoryTile fromTile = new StubInventoryTile(9); // slot 1 is empty
         InventoryPeripheral fromPeripheral = new InventoryPeripheral(fromTile);
