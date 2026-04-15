@@ -530,7 +530,7 @@ returns, and the `shouldStop` flag).
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
-| ✅ Done | `redstone_relay` peripheral                                     | Medium | Java | | Large | Java + Client |
+| ✅ Done | `redstone_relay` peripheral                                     | Medium | Java |
 | ✅ Done  | Speaker peripheral — see [SPEAKER_PLAN.md](SPEAKER_PLAN.md)    | Large | Java + Client |
 
 ---
