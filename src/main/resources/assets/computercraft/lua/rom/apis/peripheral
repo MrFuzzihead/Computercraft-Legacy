@@ -39,7 +39,13 @@ function hasType(periph, peripheral_type)
             error("value is not a peripheral", 2)
         end
     end
-    return getType(name) == peripheral_type
+    local types = table.pack(getType(name))
+    for i = 1, types.n do
+        if types[i] == peripheral_type then
+            return true
+        end
+    end
+    return false
 end
 
 function getNames()
@@ -156,7 +162,7 @@ function find( sType, fnFilter )
     end
 	local tResults = {}
 	for n,sName in ipairs( peripheral.getNames() ) do
-		if peripheral.getType( sName ) == sType then
+		if peripheral.hasType( sName, sType ) then
 			local wrapped = peripheral.wrap( sName )
 			if fnFilter == nil or fnFilter( sName, wrapped ) then
 				table.insert( tResults, wrapped )

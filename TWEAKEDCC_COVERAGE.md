@@ -218,7 +218,7 @@ this environment.
 
 ---
 
-### 8b. `cc.audio.dfpwm` — ✅ Done
+### 9. `cc.audio.dfpwm` — ✅ Done
 
 Pure-Lua port of CC:Tweaked's DFPWM audio codec module.
 
@@ -237,7 +237,7 @@ Algorithm constants match upstream exactly: `PREC_SHIFT = 10`, `PREC_CEIL = 1024
 
 ---
 
-### 8c. `cc.shell.completion` — ✅ Done
+### 10. `cc.shell.completion` — ✅ Done
 
 Pure-Lua module at `rom/modules/main/cc/shell/completion.lua`.  Provides
 completion functions whose signature (`shell, index, text, previous`) matches
@@ -269,7 +269,7 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
-### 20. ~~`commands` — Method parity gaps~~ ✅ Done (2026-04-14)
+### 11. ~~`commands` — Method parity gaps~~ ✅ Done (2026-04-14)
 
 | Method / Feature | Notes |
 |---|---|
@@ -285,7 +285,7 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
-### 21. ~~`redstone_relay` peripheral~~ ✅ Done (2026-04-14)
+### 12. ~~`redstone_relay` peripheral~~ ✅ Done (2026-04-14)
 
 New standalone block that exposes the full redstone API surface as an `IPeripheral`, letting
 computers interact with redstone through wired or wireless modems without the computer block
@@ -330,177 +330,7 @@ shaped 3×3 (`S R S / R W R / S R S` where S=stone, R=redstone, W=wired modem).
 
 ---
 
-CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
-- `speaker.playNote(instrument, volume, pitch)`
-- `speaker.playSound(id, volume, pitch)`
-- `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
-- `speaker.stop()`
-
-**Implementation plan**: See **[SPEAKER_PLAN.md](SPEAKER_PLAN.md)** for the full implementation
-plan. Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`; `playNote`/`playSound`
-via `world.playSoundEffect`; `playAudio` via a new `SpeakerAudio` CC network packet decoded
-client-side with `javax.sound.sampled.SourceDataLine`.
-
----
-
-### 10. ~~`shell` — Missing CC:Tweaked additions~~ ✅ Done
-
-| Feature | Notes |
-|---|---|
-| `shell.execute(_sCommand, ...)` | ✅ New CC:Tweaked 1.87.0 method. Resolves the program path, runs it, and returns `true` on success or `false, "No such program"` on failure. Does **not** call `printError` — the caller is responsible for error display. |
-| `shell.run(...)` | ✅ Now delegates to `execute`; tokenises its arguments, calls `execute`, and forwards any error string to `printError`. Returns `false` for empty input. |
-| Per-program environment isolation | ✅ Each `execute` call creates a fresh `tRunEnv = setmetatable({}, {__index = tEnv})` table. Globals written in one run do not bleed into the next. The base `tEnv` (containing `shell`, `multishell`) is still reachable via `__index`. |
-| `arg` table injection | ✅ CC:Tweaked 1.83.0. `env.arg` is set to `{[0] = resolvedPath, ...args}` before each `os.run` call so programs can inspect their own path and arguments. |
-| `shell.resolveProgram` `.lua` fallback | ✅ When a bare program name is not found on the path, `resolveProgram` also tries the name with a `.lua` suffix appended. The bare name is preferred when both exist. |
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/ShellAPITest.java` — 37 cases, all green.
-
----
-
-### 11. ~~`window` — Missing 3 methods~~ ✅ Done
-
-| Method | Notes |
-|---|---|
-| `window.getLine(y)` | ✅ Returns `text, textColor, backgroundColor` strings for line `y` (1-indexed). Throws if `y` is not a number or is out of the window's height range. |
-| `window.isVisible()` | ✅ Returns the current boolean visibility state. Counterpart to the existing `setVisible`. |
-| `window.reposition(nX, nY [, nW, nH [, newParent]])` | ✅ Optional 5th argument `newParent` swaps the window's underlying parent terminal surface. Throws if `newParent` is non-nil and non-table. Passing `nil` explicitly is a no-op for the parent. |
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/WindowAPITest.java` — 15 cases, all green.
-
----
-
-### 12. ~~`help` — Extension-aware lookup~~ ✅ Done
-
-| Change | Notes |
-|---|---|
-| `lookup` extension search | ✅ Now checks `<topic>` (exact), then `<topic>.md`, then `<topic>.txt`, returning the first match. Priority is exact > `.md` > `.txt`. |
-| `topics` extension stripping | ✅ Strips `.md` and `.txt` suffixes before inserting into the result set. Duplicate topic names (e.g. both `intro.md` and `intro.txt` on disk) appear only once. Extension-less files are still included unchanged. |
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/HelpAPITest.java` — 16 cases, all green.
-
----
-
-### 13. ~~`paintutils` — Missing `parseImage`~~ ✅ Done
-
-| Method | Notes |
-|---|---|
-| `paintutils.parseImage(s)` | ✅ New CC:Tweaked function. Parses an NFP-formatted string into a `{{color, ...}, ...}` pixel table. Each hex character maps to the corresponding `2^n` color value; spaces map to `0` (transparent). `loadImage` now delegates to `parseImage` internally. Throws if the argument is not a string. |
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/PaintutilsAPITest.java` — 29 cases, all green.
-
----
-
-### 14. ~~`bios.lua` `require` sentinel bug~~ ✅ Fixed
-
-**Problem**: When `package.loaded[name]` was set during module loading, the sentinel value was
-`true`. Any module that returned `nil` would cause the slot to be overwritten with `true`, and
-any circular `require` would hand the caller a boolean instead of a usable value.
-
-**Fix**: The sentinel is now an empty table `{}` assigned before the module body runs. If the
-module returns `nil`, the sentinel table is kept. Circular requires receive the (empty) sentinel
-table rather than `true`.
-
-```lua
-local loading = {}
-package.loaded[_name] = loading
--- ...
-package.loaded[_name] = (result ~= nil) and result or loading
-```
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/BiosRequireTest.java` — 4 cases, all green.
-
----
-
-### 15. ~~`cc.expect` `table.pack.n` compatibility bug~~ ✅ Fixed
-
-**Problem**: `get_type_names` in `cc/expect.lua` iterated over its type-list argument using
-`table.pack` and then indexed `.n` to get the count. The `table.pack` polyfill installed by
-`bios.lua` does not include the `n` field (Lua 5.1 limitation), so `types.n` was `nil` and
-iteration over multiple allowed types would silently truncate or error.
-
-**Fix**: `get_type_names` now uses `select("#", ...)` to count varargs and `select(i, ...)` to
-retrieve each one, with no dependency on `table.pack.n`.
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/CcExpectTest.java` — 6 cases, all green.
-
----
-
-### 16. ~~`rednet` — Test coverage~~ ✅ Done
-
-No functional changes to the `rednet` Lua API. A full unit-test suite has been added covering:
-`open`/`close`/`isOpen` (with and without modems), `send` (loopback, open modem, no modem),
-`broadcast`, `host`/`unhost`/`lookup` (including reserved-hostname and wrong-type errors).
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/RednetAPITest.java` — 26 cases, all green.
-
----
-
-### 17. ~~`peripheral` — `getType` wrapped-table support + test coverage~~ ✅ Done
-
-**Change**: `peripheral.getType` now accepts either a string side name or a wrapped peripheral
-table (looked up via the weak-keyed `wrapNames` registry, the same mechanism used by `getName`
-and `hasType`). Passing a plain table that was not created by `wrap` throws
-`"value is not a peripheral"`. Passing a non-string/non-table throws `"Expected string or table"`.
-
-This completes the CC:Tweaked contract for `getType`, `getName`, and `hasType` — all three now
-consistently accept both string sides and wrapped tables.
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/PeripheralAPITest.java` — 18 cases, all green.
-
----
-
-### 18. ~~`_G` — `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param~~ ✅ Done
-
-| Feature | Notes |
-|---|---|
-| `_HOST` | ✅ Set by `CobaltMachine` via the existing `getHostString()` reflection hook on `IComputerEnvironment`. `IComputerEnvironment` now declares `default String getHostString()` (returns `""` so anonymous test stubs compile unchanged). `ServerComputer` overrides it to return `"ComputerCraft <version> (Minecraft 1.7.10)"`. |
-| `_CC_DEFAULT_SETTINGS` | ✅ A new `public static String cc_default_settings = ""` field in `ComputerCraft.java`, loaded from the `"cc_default_settings"` config key. `CobaltMachine` sets `_CC_DEFAULT_SETTINGS` as a Lua global when the field is non-empty. `bios.lua` processes the global at boot (before `settings.load(".settings")`) by iterating comma-separated `key=value` pairs and calling `settings.set`. `textutils.unserialise` is used to deserialise each value; falls back to the raw string on failure. |
-| `read(replaceChar?, history?, completeFn?, default?)` | ✅ Added optional 4th argument `_sDefault`. When non-nil, `sLine` is pre-populated with `tostring(_sDefault)` and `nPos` is set to `string.len(sLine)` before the input loop begins. The cursor is therefore placed at the end of the default text, and the user can edit or accept it immediately. |
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/GlobalsTest.java` — 7 cases, all green.
-
----
-
-### 19. ~~`textutils` — `serialize` opts + `serializeJSON` opts + `unserializeJSON` opts~~ ✅ Done
-
-| Feature | Notes |
-|---|---|
-| `textutils.serialize(t, opts?)` | ✅ `opts.compact` (boolean) — when `true`, emits no indentation, newlines, or spaces around `=`/`,`. Array output: `{1,2,3,}`. Key-value output: `{key=value,}`. Nested tables collapse to a single line. `opts.allow_repetitions` (boolean) — when `true`, the duplicate-table guard is relaxed: after a table is fully serialised its tracking entry is cleared (`tTracking[t] = nil`), so the same table may appear in multiple sibling positions. True cycles (a table that contains itself at any depth) still always error. |
-| `textutils.serializeJSON(t, opts?)` | ✅ `opts.unicode_strings` (boolean, default `false`) — when `true`, all bytes ≥ 0x80 in string values are escaped as `\uXXXX`, producing pure-ASCII JSON output. ASCII control characters (`\b`, `\f`, `\n`, `\r`, `\t`, and `\0`–`\31`) are always escaped regardless of this flag. `opts.allow_repetitions` (boolean, default `false`) — when `true`, the same table reference may appear in multiple sibling positions without error; true self-referential cycles still always error. British alias `serialiseJSON` is provided. |
-| `textutils.unserializeJSON(s, opts?)` | ✅ `opts.parse_empty_array` (boolean, default `true`) — when `true` (or omitted), an empty JSON array `[]` returns the `empty_json_array` sentinel, matching the CC:Tweaked round-trip contract. When `false`, `[]` returns a fresh empty table `{}`. Non-empty arrays are unaffected. Existing `opts.null` handling is unchanged. British alias `unserialiseJSON` is provided. |
-
-**Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsSerializeTest.java` — 14 cases, all green.
-**Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsJsonTest.java` — 42 cases, all green.
-
----
-
-### 20. ~~`inventory` generic peripheral~~ ✅ Done
-
-Wraps any `IInventory` tile entity as an `"inventory"` peripheral exposing the six CC:Tweaked methods.
-Auto-registered by `DefaultPeripheralProvider` for any tile entity that implements `IInventory` and
-does not already have a more specific peripheral (printers, computers, turtles take priority).
-
-| Method | Notes |
-|---|---|
-| `size()` | Returns `getSizeInventory()`. Dispatches to main thread. |
-| `list()` | Returns a 1-indexed table of `{name, count, damage}` maps, skipping empty slots. Dispatches to main thread. |
-| `getItemDetail(slot)` | Returns `null` for an empty slot; otherwise `{name, count, damage, maxCount, displayName}`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
-| `getItemLimit(slot)` | Returns `getInventoryStackLimit()`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
-| `pushItems(toName, fromSlot [, limit [, toSlot]])` | Moves items from this inventory to a named modem-network inventory. Throws if the target does not exist or is not an inventory. Dispatches to main thread. |
-| `pullItems(fromName, fromSlot [, limit [, toSlot]])` | Moves items from a named modem-network inventory to this one. Throws if the source does not exist or is not an inventory. Dispatches to main thread. |
-
-`IComputerAccess.getAvailablePeripherals()` was added as a `default` method returning
-`Collections.emptyMap()` (backward-compatible). `TileCable.RemotePeripheralWrapper` overrides it
-to return a snapshot of the cable network's peripheral name map.
-
-**Double-chest support**: `InventoryUtil.getInventory` is called on every main-thread task so
-adjacent double-chest halves automatically merge to a 54-slot view.
-
-**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/inventory/InventoryPeripheralTest.java` — 20 cases, all green.
-
----
-
-### 21. ~~Speaker peripheral~~ ✅ Done
+### 13. Speaker peripheral — ✅ Done
 
 Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`.  Full design rationale in
 [SPEAKER_PLAN.md](SPEAKER_PLAN.md).
@@ -533,6 +363,211 @@ returns, and the `shouldStop` flag).
 
 ---
 
+### 14. ~~`shell` — Missing CC:Tweaked additions~~ ✅ Done
+
+| Feature | Notes |
+|---|---|
+| `shell.execute(_sCommand, ...)` | ✅ New CC:Tweaked 1.87.0 method. Resolves the program path, runs it, and returns `true` on success or `false, "No such program"` on failure. Does **not** call `printError` — the caller is responsible for error display. |
+| `shell.run(...)` | ✅ Now delegates to `execute`; tokenises its arguments, calls `execute`, and forwards any error string to `printError`. Returns `false` for empty input. |
+| Per-program environment isolation | ✅ Each `execute` call creates a fresh `tRunEnv = setmetatable({}, {__index = tEnv})` table. Globals written in one run do not bleed into the next. The base `tEnv` (containing `shell`, `multishell`) is still reachable via `__index`. |
+| `arg` table injection | ✅ CC:Tweaked 1.83.0. `env.arg` is set to `{[0] = resolvedPath, ...args}` before each `os.run` call so programs can inspect their own path and arguments. |
+| `shell.resolveProgram` `.lua` fallback | ✅ When a bare program name is not found on the path, `resolveProgram` also tries the name with a `.lua` suffix appended. The bare name is preferred when both exist. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/ShellAPITest.java` — 37 cases, all green.
+
+---
+
+### 15. ~~`window` — Missing 3 methods~~ ✅ Done
+
+| Method | Notes |
+|---|---|
+| `window.getLine(y)` | ✅ Returns `text, textColor, backgroundColor` strings for line `y` (1-indexed). Throws if `y` is not a number or is out of the window's height range. |
+| `window.isVisible()` | ✅ Returns the current boolean visibility state. Counterpart to the existing `setVisible`. |
+| `window.reposition(nX, nY [, nW, nH [, newParent]])` | ✅ Optional 5th argument `newParent` swaps the window's underlying parent terminal surface. Throws if `newParent` is non-nil and non-table. Passing `nil` explicitly is a no-op for the parent. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/WindowAPITest.java` — 15 cases, all green.
+
+---
+
+### 16. ~~`help` — Extension-aware lookup~~ ✅ Done
+
+| Change | Notes |
+|---|---|
+| `lookup` extension search | ✅ Now checks `<topic>` (exact), then `<topic>.md`, then `<topic>.txt`, returning the first match. Priority is exact > `.md` > `.txt`. |
+| `topics` extension stripping | ✅ Strips `.md` and `.txt` suffixes before inserting into the result set. Duplicate topic names (e.g. both `intro.md` and `intro.txt` on disk) appear only once. Extension-less files are still included unchanged. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/HelpAPITest.java` — 16 cases, all green.
+
+---
+
+### 17. ~~`paintutils` — Missing `parseImage`~~ ✅ Done
+
+| Method | Notes |
+|---|---|
+| `paintutils.parseImage(s)` | ✅ New CC:Tweaked function. Parses an NFP-formatted string into a `{{color, ...}, ...}` pixel table. Each hex character maps to the corresponding `2^n` color value; spaces map to `0` (transparent). `loadImage` now delegates to `parseImage` internally. Throws if the argument is not a string. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/PaintutilsAPITest.java` — 29 cases, all green.
+
+---
+
+### 18. ~~`bios.lua` `require` sentinel bug~~ ✅ Fixed
+
+**Problem**: When `package.loaded[name]` was set during module loading, the sentinel value was
+`true`. Any module that returned `nil` would cause the slot to be overwritten with `true`, and
+any circular `require` would hand the caller a boolean instead of a usable value.
+
+**Fix**: The sentinel is now an empty table `{}` assigned before the module body runs. If the
+module returns `nil`, the sentinel table is kept. Circular requires receive the (empty) sentinel
+table rather than `true`.
+
+```lua
+local loading = {}
+package.loaded[_name] = loading
+-- ...
+package.loaded[_name] = (result ~= nil) and result or loading
+```
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/BiosRequireTest.java` — 4 cases, all green.
+
+---
+
+### 19. ~~`cc.expect` `table.pack.n` compatibility bug~~ ✅ Fixed
+
+**Problem**: `get_type_names` in `cc/expect.lua` iterated over its type-list argument using
+`table.pack` and then indexed `.n` to get the count. The `table.pack` polyfill installed by
+`bios.lua` does not include the `n` field (Lua 5.1 limitation), so `types.n` was `nil` and
+iteration over multiple allowed types would silently truncate or error.
+
+**Fix**: `get_type_names` now uses `select("#", ...)` to count varargs and `select(i, ...)` to
+retrieve each one, with no dependency on `table.pack.n`.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/CcExpectTest.java` — 6 cases, all green.
+
+---
+
+### 20. ~~`rednet` — Test coverage~~ ✅ Done
+
+No functional changes to the `rednet` Lua API. A full unit-test suite has been added covering:
+`open`/`close`/`isOpen` (with and without modems), `send` (loopback, open modem, no modem),
+`broadcast`, `host`/`unhost`/`lookup` (including reserved-hostname and wrong-type errors).
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/RednetAPITest.java` — 26 cases, all green.
+
+---
+
+### 21. ~~`peripheral` — `getType` wrapped-table support + test coverage~~ ✅ Done
+
+**Change**: `peripheral.getType` now accepts either a string side name or a wrapped peripheral
+table (looked up via the weak-keyed `wrapNames` registry, the same mechanism used by `getName`
+and `hasType`). Passing a plain table that was not created by `wrap` throws
+`"value is not a peripheral"`. Passing a non-string/non-table throws `"Expected string or table"`.
+
+This completes the CC:Tweaked contract for `getType`, `getName`, and `hasType` — all three now
+consistently accept both string sides and wrapped tables.
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/PeripheralAPITest.java` — 18 cases, all green.
+
+---
+
+### 22. ~~`_G` — `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param~~ ✅ Done
+
+| Feature | Notes |
+|---|---|
+| `_HOST` | ✅ Set by `CobaltMachine` via the existing `getHostString()` reflection hook on `IComputerEnvironment`. `IComputerEnvironment` now declares `default String getHostString()` (returns `""` so anonymous test stubs compile unchanged). `ServerComputer` overrides it to return `"ComputerCraft <version> (Minecraft 1.7.10)"`. |
+| `_CC_DEFAULT_SETTINGS` | ✅ A new `public static String cc_default_settings = ""` field in `ComputerCraft.java`, loaded from the `"cc_default_settings"` config key. `CobaltMachine` sets `_CC_DEFAULT_SETTINGS` as a Lua global when the field is non-empty. `bios.lua` processes the global at boot (before `settings.load(".settings")`) by iterating comma-separated `key=value` pairs and calling `settings.set`. `textutils.unserialise` is used to deserialise each value; falls back to the raw string on failure. |
+| `read(replaceChar?, history?, completeFn?, default?)` | ✅ Added optional 4th argument `_sDefault`. When non-nil, `sLine` is pre-populated with `tostring(_sDefault)` and `nPos` is set to `string.len(sLine)` before the input loop begins. The cursor is therefore placed at the end of the default text, and the user can edit or accept it immediately. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/GlobalsTest.java` — 7 cases, all green.
+
+---
+
+### 23. ~~`textutils` — `serialize` opts + `serializeJSON` opts + `unserializeJSON` opts~~ ✅ Done
+
+| Feature | Notes |
+|---|---|
+| `textutils.serialize(t, opts?)` | ✅ `opts.compact` (boolean) — when `true`, emits no indentation, newlines, or spaces around `=`/`,`. Array output: `{1,2,3,}`. Key-value output: `{key=value,}`. Nested tables collapse to a single line. `opts.allow_repetitions` (boolean) — when `true`, the duplicate-table guard is relaxed: after a table is fully serialised its tracking entry is cleared (`tTracking[t] = nil`), so the same table may appear in multiple sibling positions. True cycles (a table that contains itself at any depth) still always error. |
+| `textutils.serializeJSON(t, opts?)` | ✅ `opts.unicode_strings` (boolean, default `false`) — when `true`, all bytes ≥ 0x80 in string values are escaped as `\uXXXX`, producing pure-ASCII JSON output. ASCII control characters (`\b`, `\f`, `\n`, `\r`, `\t`, and `\0`–`\31`) are always escaped regardless of this flag. `opts.allow_repetitions` (boolean, default `false`) — when `true`, the same table reference may appear in multiple sibling positions without error; true self-referential cycles still always error. British alias `serialiseJSON` is provided. |
+| `textutils.unserializeJSON(s, opts?)` | ✅ `opts.parse_empty_array` (boolean, default `true`) — when `true` (or omitted), an empty JSON array `[]` returns the `empty_json_array` sentinel, matching the CC:Tweaked round-trip contract. When `false`, `[]` returns a fresh empty table `{}`. Non-empty arrays are unaffected. Existing `opts.null` handling is unchanged. British alias `unserialiseJSON` is provided. |
+
+**Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsSerializeTest.java` — 14 cases, all green.
+**Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsJsonTest.java` — 42 cases, all green.
+
+---
+
+### 24. ~~`inventory` generic peripheral~~ ✅ Done
+
+Wraps any `IInventory` tile entity as an `"inventory"` peripheral exposing the six CC:Tweaked methods.
+Auto-registered by `DefaultPeripheralProvider` for any tile entity that implements `IInventory` and
+does not already have a more specific peripheral (printers, computers, turtles take priority).
+
+| Method | Notes |
+|---|---|
+| `size()` | Returns `getSizeInventory()`. Dispatches to main thread. |
+| `list()` | Returns a 1-indexed table of `{name, count, damage}` maps, skipping empty slots. Dispatches to main thread. |
+| `getItemDetail(slot)` | Returns `null` for an empty slot; otherwise `{name, count, damage, maxCount, displayName}`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `getItemLimit(slot)` | Returns `getInventoryStackLimit()`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `pushItems(toName, fromSlot [, limit [, toSlot]])` | Moves items from this inventory to a named modem-network inventory. Throws if the target does not exist or is not an inventory. Dispatches to main thread. |
+| `pullItems(fromName, fromSlot [, limit [, toSlot]])` | Moves items from a named modem-network inventory to this one. Throws if the source does not exist or is not an inventory. Dispatches to main thread. |
+
+`IComputerAccess.getAvailablePeripherals()` was added as a `default` method returning
+`Collections.emptyMap()` (backward-compatible). `TileCable.RemotePeripheralWrapper` overrides it
+to return a snapshot of the cable network's peripheral name map.
+
+**Double-chest support**: `InventoryUtil.getInventory` is called on every main-thread task so
+adjacent double-chest halves automatically merge to a 54-slot view.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/inventory/InventoryPeripheralTest.java` — 20 cases, all green.
+
+---
+
+### 25. `fluid_storage` generic peripheral — ✅ Done (2026-04-14)
+
+Upstream reference: [tweaked.cc/generic_peripheral/fluid_storage](https://tweaked.cc/generic_peripheral/fluid_storage.html),
+[`AbstractFluidMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/common/src/main/java/dan200/computercraft/shared/peripheral/generic/methods/AbstractFluidMethods.java)
+
+Wraps any tile entity that implements Forge 1.7.10's `net.minecraftforge.fluids.IFluidHandler`
+(the 1.7.10 equivalent of the 1.12+ capability system) and exposes it as a peripheral of type
+`"fluid_storage"` with three methods.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `tanks()` | `tanks()` → `{ { name, amount, capacity }, … }` | Calls `getTankInfo(ForgeDirection.UNKNOWN)`. Each `FluidTankInfo` becomes a table with `capacity` (int→double). If the tank is non-empty, `name` (`Fluid.getName()`) and `amount` are also included. Empty-tank entries have only `capacity`. |
+| `pushFluid()` | `pushFluid(toName [, limit [, fluidName]])` → `number` | Resolves `toName` to an `IFluidHandler` via `computer.getAvailablePeripheral(toName)`. Transfers up to `limit` mB of `fluidName` (or any fluid if omitted). Returns the number of mB actually moved. Runs on the main thread. |
+| `pullFluid()` | `pullFluid(fromName [, limit [, fluidName]])` → `number` | Mirror of `pushFluid` with source and destination swapped. |
+
+#### Design decisions
+
+| # | Decision |
+|---|---|
+| 1 | **Fluid name format**: `Fluid.getName()` as-is (raw Forge fluid name, e.g. `"water"`). |
+| 2 | **Mixed `IPeripheralTile` + `IFluidHandler`**: `IPeripheralTile` check takes priority in `DefaultPeripheralProvider`; those tiles keep their own peripheral. Only "plain" `IFluidHandler` tiles without a custom peripheral are wrapped. |
+| 3 | **`ForgeDirection` for transfer**: `ForgeDirection.UNKNOWN` for both source and target (omnidirectional). Consistent with CC:Tweaked. |
+
+#### Files added / modified
+
+| File | Change |
+|---|---|
+| `api/peripheral/IComputerAccess.java` | Added `default IPeripheral getAvailablePeripheral(String name)` (returns `null`). |
+| `core/apis/PeripheralAPI.java` | `PeripheralWrapper` overrides `getAvailablePeripheral` — scans 6-side array by `m_side`. |
+| `shared/peripheral/modem/TileCable.java` | `RemotePeripheralWrapper` gains a `TileCable m_entity` field; overrides `getAvailablePeripheral` via `m_peripheralsByName.get(name)`. |
+| `shared/util/FluidUtil.java` | New. Static `moveFluid` helper implementing simulate-drain → simulate-fill → execute-drain → execute-fill. |
+| `shared/peripheral/generic/GenericFluidPeripheral.java` | New. `IPeripheral` implementation wrapping `IFluidHandler`. |
+| `shared/peripheral/common/DefaultPeripheralProvider.java` | Added `IFluidHandler` fallback after `TileComputerBase` check. |
+
+#### Test note
+
+`FluidStack(Fluid, int)` calls `FluidRegistry.makeDelegate()`, which triggers
+`FluidRegistry.<clinit>` and crashes outside a running Minecraft server (requires
+`Blocks.water` to be initialized). Unit tests therefore cover method surface, empty-tank
+`tanks()`, all error paths, and end-to-end zero-transfer smoke tests (empty tank → drain
+returns `null` → `FluidUtil.moveFluid` returns 0 without constructing any `FluidStack`).
+Actual fluid transfer, fluid-name filtering, and multi-tank scenarios are verified by the
+in-game test script `run/saves/Test World/computer/37/test_fluid_storage.lua`.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/generic/GenericFluidPeripheralTest.java` — **20 cases**, all green.
+
+---
+
 ## Prioritized Implementation Roadmap
 
 | Priority | Item                                                            | Effort | Type |
@@ -557,6 +592,7 @@ returns, and the `shouldStop` flag).
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
+| ✅ Done | `fluid_storage` generic peripheral (`tanks`, `pushFluid`, `pullFluid`)          | Medium | Java |
 | ✅ Done | `inventory` generic peripheral                                  | Medium | Java |
 | ✅ Done | `redstone_relay` peripheral                                     | Medium | Java |
 | ✅ Done  | Speaker peripheral — see [SPEAKER_PLAN.md](SPEAKER_PLAN.md)    | Large | Java + Client |
@@ -569,5 +605,5 @@ returns, and the `shouldStop` flag).
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
    approach is correct — no change needed.
 
-2. **Speaker**: ✅ Implemented — see `### 21` above and [SPEAKER_PLAN.md](SPEAKER_PLAN.md) for
+2. **Speaker**: ✅ Implemented — see `### 13` above and [SPEAKER_PLAN.md](SPEAKER_PLAN.md) for
    full design rationale.  Advanced speaker (streaming synthesis) is deferred.
