@@ -19,13 +19,16 @@ package dan200.computercraft.shared.peripheral.generic;
  * <p>
  * The simplest correct implementation:
  * </p>
- * <pre>{@code
+ * 
+ * <pre>
+ * {@code
  * public boolean equals(Object o) {
  *     if (!(o instanceof MyAdapter)) return false;
  *     return ((MyAdapter) o).m_handler == this.m_handler; // reference equality
  * }
  * public int hashCode() { return System.identityHashCode(m_handler); }
- * }</pre>
+ * }
+ * </pre>
  */
 public interface IEnergyStorageAdapter {
 

@@ -15,8 +15,8 @@ import dan200.computercraft.shared.peripheral.generic.IEnergyStorageAdapter;
  * Check order (first match wins):
  * <ol>
  * <li>{@link IEnergyReceiver} — directional consumer; also catches {@link cofh.api.energy.IEnergyHandler}
- *     since it extends {@code IEnergyReceiver}. Used by processing machines such as
- *     Thermal Expansion's Redstone Furnace.</li>
+ * since it extends {@code IEnergyReceiver}. Used by processing machines such as
+ * Thermal Expansion's Redstone Furnace.</li>
  * <li>{@link IEnergyProvider} — directional generator/source-only blocks.</li>
  * <li>{@link IEnergyStorage} — non-directional storage blocks.</li>
  * </ol>

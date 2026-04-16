@@ -15,7 +15,7 @@ import dan200.computercraft.shared.peripheral.generic.IEnergyStorageAdapter;
  * </p>
  * <ol>
  * <li>{@link IEnergyReceiver} (preferred, directional) — covers {@code IEnergyHandler} too,
- *     since {@code IEnergyHandler extends IEnergyReceiver}.</li>
+ * since {@code IEnergyHandler extends IEnergyReceiver}.</li>
  * <li>{@link IEnergyProvider} (directional, generator/source-only blocks).</li>
  * <li>{@link IEnergyStorage} (non-directional fallback).</li>
  * </ol>
@@ -83,7 +83,8 @@ public class RFEnergyStorageAdapter implements IEnergyStorageAdapter {
         if (!(obj instanceof RFEnergyStorageAdapter)) return false;
         RFEnergyStorageAdapter other = (RFEnergyStorageAdapter) obj;
         Object mine = m_receiver != null ? m_receiver : m_provider != null ? m_provider : m_storage;
-        Object theirs = other.m_receiver != null ? other.m_receiver : other.m_provider != null ? other.m_provider : other.m_storage;
+        Object theirs = other.m_receiver != null ? other.m_receiver
+            : other.m_provider != null ? other.m_provider : other.m_storage;
         return mine == theirs;
     }
 

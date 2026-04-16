@@ -6,6 +6,7 @@ import java.util.List;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
+import net.minecraftforge.common.util.ForgeDirection;
 import net.minecraftforge.fluids.IFluidHandler;
 
 import dan200.computercraft.api.peripheral.IPeripheral;
@@ -55,12 +56,13 @@ public class DefaultPeripheralProvider implements IPeripheralProvider {
 
             // Build the list of applicable generic modules. Add new capability modules
             // here as additional entries.
+            ForgeDirection face = ForgeDirection.getOrientation(side);
             List<IPeripheral> modules = new ArrayList<>();
             if (tile instanceof IInventory) {
                 modules.add(new InventoryPeripheral(tile));
             }
             if (tile instanceof IFluidHandler) {
-                modules.add(new GenericFluidPeripheral((IFluidHandler) tile));
+                modules.add(new GenericFluidPeripheral((IFluidHandler) tile, face));
             }
             // Energy: try each registered factory; use the first adapter that matches.
             for (IEnergyAdapterFactory factory : m_energyFactories) {
