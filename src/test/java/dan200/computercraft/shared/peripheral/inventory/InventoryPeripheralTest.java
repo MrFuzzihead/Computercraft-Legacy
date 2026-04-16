@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.Collections;
 import java.util.Map;
 
+import net.minecraft.tileentity.TileEntity;
+
 import org.junit.jupiter.api.Test;
 
 import dan200.computercraft.api.lua.ILuaContext;
@@ -150,6 +152,28 @@ class InventoryPeripheralTest {
     // size()
     // =========================================================================
 
+    /**
+     * A {@link TileEntity} that does NOT implement {@link net.minecraft.inventory.IInventory}.
+     * Used to exercise the "inventory no longer available" error path in
+     * {@code InventoryPeripheral.getInventory()}.
+     */
+    private static class StubNonInventoryTile extends TileEntity {
+    }
+
+    @Test
+    void sizeThrowsLuaExceptionWhenTileIsNotAnInventory() {
+        // Constructing InventoryPeripheral around a non-IInventory tile (m_world == null)
+        // must throw LuaException with a clear message rather than ClassCastException/NPE.
+        InventoryPeripheral p = new InventoryPeripheral(new StubNonInventoryTile());
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_SIZE, new Object[0]));
+        assertTrue(
+            ex.getMessage()
+                .contains("no longer available"),
+            "Error should indicate the inventory is unavailable, got: " + ex.getMessage());
+    }
+
     @Test
     void sizeReturnsInventorySize() throws Exception {
         InventoryPeripheral p = makePeripheral(9);
@@ -240,6 +264,39 @@ class InventoryPeripheralTest {
     // =========================================================================
 
     @Test
+    void pushItemsThrowsForNonInventoryTarget() {
+        // Target peripheral is IPeripheralTargeted but its getTarget() is a plain
+        // TileEntity (StubNonInventoryTile) that does not implement IInventory and has
+        // no world — must throw "not an inventory", not NPE/CCE.
+        InventoryPeripheral nonInvPeripheral = new InventoryPeripheral(new StubNonInventoryTile());
+        IComputerAccess computerWithNonInv = makeComputerWithPeripheral("not_an_inv", nonInvPeripheral);
+
+        InventoryPeripheral p = makePeripheral(9);
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> p.callMethod(computerWithNonInv, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "not_an_inv", 1 }));
+        assertTrue(
+            ex.getMessage()
+                .contains("not an inventory"),
+            "Error should mention 'not an inventory', got: " + ex.getMessage());
+    }
+
+    @Test
+    void pullItemsThrowsForNonInventorySource() {
+        InventoryPeripheral nonInvPeripheral = new InventoryPeripheral(new StubNonInventoryTile());
+        IComputerAccess computerWithNonInv = makeComputerWithPeripheral("not_an_inv", nonInvPeripheral);
+
+        InventoryPeripheral p = makePeripheral(9);
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> p.callMethod(computerWithNonInv, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "not_an_inv", 1 }));
+        assertTrue(
+            ex.getMessage()
+                .contains("not an inventory"),
+            "Error should mention 'not an inventory', got: " + ex.getMessage());
+    }
+
+    @Test
     void pushItemsThrowsForMissingTarget() {
         InventoryPeripheral p = makePeripheral(9);
         LuaException ex = assertThrows(
@@ -293,7 +350,10 @@ class InventoryPeripheralTest {
             .callMethod(computerWithSideTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "top", 1 });
 
         assertNotNull(result);
-        assertEquals(0, ((Number) result[0]).intValue(), "Moving from an empty slot to a side peripheral should return 0, not throw");
+        assertEquals(
+            0,
+            ((Number) result[0]).intValue(),
+            "Moving from an empty slot to a side peripheral should return 0, not throw");
     }
 
     @Test
@@ -310,7 +370,10 @@ class InventoryPeripheralTest {
             .callMethod(computerWithSideSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "top", 1 });
 
         assertNotNull(result);
-        assertEquals(0, ((Number) result[0]).intValue(), "Pulling from an empty side peripheral slot should return 0, not throw");
+        assertEquals(
+            0,
+            ((Number) result[0]).intValue(),
+            "Pulling from an empty side peripheral slot should return 0, not throw");
     }
 
     @Test
@@ -327,6 +390,262 @@ class InventoryPeripheralTest {
 
         assertNotNull(result);
         assertEquals(0, ((Number) result[0]).intValue(), "Pulling from an empty slot should return 0");
+    }
+
+    @Test
+    void pushItemsMovesStackToTarget() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        // Create a dummy ItemStack with a null Item (allowed in headless tests)
+        net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 10, 0);
+        fromTile.setSlot(0, stack);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        Object[] result = p
+            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+
+        assertNotNull(result);
+        assertEquals(10, ((Number) result[0]).intValue(), "Should move the full stack");
+
+        // Source should be emptied
+        assertNull(fromTile.getStackInSlot(0));
+
+        // Destination should contain the moved stack in slot 0
+        net.minecraft.item.ItemStack dest = toTile.getStackInSlot(0);
+        assertNotNull(dest);
+        assertEquals(10, dest.stackSize);
+    }
+
+    @Test
+    void pullItemsMovesStackFromSourceToDestination() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 5, 0);
+        fromTile.setSlot(0, stack);
+
+        InventoryPeripheral fromPeripheral = new InventoryPeripheral(fromTile);
+        IComputerAccess computerWithSource = makeComputerWithPeripheral("source_chest", fromPeripheral);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral p = new InventoryPeripheral(toTile);
+
+        Object[] result = p
+            .callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1 });
+
+        assertNotNull(result);
+        assertEquals(5, ((Number) result[0]).intValue(), "Should move the full stack");
+
+        // Source should be emptied
+        assertNull(fromTile.getStackInSlot(0));
+
+        // Destination should contain the moved stack
+        net.minecraft.item.ItemStack dest = toTile.getStackInSlot(0);
+        assertNotNull(dest);
+        assertEquals(5, dest.stackSize);
+    }
+
+    @Test
+    void pushItemsRespectsDestinationInventoryStackLimit() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 20, 0);
+        fromTile.setSlot(0, stack);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        // Limit destination inventory to 16 per-slot
+        toTile.setStackLimit(16);
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        Object[] result = p
+            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+
+        assertNotNull(result);
+        // InventoryUtil will store across multiple slots, so the full 20 should be moved
+        assertEquals(20, ((Number) result[0]).intValue(), "Should move all items into available slots");
+
+        // Source should be emptied
+        assertNull(fromTile.getStackInSlot(0));
+
+        // Destination should have filled slot 0 up to its per-slot limit, with remainder in slot 1
+        net.minecraft.item.ItemStack dest0 = toTile.getStackInSlot(0);
+        assertNotNull(dest0);
+        assertEquals(16, dest0.stackSize);
+        net.minecraft.item.ItemStack dest1 = toTile.getStackInSlot(1);
+        assertNotNull(dest1);
+        assertEquals(4, dest1.stackSize);
+    }
+
+    @Test
+    void pushItemsMergesIntoExistingStackRespectingMaxStackSize() throws Exception {
+        // Use a real Item instance to avoid null-Item NPEs when querying max stack size
+        net.minecraft.item.Item dummyItem = new net.minecraft.item.Item();
+
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        net.minecraft.item.ItemStack srcStack = new net.minecraft.item.ItemStack(dummyItem, 10, 0);
+        fromTile.setSlot(0, srcStack);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        // Destination already has a stack of the same item
+        net.minecraft.item.ItemStack existing = new net.minecraft.item.ItemStack(dummyItem, 60, 0);
+        toTile.setSlot(0, existing);
+
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        Object[] result = p
+            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+
+        assertNotNull(result);
+        // InventoryUtil will merge into the existing slot and then store remainder into following slots
+        assertEquals(10, ((Number) result[0]).intValue(), "Should move the full source stack across slots");
+
+        // Source should be emptied
+        assertNull(fromTile.getStackInSlot(0));
+
+        // Destination slot 0 should be full at 64 and slot 1 should contain the remainder (6)
+        net.minecraft.item.ItemStack dest0 = toTile.getStackInSlot(0);
+        assertNotNull(dest0);
+        assertEquals(64, dest0.stackSize);
+        net.minecraft.item.ItemStack dest1 = toTile.getStackInSlot(1);
+        assertNotNull(dest1);
+        assertEquals(6, dest1.stackSize);
+    }
+
+    @Test
+    void pushItemsIntoSpecificSlotRespectsIsItemValidForSlot() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        fromTile.setSlot(0, new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 5, 0));
+
+        // Destination rejects all items in slot 0 (Lua slot 1).
+        StubInventoryTile toTile = new StubInventoryTile(9) {
+
+            @Override
+            public boolean isItemValidForSlot(int index, net.minecraft.item.ItemStack stack) {
+                return index != 0; // slot 1 (1-indexed) is invalid
+            }
+        };
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        // toSlot = 1 maps to index 0, which isItemValidForSlot() rejects.
+        Object[] result = p
+            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 5, 1 });
+
+        assertNotNull(result);
+        assertEquals(
+            0,
+            ((Number) result[0]).intValue(),
+            "Should not move items into a slot rejected by isItemValidForSlot");
+
+        // Source unchanged.
+        assertNotNull(fromTile.getStackInSlot(0));
+        assertEquals(5, fromTile.getStackInSlot(0).stackSize);
+
+        // Destination slot 0 still empty.
+        assertNull(toTile.getStackInSlot(0));
+    }
+
+    @Test
+    void pushItemsIntoSpecificSlotSucceedsWhenSlotIsValid() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        fromTile.setSlot(0, new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 5, 0));
+
+        // Destination rejects slot 0 but accepts slot 1 (Lua slot 2).
+        StubInventoryTile toTile = new StubInventoryTile(9) {
+
+            @Override
+            public boolean isItemValidForSlot(int index, net.minecraft.item.ItemStack stack) {
+                return index != 0;
+            }
+        };
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        // toSlot = 2 maps to index 1, which is accepted.
+        Object[] result = p
+            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 5, 2 });
+
+        assertNotNull(result);
+        assertEquals(5, ((Number) result[0]).intValue(), "Should move items into a valid slot");
+        assertNull(fromTile.getStackInSlot(0));
+        assertNotNull(toTile.getStackInSlot(1));
+        assertEquals(5, toTile.getStackInSlot(1).stackSize);
+    }
+
+    @Test
+    void pushItemsThrowsForOutOfRangeToSlot() {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        fromTile.setSlot(0, new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 5, 0));
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        // toSlot 10 exceeds target inventory size of 9 — must throw LuaException, not AIOOBE
+        assertThrows(
+            LuaException.class,
+            () -> p.callMethod(
+                computerWithTarget,
+                SYNC_CONTEXT,
+                METHOD_PUSH_ITEMS,
+                new Object[] { "target_chest", 1, 5, 10 }),
+            "pushItems with an out-of-range toSlot must throw LuaException");
+    }
+
+    @Test
+    void pushItemsRespectsExplicitLimitParameter() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 10, 0);
+        fromTile.setSlot(0, stack);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral toPeripheral = new InventoryPeripheral(toTile);
+        IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
+
+        InventoryPeripheral p = new InventoryPeripheral(fromTile);
+        // Provide an explicit limit of 3 items
+        Object[] result = p
+            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 3 });
+
+        assertNotNull(result);
+        assertEquals(3, ((Number) result[0]).intValue(), "Should move only the explicit limit");
+
+        // Source should have 7 remaining
+        net.minecraft.item.ItemStack src = fromTile.getStackInSlot(0);
+        assertNotNull(src);
+        assertEquals(7, src.stackSize);
+    }
+
+    @Test
+    void pullItemsRespectsExplicitLimitParameter() throws Exception {
+        StubInventoryTile fromTile = new StubInventoryTile(9);
+        net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack((net.minecraft.item.Item) null, 8, 0);
+        fromTile.setSlot(0, stack);
+
+        InventoryPeripheral fromPeripheral = new InventoryPeripheral(fromTile);
+        IComputerAccess computerWithSource = makeComputerWithPeripheral("source_chest", fromPeripheral);
+
+        StubInventoryTile toTile = new StubInventoryTile(9);
+        InventoryPeripheral p = new InventoryPeripheral(toTile);
+
+        // Explicit limit of 5 should move only 5 items
+        Object[] result = p
+            .callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1, 5 });
+
+        assertNotNull(result);
+        assertEquals(5, ((Number) result[0]).intValue(), "Should pull only the explicit limit");
+
+        // Source should have 3 remaining
+        net.minecraft.item.ItemStack src = fromTile.getStackInSlot(0);
+        assertNotNull(src);
+        assertEquals(3, src.stackSize);
     }
 
     // =========================================================================

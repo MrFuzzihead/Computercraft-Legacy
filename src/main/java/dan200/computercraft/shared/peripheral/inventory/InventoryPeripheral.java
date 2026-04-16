@@ -151,6 +151,9 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         IInventory from = getInventory();
                         validateSlot(from, fromSlot);
                         IInventory to = resolveInventoryPeripheral(computer, toName);
+                        if (toSlot > 0) {
+                            validateSlot(to, toSlot);
+                        }
                         int effectiveLimit = limit == Integer.MAX_VALUE ? getSourceStackSize(from, fromSlot - 1)
                             : limit;
                         int moved = moveItems(from, fromSlot - 1, to, toSlot <= 0 ? -1 : toSlot - 1, effectiveLimit);
@@ -210,14 +213,34 @@ public class InventoryPeripheral implements IPeripheralTargeted {
 
     /**
      * Resolves the live (possibly merged double-chest) {@link IInventory} at
-     * this peripheral's world position. When no world is available (e.g. in
-     * unit tests), the stored tile entity is returned directly.
+     * this peripheral's world position.
+     *
+     * <p>
+     * When no world is available (e.g. in unit tests), {@code m_tile} is
+     * returned directly if it implements {@link IInventory}.
+     * When a world is available, {@link InventoryUtil#getInventory} is tried
+     * first (handles double chests, entity inventories, etc.); if that returns
+     * {@code null} (tile unloaded/removed), {@code m_tile} is used as a
+     * fallback if it is still a valid {@link IInventory}.
+     * </p>
+     *
+     * @throws LuaException if no inventory can be resolved (tile removed or unloaded)
      */
-    private IInventory getInventory() {
+    private IInventory getInventory() throws LuaException {
         if (m_world == null) {
-            return (IInventory) m_tile;
+            if (m_tile instanceof IInventory) {
+                return (IInventory) m_tile;
+            }
+        } else {
+            IInventory inventory = InventoryUtil.getInventory(m_world, m_x, m_y, m_z, -1);
+            if (inventory != null) {
+                return inventory;
+            }
+            if (m_tile instanceof IInventory) {
+                return (IInventory) m_tile;
+            }
         }
-        return InventoryUtil.getInventory(m_world, m_x, m_y, m_z, -1);
+        throw new LuaException("Inventory is no longer available");
     }
 
     /**
@@ -233,6 +256,15 @@ public class InventoryPeripheral implements IPeripheralTargeted {
     /**
      * Resolves a named peripheral from the computer's modem network and verifies
      * that it targets an {@link IInventory}.
+     *
+     * <p>
+     * When the target is a {@link TileEntity} with a live {@link World}, resolution
+     * is delegated to {@link InventoryUtil#getInventory} so that double-chest
+     * merging is applied consistently with {@link #getInventory()}. If the
+     * world-based lookup returns {@code null} (tile unloaded), or the target has
+     * no world (e.g. unit-test stubs), the target is used directly as an
+     * {@link IInventory} fallback.
+     * </p>
      */
     private static IInventory resolveInventoryPeripheral(IComputerAccess computer, String name) throws LuaException {
         Map<String, IPeripheral> peripherals = computer.getAvailablePeripherals();
@@ -244,6 +276,19 @@ public class InventoryPeripheral implements IPeripheralTargeted {
             throw new LuaException("Target '" + name + "' is not an inventory");
         }
         Object target = ((IPeripheralTargeted) periph).getTarget();
+        // Prefer world-based resolution to get the merged double-chest view.
+        if (target instanceof TileEntity) {
+            TileEntity tile = (TileEntity) target;
+            World world = tile.getWorldObj();
+            if (world != null) {
+                IInventory inventory = InventoryUtil.getInventory(world, tile.xCoord, tile.yCoord, tile.zCoord, -1);
+                if (inventory != null) {
+                    return inventory;
+                }
+            }
+        }
+        // Fall back to direct cast for no-world contexts (unit tests) or
+        // non-TileEntity IInventory implementations.
         if (!(target instanceof IInventory)) {
             throw new LuaException("Target '" + name + "' is not an inventory");
         }
@@ -275,29 +320,11 @@ public class InventoryPeripheral implements IPeripheralTargeted {
 
         int moved;
         if (toSlot >= 0) {
-            // Place into a specific destination slot.
-            ItemStack dest = to.getStackInSlot(toSlot);
-            if (dest == null) {
-                int space = to.getInventoryStackLimit();
-                int actual = Math.min(toMove, space);
-                ItemStack placed = moving.copy();
-                placed.stackSize = actual;
-                to.setInventorySlotContents(toSlot, placed);
-                to.markDirty();
-                moved = actual;
-            } else if (InventoryUtil.areItemsStackable(dest, moving)) {
-                int space = Math.min(dest.getMaxStackSize(), to.getInventoryStackLimit()) - dest.stackSize;
-                int actual = Math.min(toMove, space);
-                if (actual <= 0) {
-                    return 0;
-                }
-                dest.stackSize += actual;
-                to.setInventorySlotContents(toSlot, dest);
-                to.markDirty();
-                moved = actual;
-            } else {
-                return 0;
-            }
+            // Store into a specific destination slot via InventoryUtil so that
+            // isItemValidForSlot() is enforced (e.g. furnace slot restrictions),
+            // keeping behavior consistent with the any-slot path below.
+            ItemStack remainder = InventoryUtil.storeItems(moving, to, toSlot, 1, toSlot);
+            moved = toMove - (remainder != null ? remainder.stackSize : 0);
         } else {
             // Store into any available slot.
             ItemStack remainder = InventoryUtil.storeItems(moving, to, 0, to.getSizeInventory(), 0);

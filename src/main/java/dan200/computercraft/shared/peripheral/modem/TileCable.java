@@ -966,9 +966,11 @@ public class TileCable extends TileModemBase implements INetwork {
 
         @Override
         public Map<String, IPeripheral> getAvailablePeripherals() {
+            Map<String, IPeripheral> peripherals = new HashMap<>(this.m_computer.getAvailablePeripherals());
             synchronized (m_entity.m_peripheralsByName) {
-                return Collections.unmodifiableMap(new HashMap<>(m_entity.m_peripheralsByName));
+                peripherals.putAll(m_entity.m_peripheralsByName);
             }
+            return Collections.unmodifiableMap(peripherals);
         }
     }
 
