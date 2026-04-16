@@ -31,6 +31,20 @@ import org.junit.jupiter.api.Test;
  * by the in-game script {@code test_wired_modem.lua}.
  * </p>
  *
+ * <h2>RemotePeripheralWrapper.getAvailablePeripherals()</h2>
+ * <p>
+ * {@code RemotePeripheralWrapper} is a {@code private static} inner class that
+ * wraps a peripheral as seen by a wired-modem computer. Its
+ * {@code getAvailablePeripherals()} now merges the underlying
+ * {@code IComputerAccess}'s peripheral map (local side peripherals, e.g.
+ * {@code "top"}) with the cable-network snapshot ({@code m_peripheralsByName}),
+ * so that remote peripherals such as {@link dan200.computercraft.shared.peripheral.inventory.InventoryPeripheral}
+ * can resolve both side-attached and wired-network targets via
+ * {@code pushItems}/{@code pullItems}. Wired-network names take precedence on
+ * collision (via {@code putAll} ordering). Behavioural verification is covered
+ * by the in-game script.
+ * </p>
+ *
  * <h2>Reflection note</h2>
  * <p>
  * {@code TileCable.Peripheral} is a {@code private static} inner class.

@@ -1,6 +1,7 @@
 package dan200.computercraft.core.apis;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -474,6 +475,20 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                 throw new RuntimeException("You are not attached to this Computer");
             } else {
                 return this.m_side;
+            }
+        }
+
+        @Override
+        public Map<String, IPeripheral> getAvailablePeripherals() {
+            synchronized (PeripheralAPI.this.m_peripherals) {
+                Map<String, IPeripheral> result = new HashMap<>();
+                for (int i = 0; i < PeripheralAPI.this.m_peripherals.length; i++) {
+                    PeripheralWrapper wrapper = PeripheralAPI.this.m_peripherals[i];
+                    if (wrapper != null && wrapper.isAttached()) {
+                        result.put(Computer.s_sideNames[i], wrapper.getPeripheral());
+                    }
+                }
+                return Collections.unmodifiableMap(result);
             }
         }
 

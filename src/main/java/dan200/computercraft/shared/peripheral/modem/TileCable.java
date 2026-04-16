@@ -1,6 +1,7 @@
 package dan200.computercraft.shared.peripheral.modem;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -871,7 +872,7 @@ public class TileCable extends TileModemBase implements INetwork {
         private String m_type;
         private String[] m_methods;
         private Map<String, Integer> m_methodMap;
-        private final TileCable m_entity;
+        private TileCable m_entity;
 
         public RemotePeripheralWrapper(IPeripheral peripheral, IComputerAccess computer, String name,
             TileCable entity) {
@@ -964,10 +965,12 @@ public class TileCable extends TileModemBase implements INetwork {
         }
 
         @Override
-        public IPeripheral getAvailablePeripheral(String name) {
+        public Map<String, IPeripheral> getAvailablePeripherals() {
+            Map<String, IPeripheral> peripherals = new HashMap<>(this.m_computer.getAvailablePeripherals());
             synchronized (m_entity.m_peripheralsByName) {
-                return m_entity.m_peripheralsByName.get(name);
+                peripherals.putAll(m_entity.m_peripheralsByName);
             }
+            return Collections.unmodifiableMap(peripherals);
         }
     }
 

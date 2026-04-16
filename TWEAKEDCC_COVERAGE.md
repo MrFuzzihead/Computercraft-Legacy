@@ -39,6 +39,8 @@
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
 | Drive peripheral | `DiskDrivePeripheral.java` | `isDiskPresent`, `getDiskLabel`, `setDiskLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `ejectDisk`, `getDiskID` |
+| `inventory` generic peripheral | `InventoryPeripheral.java` | `size`, `list`, `getItemDetail`, `getItemLimit`, `pushItems`, `pullItems` |
+| Speaker peripheral | `SpeakerPeripheral.java` | `playNote`, `playSound`, `playAudio`, `stop` |
 
 ---
 
@@ -283,7 +285,50 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
+### 21. ~~`redstone_relay` peripheral~~ ✅ Done (2026-04-14)
 
+New standalone block that exposes the full redstone API surface as an `IPeripheral`, letting
+computers interact with redstone through wired or wireless modems without the computer block
+itself needing to be adjacent to the circuit.
+
+**Reference**: [tweaked.cc/peripheral/redstone_relay](https://tweaked.cc/peripheral/redstone_relay.html)
+and upstream [`RedstoneMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/core/src/main/java/dan200/computercraft/core/apis/RedstoneMethods.java).
+
+#### Peripheral methods (same surface as `redstone` / `rs` global API)
+
+| Method | Notes |
+|---|---|
+| `getSides()` | Returns a table of the six side-name strings. |
+| `setOutput(side, bool)` | Digital write: sets the specified side to signal strength 15 (true) or 0 (false). |
+| `getOutput(side)` | Returns `true` if the current output on `side` is > 0. |
+| `getInput(side)` | Returns `true` if the current redstone input on `side` is > 0. |
+| `setBundledOutput(side, number)` | Sets the 16-bit bundled-cable output mask on `side`. |
+| `getBundledOutput(side)` | Returns the current bundled output mask on `side`. |
+| `getBundledInput(side)` | Returns the current bundled input mask on `side`. |
+| `testBundledInput(side, mask)` | Returns `true` if all bits of `mask` are set in the bundled input on `side`. |
+| `setAnalogOutput(side, level)` / `setAnalogueOutput` | Sets analog output (0–15) on `side`. British alias shares the same case body. |
+| `getAnalogOutput(side)` / `getAnalogueOutput` | Returns the analog output level (0–15) on `side`. |
+| `getAnalogInput(side)` / `getAnalogueInput` | Returns the analog input level (0–15) on `side`. |
+
+Sides are in local coordinates (relative to the relay's facing direction): `"bottom"`, `"top"`,
+`"back"`, `"front"`, `"right"`, `"left"`. This mirrors the computer-block `redstone` API exactly.
+
+Input changes (detected on neighbor-change and processed on the next server tick) fire a
+`"redstone"` event on all computers attached to the relay via modem.
+
+Output state is persisted in NBT (`"output"` and `"bundledOutput"` int arrays). Direction is
+stored in block metadata (2–5) and propagated to the client via `writeDescription`.
+
+Recipe: 4 × stone (corners) + 4 × redstone dust (cardinal sides) + 1 × wired modem (centre),
+shaped 3×3 (`S R S / R W R / S R S` where S=stone, R=redstone, W=wired modem).
+
+**Textures**: four PNGs already present under `assets/computercraft/textures/blocks/`:
+`redstoneRelayTop.png`, `redstoneRelayBottom.png`, `redstoneRelayFront.png`,
+`redstoneRelaySide.png`.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/redstone/RedstoneRelayPeripheralTest.java` — 21 cases, all green.
+
+---
 
 CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 - `speaker.playNote(instrument, volume, pitch)`
@@ -291,8 +336,10 @@ CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
 - `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
 - `speaker.stop()`
 
-**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to
-Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
+**Implementation plan**: See **[SPEAKER_PLAN.md](SPEAKER_PLAN.md)** for the full implementation
+plan. Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`; `playNote`/`playSound`
+via `world.playSoundEffect`; `playAudio` via a new `SpeakerAudio` CC network packet decoded
+client-side with `javax.sound.sampled.SourceDataLine`.
 
 ---
 
@@ -427,6 +474,65 @@ consistently accept both string sides and wrapped tables.
 
 ---
 
+### 20. ~~`inventory` generic peripheral~~ ✅ Done
+
+Wraps any `IInventory` tile entity as an `"inventory"` peripheral exposing the six CC:Tweaked methods.
+Auto-registered by `DefaultPeripheralProvider` for any tile entity that implements `IInventory` and
+does not already have a more specific peripheral (printers, computers, turtles take priority).
+
+| Method | Notes |
+|---|---|
+| `size()` | Returns `getSizeInventory()`. Dispatches to main thread. |
+| `list()` | Returns a 1-indexed table of `{name, count, damage}` maps, skipping empty slots. Dispatches to main thread. |
+| `getItemDetail(slot)` | Returns `null` for an empty slot; otherwise `{name, count, damage, maxCount, displayName}`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `getItemLimit(slot)` | Returns `getInventoryStackLimit()`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `pushItems(toName, fromSlot [, limit [, toSlot]])` | Moves items from this inventory to a named modem-network inventory. Throws if the target does not exist or is not an inventory. Dispatches to main thread. |
+| `pullItems(fromName, fromSlot [, limit [, toSlot]])` | Moves items from a named modem-network inventory to this one. Throws if the source does not exist or is not an inventory. Dispatches to main thread. |
+
+`IComputerAccess.getAvailablePeripherals()` was added as a `default` method returning
+`Collections.emptyMap()` (backward-compatible). `TileCable.RemotePeripheralWrapper` overrides it
+to return a snapshot of the cable network's peripheral name map.
+
+**Double-chest support**: `InventoryUtil.getInventory` is called on every main-thread task so
+adjacent double-chest halves automatically merge to a 54-slot view.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/inventory/InventoryPeripheralTest.java` — 20 cases, all green.
+
+---
+
+### 21. ~~Speaker peripheral~~ ✅ Done
+
+Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`.  Full design rationale in
+[SPEAKER_PLAN.md](SPEAKER_PLAN.md).
+
+| Method | Implementation | Notes |
+|---|---|---|
+| `playNote(instrument[, volume[, pitch]])` | Non-blocking; queues a `PendingNote` in `TileSpeaker.m_pendingNotes`; flushed to `world.playSoundEffect` in `updateEntity()`. Rate-limited to `speaker_max_notes_per_tick` (default 8) per tick. | All 16 CC:Tweaked instrument names accepted; 11 post-1.7.10 ones are silent in vanilla 1.7.10 but activate with a resource pack. |
+| `playSound(name[, volume[, pitch]])` | Non-blocking; queues a `PendingSound`; `world.playSoundEffect` called in `updateEntity()`. | Rejected while audio stream is active. |
+| `playAudio(audio[, volume])` | Non-blocking; validates and DFPWM-encodes the PCM table; sends a `SpeakerAudio` packet from `updateEntity()`. Back-pressure via nanosecond timer (500 ms `CLIENT_BUFFER`). | `speaker_audio_empty` is queued on attached computers after each batch dispatch. |
+| `stop()` | Sets `m_shouldStop` flag; `updateEntity()` clears state and sends `SpeakerStop` to all players. | Does not queue `speaker_audio_empty`. |
+
+**Network packets**: `SpeakerAudio = 10` (DFPWM bytes + volume×1000 as int), `SpeakerStop = 11`
+(coordinates only) — both added to `ComputerCraftPacket`.
+
+**Client audio**: `SpeakerManager` (`@SideOnly(CLIENT)`) decodes DFPWM → PCM via `DfpwmDecoder`
+(same PREC_SHIFT/PREC_CEIL/LPF_STRENGTH constants as the server encoder) and plays via
+`javax.sound.sampled.SourceDataLine` at 48 kHz / 8-bit signed mono.  Volume is applied by
+linearly scaling PCM sample values.
+
+**Config keys**: `speaker_max_notes_per_tick` (default 8) and `speaker_audio_range` (default
+256 blocks ≈ 16-chunk view distance, approximating upstream's `sendToAllTracking`).
+
+**Bug fixed**: `ComputerCraftPacket.fromBytes` previously used `getBytes` (non-advancing) to
+read `m_dataByte` entries; replaced with `readBytes` so the reader index advances correctly.
+This was required for the new `SpeakerAudio` packet to deserialize its payload.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/speaker/SpeakerPeripheralTest.java`
+— 26 cases, all green (covers all argument-validation paths, rate-limit / buffer-full false
+returns, and the `shouldStop` flag).
+
+---
+
 ## Prioritized Implementation Roadmap
 
 | Priority | Item                                                            | Effort | Type |
@@ -452,7 +558,9 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
 | ✅ Done | `fluid_storage` generic peripheral (`tanks`, `pushFluid`, `pullFluid`)          | Medium | Java |
-| Deferred | Speaker peripheral                                              | Large | Java + Client |
+| ✅ Done | `inventory` generic peripheral                                  | Medium | Java |
+| ✅ Done | `redstone_relay` peripheral                                     | Medium | Java |
+| ✅ Done  | Speaker peripheral — see [SPEAKER_PLAN.md](SPEAKER_PLAN.md)    | Large | Java + Client |
 
 ---
 
@@ -510,6 +618,5 @@ in-game test script `run/saves/Test World/computer/37/test_fluid_storage.lua`.
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
    approach is correct — no change needed.
 
-2. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired
-   to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless
-   explicitly requested.
+2. **Speaker**: ✅ Implemented — see `### 21` above and [SPEAKER_PLAN.md](SPEAKER_PLAN.md) for
+   full design rationale.  Advanced speaker (streaming synthesis) is deferred.

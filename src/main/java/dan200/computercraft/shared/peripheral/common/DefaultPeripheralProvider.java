@@ -1,5 +1,6 @@
 package dan200.computercraft.shared.peripheral.common;
 
+import net.minecraft.inventory.IInventory;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.fluids.IFluidHandler;
@@ -8,6 +9,7 @@ import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.api.peripheral.IPeripheralProvider;
 import dan200.computercraft.shared.computer.blocks.ComputerPeripheral;
 import dan200.computercraft.shared.computer.blocks.TileComputerBase;
+import dan200.computercraft.shared.peripheral.inventory.InventoryPeripheral;
 import dan200.computercraft.shared.peripheral.generic.GenericFluidPeripheral;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 
@@ -35,6 +37,10 @@ public class DefaultPeripheralProvider implements IPeripheralProvider {
 
             if (tile instanceof IFluidHandler) {
                 return new GenericFluidPeripheral((IFluidHandler) tile);
+            }
+
+            if (tile instanceof IInventory) {
+                return new InventoryPeripheral(tile);
             }
         }
 

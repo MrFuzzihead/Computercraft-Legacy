@@ -1,5 +1,8 @@
 package dan200.computercraft.api.peripheral;
 
+import java.util.Collections;
+import java.util.Map;
+
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
 
@@ -20,6 +23,10 @@ public interface IComputerAccess {
     void queueEvent(String var1, Object[] var2);
 
     String getAttachmentName();
+
+    default Map<String, IPeripheral> getAvailablePeripherals() {
+        return Collections.emptyMap();
+    }
 
     /**
      * Returns the {@link IPeripheral} attached to this computer under the given name, or {@code null} if no such
