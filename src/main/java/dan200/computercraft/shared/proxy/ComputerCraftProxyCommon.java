@@ -67,7 +67,6 @@ import dan200.computercraft.shared.peripheral.common.ItemPeripheral;
 import dan200.computercraft.shared.peripheral.common.PeripheralItemFactory;
 import dan200.computercraft.shared.peripheral.diskdrive.ContainerDiskDrive;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
-import dan200.computercraft.shared.peripheral.generic.GenericPeripheralProvider;
 import dan200.computercraft.shared.peripheral.generic.energy.rf.RFIntegration;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
@@ -414,16 +413,15 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
         GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
-        ComputerCraftAPI.registerPeripheralProvider(new DefaultPeripheralProvider());
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
         }
 
-        GenericPeripheralProvider genericProvider = new GenericPeripheralProvider();
+        DefaultPeripheralProvider defaultProvider = new DefaultPeripheralProvider();
         try {
-            RFIntegration.register(genericProvider);
+            RFIntegration.register(defaultProvider);
         } catch (NoClassDefFoundError ignored) {}
-        ComputerCraftAPI.registerPeripheralProvider(genericProvider);
+        ComputerCraftAPI.registerPeripheralProvider(defaultProvider);
 
         ComputerCraftAPI.registerBundledRedstoneProvider(new DefaultBundledRedstoneProvider());
         ComputerCraftAPI.registerMediaProvider(new DefaultMediaProvider());

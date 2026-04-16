@@ -1,15 +1,15 @@
 package dan200.computercraft.shared.peripheral.generic.energy.rf;
 
-import dan200.computercraft.shared.peripheral.generic.GenericPeripheralProvider;
+import dan200.computercraft.shared.peripheral.common.DefaultPeripheralProvider;
 
 /**
  * Class-load isolation shim for the CoFH RF integration.
  *
  * <p>
- * All {@code cofh.api.energy.*} imports are confined to this compilation unit. The JVM
- * defers loading this class until {@link #register} is actually invoked, so if CoFH Core is
- * absent at runtime the {@link NoClassDefFoundError} is caught at the call site and
- * integration is skipped silently.
+ * All {@code cofh.api.energy.*} imports are confined to the {@link RFEnergyAdapterFactory} and
+ * {@link RFEnergyStorageAdapter} classes. The JVM defers loading those classes until
+ * {@link #register} is actually invoked, so if CoFH Core is absent at runtime the
+ * {@link NoClassDefFoundError} is caught at the call site and integration is skipped silently.
  * </p>
  */
 public final class RFIntegration {
@@ -22,7 +22,7 @@ public final class RFIntegration {
      *
      * @param provider the provider to register the RF factory with
      */
-    public static void register(GenericPeripheralProvider provider) {
-        provider.addFactory(new RFEnergyAdapterFactory());
+    public static void register(DefaultPeripheralProvider provider) {
+        provider.addEnergyFactory(new RFEnergyAdapterFactory());
     }
 }
