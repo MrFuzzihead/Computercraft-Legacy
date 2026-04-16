@@ -3,11 +3,14 @@ package dan200.computercraft.shared.peripheral.modem;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import dan200.computercraft.api.peripheral.IPeripheral;
 
 /**
  * Unit tests for the wired-modem-specific additions to {@link TileCable}'s
@@ -29,6 +32,20 @@ import org.junit.jupiter.api.Test;
  * requires a live {@link TileCable} tile entity with an active
  * {@link net.minecraft.world.World}. Behavioural paths are therefore covered
  * by the in-game script {@code test_wired_modem.lua}.
+ * </p>
+ *
+ * <h2>RemotePeripheralWrapper.getAvailablePeripherals()</h2>
+ * <p>
+ * {@code RemotePeripheralWrapper} is a {@code private static} inner class that
+ * wraps a peripheral as seen by a wired-modem computer. Its
+ * {@code getAvailablePeripherals()} now merges the underlying
+ * {@code IComputerAccess}'s peripheral map (local side peripherals, e.g.
+ * {@code "top"}) with the cable-network snapshot ({@code m_peripheralsByName}),
+ * so that remote peripherals such as {@link dan200.computercraft.shared.peripheral.inventory.InventoryPeripheral}
+ * can resolve both side-attached and wired-network targets via
+ * {@code pushItems}/{@code pullItems}. Wired-network names take precedence on
+ * collision (via {@code putAll} ordering). Behavioural verification is covered
+ * by the in-game script.
  * </p>
  *
  * <h2>Reflection note</h2>
@@ -156,6 +173,30 @@ class WiredModemPeripheralTest {
     @Test
     void peripheralTypeIsModem() {
         assertEquals("modem", peripheral.getType());
+    }
+
+    // =========================================================================
+    // RemotePeripheralWrapper.getAvailablePeripheral contract
+    // =========================================================================
+
+    /**
+     * Verifies that {@code RemotePeripheralWrapper} explicitly declares
+     * {@code getAvailablePeripheral(String)} — i.e. the override is present and
+     * not merely inherited from the {@code default} on {@link dan200.computercraft.api.peripheral.IComputerAccess},
+     * which always returns {@code null}.
+     */
+    @Test
+    void remotePeripheralWrapperDeclaresGetAvailablePeripheral() throws Exception {
+        Class<?> wrapperClass = Arrays.stream(TileCable.class.getDeclaredClasses())
+            .filter(
+                c -> c.getSimpleName()
+                    .equals("RemotePeripheralWrapper"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("TileCable$RemotePeripheralWrapper not found"));
+
+        Method method = wrapperClass.getDeclaredMethod("getAvailablePeripheral", String.class);
+        assertNotNull(method, "RemotePeripheralWrapper must declare getAvailablePeripheral(String)");
+        assertEquals(IPeripheral.class, method.getReturnType());
     }
 
 }

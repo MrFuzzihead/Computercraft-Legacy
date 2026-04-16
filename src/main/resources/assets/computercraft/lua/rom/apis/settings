@@ -29,6 +29,27 @@ local function isSerializable( v )
     return t == "number" or t == "string" or t == "boolean" or t == "table"
 end
 
+local ALLOWED_TYPES     = { "number", "string", "boolean", "table" }
+local ALLOWED_TYPES_SET = {}
+for _, t in ipairs( ALLOWED_TYPES ) do ALLOWED_TYPES_SET[ t ] = true end
+
+--- Deep-copy a value via a serialize / unserialize round-trip.
+-- Ensures the stored copy is independent of the caller's table and
+-- validates that the value is fully serializable.
+local function reserialize( value )
+    if type( value ) ~= "table" then return value end
+    return textutils.unserialize( textutils.serialize( value ) )
+end
+
+--- Return a lightweight recursive copy of a value.
+-- Prevents the caller from mutating stored tables through the returned reference.
+local function copy( value )
+    if type( value ) ~= "table" then return value end
+    local result = {}
+    for k, v in pairs( value ) do result[ k ] = copy( v ) end
+    return result
+end
+
 -- ---------------------------------------------------------------------------
 -- Public API
 -- ---------------------------------------------------------------------------
@@ -45,9 +66,15 @@ function define( name, options )
 
     local current = defined[ name ] or {}
     if options then
-        if options.default     ~= nil then current.default     = options.default     end
-        if options.description ~= nil then current.description = options.description end
-        if options.type        ~= nil then current.type        = options.type        end
+        if options.type ~= nil then
+            if not ALLOWED_TYPES_SET[ options.type ] then
+                error( ( "bad argument #2 (field 'type': unknown type %q; expected one of %s)" )
+                    :format( options.type, table.concat( ALLOWED_TYPES, ", " ) ), 2 )
+            end
+            current.type = options.type
+        end
+        if options.default     ~= nil then current.default     = reserialize( options.default ) end
+        if options.description ~= nil then current.description = options.description             end
     end
     defined[ name ] = current
 end
@@ -76,19 +103,20 @@ function set( name, value )
         error( "bad argument #2 (" .. options.type .. " expected, got " .. type( value ) .. ")", 2 )
     end
 
-    values[ name ] = value
+    values[ name ] = reserialize( value )
 end
 
 --- Get the value of a setting.
 -- Resolution order: set value → registered default → provided default → nil.
+-- Returns an independent copy of table values to prevent mutation of stored state.
 function get( name, default )
     checkString( 1, name )
 
     local v = values[ name ]
-    if v ~= nil then return v end
+    if v ~= nil then return copy( v ) end
 
     local options = defined[ name ]
-    if options and options.default ~= nil then return options.default end
+    if options and options.default ~= nil then return copy( options.default ) end
 
     return default
 end
@@ -135,13 +163,13 @@ function getDetails( name )
     local options = defined[ name ] or {}
     local result  = {
         description = options.description,
-        default     = options.default,
+        default     = copy( options.default ),
         type        = options.type,
     }
 
     local v = values[ name ]
     if v ~= nil then
-        result.value   = v
+        result.value   = copy( v )
         result.changed = true
     else
         result.changed = false

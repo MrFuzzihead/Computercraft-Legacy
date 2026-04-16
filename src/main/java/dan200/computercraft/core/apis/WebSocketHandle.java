@@ -15,13 +15,15 @@ import dan200.computercraft.api.lua.LuaException;
  * The Lua-visible WebSocket handle returned by {@code websocket_success}.
  *
  * <p>
- * Exposes three methods to Lua:
+ * Exposes four methods to Lua:
  * <ol>
  * <li>{@code receive([timeout])} — blocks until a {@code websocket_message} or
  * {@code websocket_closed} event arrives for this URL, or the optional
  * wall-clock deadline expires.</li>
  * <li>{@code send(message [, binary])} — sends a text or binary frame.</li>
  * <li>{@code close()} — initiates a close handshake.</li>
+ * <li>{@code getResponseHeaders()} — returns the HTTP response headers
+ * received during the WebSocket handshake.</li>
  * </ol>
  */
 class WebSocketHandle implements ILuaObject {
@@ -29,8 +31,9 @@ class WebSocketHandle implements ILuaObject {
     private static final int METHOD_RECEIVE = 0;
     private static final int METHOD_SEND = 1;
     private static final int METHOD_CLOSE = 2;
+    private static final int METHOD_GETRESPONSEHEADERS = 3;
 
-    private static final String[] METHOD_NAMES = { "receive", "send", "close" };
+    private static final String[] METHOD_NAMES = { "receive", "send", "close", "getResponseHeaders" };
 
     /**
      * Internal event name used to wake up a blocking {@code receive(timeout)} call.
@@ -105,14 +108,14 @@ class WebSocketHandle implements ILuaObject {
                             }
 
                             if ("websocket_closed".equals(eventName) && event.length >= 2 && m_url.equals(event[1])) {
-                                return null; // EOF sentinel — matches CC:Tweaked
+                                return new Object[] { null, null, "Connection closed" };
                             }
 
                             if (hasTimeout && TIMEOUT_EVENT.equals(eventName)
                                 && event.length >= 2
                                 && event[1] instanceof Number
                                 && ((Number) event[1]).longValue() == timeoutId) {
-                                return null;
+                                return new Object[] { null, null, "Timeout" };
                             }
                         }
                     }
@@ -152,6 +155,10 @@ class WebSocketHandle implements ILuaObject {
             case METHOD_CLOSE: {
                 m_connection.closeConnection();
                 return null;
+            }
+
+            case METHOD_GETRESPONSEHEADERS: {
+                return new Object[] { m_connection.getResponseHeaders() };
             }
 
             default:

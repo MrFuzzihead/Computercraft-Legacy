@@ -24,8 +24,9 @@ public class MonitorPeripheral implements IPeripheral {
     public String[] getMethodNames() {
         return new String[] { "write", "scroll", "setCursorPos", "setCursorBlink", "getCursorPos", "getSize", "clear",
             "clearLine", "setTextScale", "setTextColour", "setTextColor", "setBackgroundColour", "setBackgroundColor",
-            "isColour", "isColor", "getTextColour", "getTextColor", "getBackgroundColour", "getBackgroundColor",
-            "blit" };
+            "isColour", "isColor", "getTextColour", "getTextColor", "getBackgroundColour", "getBackgroundColor", "blit",
+            "getTextScale", "getCursorBlink", "setPaletteColor", "setPaletteColour", "getPaletteColor",
+            "getPaletteColour" };
     }
 
     @Override
@@ -111,10 +112,9 @@ public class MonitorPeripheral implements IPeripheral {
                 throw new LuaException("Expected number");
             case 9:
             case 10: {
-                int colour = TermAPI.parseColour(
-                    args,
-                    this.m_monitor.getTerminal()
-                        .isColour());
+                // Monitors always accept all 16 colors; non-color monitors
+                // render them as greyscale on screen.
+                int colour = TermAPI.parseColour(args, true);
                 Terminal terminal = this.m_monitor.getTerminal()
                     .getTerminal();
                 terminal.setTextColour(colour);
@@ -122,10 +122,9 @@ public class MonitorPeripheral implements IPeripheral {
             }
             case 11:
             case 12: {
-                int colour = TermAPI.parseColour(
-                    args,
-                    this.m_monitor.getTerminal()
-                        .isColour());
+                // Monitors always accept all 16 colors; non-color monitors
+                // render them as greyscale on screen.
+                int colour = TermAPI.parseColour(args, true);
                 Terminal terminal = this.m_monitor.getTerminal()
                     .getTerminal();
                 terminal.setBackgroundColour(colour);
@@ -166,6 +165,45 @@ public class MonitorPeripheral implements IPeripheral {
                 }
 
                 throw new LuaException("Expected string, string, string");
+            case 20:
+                // getTextScale() -> number (0.5–5.0, matching setTextScale's input range)
+                return new Object[] { (double) this.m_monitor.getTextScale() };
+            case 21: {
+                // getCursorBlink() -> boolean
+                Terminal terminal = this.m_monitor.getTerminal()
+                    .getTerminal();
+                return new Object[] { terminal.getCursorBlink() };
+            }
+            case 22:
+            case 23: {
+                // setPaletteColor(color, r, g, b)
+                if (args.length < 4 || !(args[0] instanceof Double)
+                    || !(args[1] instanceof Double)
+                    || !(args[2] instanceof Double)
+                    || !(args[3] instanceof Double)) {
+                    throw new LuaException("Expected number, number, number, number");
+                }
+                int paletteIdx = TermAPI.parseColour(new Object[] { args[0] }, true);
+                double r = (Double) args[1];
+                double g = (Double) args[2];
+                double b = (Double) args[3];
+                if (r < 0 || r > 1) throw new LuaException("'r' value must be between 0 and 1");
+                if (g < 0 || g > 1) throw new LuaException("'g' value must be between 0 and 1");
+                if (b < 0 || b > 1) throw new LuaException("'b' value must be between 0 and 1");
+                Terminal terminal = this.m_monitor.getTerminal()
+                    .getTerminal();
+                terminal.setPaletteColour(paletteIdx, r, g, b);
+                return null;
+            }
+            case 24:
+            case 25: {
+                // getPaletteColor(color) -> r, g, b
+                int paletteIdx = TermAPI.parseColour(args, true);
+                Terminal terminal = this.m_monitor.getTerminal()
+                    .getTerminal();
+                double[] rgb = terminal.getPaletteColour(paletteIdx);
+                return new Object[] { rgb[0], rgb[1], rgb[2] };
+            }
             default:
                 return null;
         }

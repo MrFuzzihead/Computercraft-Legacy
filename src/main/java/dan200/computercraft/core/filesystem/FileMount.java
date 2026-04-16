@@ -201,6 +201,53 @@ public class FileMount implements IWritableMount {
     }
 
     @Override
+    public RandomAccessFile openForReadRandom(String path) throws IOException {
+        if (!this.created()) {
+            throw new IOException("No such file");
+        }
+        File file = this.getRealPath(path);
+        if (!file.exists() || file.isDirectory()) {
+            throw new IOException("No such file");
+        }
+        return new RandomAccessFile(file, "r");
+    }
+
+    @Override
+    public RandomAccessFile openForWriteRandom(String path, boolean append) throws IOException {
+        this.create();
+        File file = this.getRealPath(path);
+        if (file.exists() && file.isDirectory()) {
+            throw new IOException("Cannot write to directory");
+        }
+        if (!append) {
+            // "w" mode: create or truncate
+            if (!file.exists()) {
+                if (this.getRemainingSpace() < MINIMUM_FILE_SIZE) {
+                    throw new IOException("Out of space");
+                }
+                this.m_usedSpace += MINIMUM_FILE_SIZE;
+            } else {
+                this.m_usedSpace -= Math.max(file.length(), (long) MINIMUM_FILE_SIZE);
+                this.m_usedSpace += MINIMUM_FILE_SIZE;
+            }
+            RandomAccessFile raf = new RandomAccessFile(file, "rw");
+            raf.setLength(0L);
+            return raf;
+        } else {
+            // "a" mode: create if absent, position at end
+            if (!file.exists()) {
+                if (this.getRemainingSpace() < MINIMUM_FILE_SIZE) {
+                    throw new IOException("Out of space");
+                }
+                this.m_usedSpace += MINIMUM_FILE_SIZE;
+            }
+            RandomAccessFile raf = new RandomAccessFile(file, "rw");
+            raf.seek(raf.length());
+            return raf;
+        }
+    }
+
+    @Override
     public RandomAccessFile openForReadWrite(String path, boolean truncate) throws IOException {
         this.create();
         File file = this.getRealPath(path);

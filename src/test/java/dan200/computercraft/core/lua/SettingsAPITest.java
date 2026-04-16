@@ -362,11 +362,121 @@ class SettingsAPITest {
 
     @Test
     void setTableValueRoundtrips() {
+        // reserialize uses textutils, so table values require mock environment
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "set('t', {a=1,b=2})\nlocal v=get('t')\n_capture(v.a, v.b)");
+        runWithMocks(buildMachine(cap), null, "set('t', {a=1,b=2})\nlocal v=get('t')\n_capture(v.a, v.b)");
         assertNotNull(cap.args);
         assertEquals(1.0, ((Number) cap.args[0]).doubleValue());
         assertEquals(2.0, ((Number) cap.args[1]).doubleValue());
+    }
+
+    // =========================================================================
+    // Gap 1 — define: options.type validation
+    // =========================================================================
+
+    @Test
+    void defineWithInvalidTypeErrors() {
+        ResultCapture cap = new ResultCapture();
+        run(buildMachine(cap), "local ok, err = pcall(define, 'k', {type='invalid'})\n" + "_capture(ok, err)");
+        assertNotNull(cap.args);
+        assertFalse((Boolean) cap.args[0], "define with unknown type must error");
+        assertTrue(((String) cap.args[1]).contains("invalid"), "Error message must include the bad type name");
+    }
+
+    @Test
+    void defineWithValidTypesDoesNotError() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "local ok1 = pcall(define, 'a', {type='number'})\n" + "local ok2 = pcall(define, 'b', {type='string'})\n"
+                + "local ok3 = pcall(define, 'c', {type='boolean'})\n"
+                + "local ok4 = pcall(define, 'd', {type='table'})\n"
+                + "_capture(ok1, ok2, ok3, ok4)");
+        assertNotNull(cap.args);
+        assertTrue((Boolean) cap.args[0], "number must be allowed");
+        assertTrue((Boolean) cap.args[1], "string must be allowed");
+        assertTrue((Boolean) cap.args[2], "boolean must be allowed");
+        assertTrue((Boolean) cap.args[3], "table must be allowed");
+    }
+
+    // =========================================================================
+    // Gap 2 — reserialize: stored copies are independent of caller tables
+    // =========================================================================
+
+    @Test
+    void setTableMutationDoesNotAffectStoredValue() {
+        ResultCapture cap = new ResultCapture();
+        runWithMocks(
+            buildMachine(cap),
+            null,
+            "local t = {x = 1}\n" + "set('t', t)\n" + "t.x = 99\n" + "_capture(get('t').x)");
+        assertNotNull(cap.args);
+        assertEquals(
+            1.0,
+            ((Number) cap.args[0]).doubleValue(),
+            "Mutating the original table after set() must not affect the stored value");
+    }
+
+    @Test
+    void defineDefaultMutationDoesNotAffectStoredDefault() {
+        ResultCapture cap = new ResultCapture();
+        runWithMocks(
+            buildMachine(cap),
+            null,
+            "local t = {x = 1}\n" + "define('k', {default = t})\n" + "t.x = 99\n" + "_capture(get('k').x)");
+        assertNotNull(cap.args);
+        assertEquals(
+            1.0,
+            ((Number) cap.args[0]).doubleValue(),
+            "Mutating the original default table after define() must not affect the stored default");
+    }
+
+    // =========================================================================
+    // Gap 3 — copy: get / getDetails return independent copies
+    // =========================================================================
+
+    @Test
+    void getReturnsIndependentCopyOfTable() {
+        ResultCapture cap = new ResultCapture();
+        runWithMocks(
+            buildMachine(cap),
+            null,
+            "set('t', {x = 1})\n" + "local v = get('t')\n" + "v.x = 99\n" + "_capture(get('t').x)");
+        assertNotNull(cap.args);
+        assertEquals(
+            1.0,
+            ((Number) cap.args[0]).doubleValue(),
+            "Mutating the table returned by get() must not affect the stored value");
+    }
+
+    @Test
+    void getDetailsValueIsIndependentCopy() {
+        ResultCapture cap = new ResultCapture();
+        runWithMocks(
+            buildMachine(cap),
+            null,
+            "set('t', {x = 1})\n" + "local d = getDetails('t')\n" + "d.value.x = 99\n" + "_capture(get('t').x)");
+        assertNotNull(cap.args);
+        assertEquals(
+            1.0,
+            ((Number) cap.args[0]).doubleValue(),
+            "Mutating the value table from getDetails() must not affect the stored value");
+    }
+
+    @Test
+    void getDetailsDefaultIsIndependentCopy() {
+        ResultCapture cap = new ResultCapture();
+        runWithMocks(
+            buildMachine(cap),
+            null,
+            "define('k', {default = {x = 1}})\n" + "local d = getDetails('k')\n"
+                + "d.default.x = 99\n"
+                + "_capture(get('k').x)");
+        assertNotNull(cap.args);
+        assertEquals(
+            1.0,
+            ((Number) cap.args[0]).doubleValue(),
+            "Mutating the default table from getDetails() must not affect the stored default");
     }
 
     // =========================================================================

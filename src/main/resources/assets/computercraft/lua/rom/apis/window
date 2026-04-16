@@ -261,11 +261,8 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
     end
 
     local function setTextColor( color )
-        if not parent.isColor() then
-            if color ~= colors.white and color ~= colors.black and color ~= colors.gray and color ~= colors.lightGray then
-                error( "Color not supported", 3 )
-            end
-        end
+        -- All 16 colors are always accepted; non-color screens render them as
+        -- greyscale on screen.
         nTextColor = color
         if bVisible then
             updateCursorColor()
@@ -281,11 +278,8 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
     end
 
     local function setBackgroundColor( color )
-        if not parent.isColor() then
-            if color ~= colors.white and color ~= colors.black and color ~= colors.gray and color ~= colors.lightGray then
-                error( "Color not supported", 3 )
-            end
-        end
+        -- All 16 colors are always accepted; non-color screens render them as
+        -- greyscale on screen.
         nBackgroundColor = color
     end
 

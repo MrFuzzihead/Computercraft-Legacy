@@ -1,6 +1,7 @@
 package dan200.computercraft.core.apis;
 
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -86,17 +87,7 @@ public class HTTPRequest {
         return uri;
     }
 
-    private final Object lock = new Object();
-    private URL url;
-    private final String urlString;
-    private boolean complete = false;
-    private boolean cancelled = false;
-    private boolean success = false;
-    private byte[] result;
-    private int responseCode = -1;
-    private Map<String, String> responseHeaders;
-
-    private static final String[] methods = { "GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE" };
+    private static final String[] methods = { "GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "PATCH", "TRACE" };
 
     private static boolean checkMethod(String verb) {
         for (String method : methods) {
@@ -106,10 +97,31 @@ public class HTTPRequest {
         return false;
     }
 
-    public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb)
-        throws LuaException {
+    private final Object lock = new Object();
+    private URL url;
+    private final String urlString;
+    private boolean complete = false;
+    private boolean cancelled = false;
+    private boolean success = false;
+    private byte[] result;
+    private int responseCode = -1;
+    private String responseMessage = "";
+    private Map<String, String> responseHeaders;
+    /** Connection + read timeout in milliseconds. 0 means use the JVM default (no explicit timeout). */
+    private final int m_timeout;
+    /**
+     * Whether the caller requested a binary response handle. Currently a no-op because
+     * {@link HTTPResponse} always returns raw bytes; reserved for future text/binary mode
+     * differentiation.
+     */
+    private final boolean m_binary;
+
+    public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
+        final int timeout, final boolean binary) throws LuaException {
         urlString = url;
         this.url = checkURL(url);
+        this.m_timeout = timeout;
+        this.m_binary = binary;
 
         if (verb != null && !checkMethod(verb)) throw new LuaException("No such verb: " + verb);
 
@@ -119,6 +131,11 @@ public class HTTPRequest {
             public void run() {
                 try {
                     HttpURLConnection connection = (HttpURLConnection) HTTPRequest.this.url.openConnection();
+
+                    if (m_timeout > 0) {
+                        connection.setConnectTimeout(m_timeout);
+                        connection.setReadTimeout(m_timeout);
+                    }
 
                     { // Setup connection
                         if (verb != null) {
@@ -152,7 +169,9 @@ public class HTTPRequest {
                         }
                     }
 
-                    int code = responseCode = connection.getResponseCode();
+                    int code = connection.getResponseCode();
+                    responseCode = code;
+                    responseMessage = connection.getResponseMessage();
 
                     // If we get an error code then use the error stream instead
                     InputStream is;
@@ -163,6 +182,13 @@ public class HTTPRequest {
                     } else {
                         is = connection.getErrorStream();
                         responseSuccess = false;
+                        if (is == null) {
+                            // Server returned an error code with no body (e.g. a bare
+                            // 404 with Content-Length: 0). Substitute an empty stream
+                            // so asResponse() always returns a non-null handle — which
+                            // is required by the 1.80pr1 "response handle on error" contract.
+                            is = new ByteArrayInputStream(new byte[0]);
+                        }
                     }
 
                     // Read from the input stream
@@ -241,7 +267,7 @@ public class HTTPRequest {
 
     public HTTPResponse asResponse() {
         synchronized (lock) {
-            return result == null ? null : new HTTPResponse(responseCode, result, responseHeaders);
+            return result == null ? null : new HTTPResponse(responseCode, responseMessage, result, responseHeaders);
         }
     }
 

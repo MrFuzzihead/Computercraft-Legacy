@@ -2,6 +2,7 @@ package dan200.computercraft.api.filesystem;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.util.List;
 
 public interface IMount {
@@ -31,5 +32,23 @@ public interface IMount {
      */
     default long getLastModified(String path) throws IOException {
         return 0L;
+    }
+
+    /**
+     * Open the file at {@code path} for random-access (seekable) reading.
+     *
+     * <p>
+     * The default implementation always throws {@link IOException} — mounts backed by
+     * resources that cannot be memory-mapped or file-mapped (e.g. JARs) are not required
+     * to support this mode. Callers should fall back to {@link #openForRead(String)} when
+     * this throws.
+     * </p>
+     *
+     * @param path the mount-relative path to open
+     * @return an open {@link RandomAccessFile} positioned at byte 0, in read-only mode
+     * @throws IOException if the operation is unsupported or an I/O error occurs
+     */
+    default RandomAccessFile openForReadRandom(String path) throws IOException {
+        throw new IOException("seek not supported by this mount");
     }
 }

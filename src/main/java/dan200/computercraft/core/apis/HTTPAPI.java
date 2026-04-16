@@ -185,6 +185,11 @@ public class HTTPAPI implements ILuaAPI {
                 String urlString = args[0].toString();
                 String data = args.length > 1 && args[1] instanceof String ? (String) args[1] : null;
                 String verb = args.length > 3 && args[3] instanceof String ? (String) args[3] : null;
+                int timeout = 0;
+                if (args.length > 4 && args[4] instanceof Number) {
+                    timeout = (int) (((Number) args[4]).doubleValue() * 1000);
+                }
+                boolean binary = args.length > 5 && Boolean.TRUE.equals(args[5]);
 
                 HashMap<String, String> headers = null;
                 if (args.length >= 3 && args[2] instanceof Map) {
@@ -200,7 +205,7 @@ public class HTTPAPI implements ILuaAPI {
                 }
 
                 try {
-                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb);
+                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary);
                     synchronized (this.m_httpRequests) {
                         this.m_httpRequests.add(request);
                     }

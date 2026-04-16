@@ -6,6 +6,8 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import javax.net.SocketFactory;
@@ -64,6 +66,9 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     /** Non-null failure reason when {@code m_connectComplete && !m_connectSuccess}. */
     private volatile String m_connectError = null;
+
+    /** HTTP response headers captured from the server handshake; populated in {@link #onOpen}. */
+    private volatile Map<String, String> m_responseHeaders = Collections.emptyMap();
 
     public WebSocketRequest(String urlString, Map<String, String> headers, IAPIEnvironment environment)
         throws LuaException {
@@ -134,6 +139,12 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        for (Iterator<String> it = handshakedata.iterateHttpFields(); it.hasNext();) {
+            String name = it.next();
+            headers.put(name, handshakedata.getFieldValue(name));
+        }
+        m_responseHeaders = Collections.unmodifiableMap(headers);
         m_open = true;
         m_connectSuccess = true;
         m_connectComplete = true; // written last so advance() sees a consistent view
@@ -186,6 +197,11 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
     @Override
     public boolean isConnectionOpen() {
         return m_open;
+    }
+
+    @Override
+    public Map<String, String> getResponseHeaders() {
+        return m_responseHeaders;
     }
 
     @Override

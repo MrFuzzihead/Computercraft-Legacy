@@ -169,7 +169,10 @@ public class FileSystem {
 
     public synchronized String[] find(String wildPath) throws FileSystemException {
         wildPath = sanitizePath(wildPath, true);
-        Pattern wildPattern = Pattern.compile("^\\Q" + wildPath.replaceAll("\\*", "\\\\E[^\\\\/]*\\\\Q") + "\\E$");
+        // Convert wildcard globs to a regex: '*' → any sequence, '?' → exactly one non-separator char.
+        String regexBody = wildPath.replaceAll("\\*", "\\\\E[^\\\\/]*\\\\Q")
+            .replaceAll("\\?", "\\\\E[^\\\\/]\\\\Q");
+        Pattern wildPattern = Pattern.compile("^\\Q" + regexBody + "\\E$");
         List<String> matches = new ArrayList<>();
         this.findIn("", matches, wildPattern);
         String[] array = new String[matches.size()];
@@ -475,6 +478,11 @@ public class FileSystem {
 
             @Override
             public byte[] readLine() throws IOException {
+                return readLine(false);
+            }
+
+            @Override
+            public byte[] readLine(boolean withTrailing) throws IOException {
                 ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
                 int val;
                 while ((val = raf.read()) != -1) {
@@ -484,14 +492,25 @@ public class FileSystem {
                         if (next != '\n' && next != -1) {
                             raf.seek(pos);
                         }
+                        if (withTrailing) buffer.write('\n');
                         return buffer.toByteArray();
                     } else if (val == '\n') {
+                        if (withTrailing) buffer.write('\n');
                         return buffer.toByteArray();
                     } else {
                         buffer.write(val);
                     }
                 }
                 return buffer.size() > 0 ? buffer.toByteArray() : null;
+            }
+
+            @Override
+            public byte[] read(int count) throws IOException {
+                if (count <= 0) return new byte[0];
+                byte[] buf = new byte[count];
+                int n = raf.read(buf, 0, count);
+                if (n == -1) return null;
+                return n == count ? buf : Arrays.copyOf(buf, n);
             }
 
             @Override
@@ -546,6 +565,260 @@ public class FileSystem {
         return file;
     }
 
+    /**
+     * Open a file for seekable text reading (mode {@code "r"}).
+     *
+     * <p>
+     * Attempts to obtain a {@link RandomAccessFile} from the underlying mount for full seek
+     * support. If the mount does not support random access (e.g. JarMount / ROM), falls back to
+     * a stream-backed implementation; in that case the returned handle exposes
+     * {@code readLine(boolean)}, {@code read(int)}, and {@code readAll()} but {@code seek} will
+     * return {@code nil, msg} from Lua.
+     * </p>
+     *
+     * @return the file handle, or {@code null} if the file does not exist
+     */
+    public synchronized IMountedFileNormal openForReadSeekable(String path) throws FileSystemException {
+        path = sanitizePath(path);
+        MountWrapper mount = getMount(path);
+
+        // Attempt RAF (seek-capable) path first.
+        RandomAccessFile raf = mount.openForReadRandom(path); // null → mount doesn't support RAF
+        if (raf != null) {
+            final RandomAccessFile rafFinal = raf;
+            IMountedFileNormal file = new IMountedFileNormal() {
+
+                @Override
+                public byte[] readLine() throws IOException {
+                    return readLine(false);
+                }
+
+                @Override
+                public byte[] readLine(boolean withTrailing) throws IOException {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+                    int val;
+                    while ((val = rafFinal.read()) != -1) {
+                        if (val == '\r') {
+                            long pos = rafFinal.getFilePointer();
+                            int next = rafFinal.read();
+                            if (next != '\n' && next != -1) {
+                                rafFinal.seek(pos);
+                            }
+                            if (withTrailing) buffer.write('\n');
+                            return buffer.toByteArray();
+                        } else if (val == '\n') {
+                            if (withTrailing) buffer.write('\n');
+                            return buffer.toByteArray();
+                        } else {
+                            buffer.write(val);
+                        }
+                    }
+                    return buffer.size() > 0 ? buffer.toByteArray() : null;
+                }
+
+                @Override
+                public byte[] read(int count) throws IOException {
+                    if (count <= 0) return new byte[0];
+                    byte[] buf = new byte[count];
+                    int n = rafFinal.read(buf, 0, count);
+                    if (n == -1) return null;
+                    return n == count ? buf : Arrays.copyOf(buf, n);
+                }
+
+                @Override
+                public byte[] readAll() throws IOException {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
+                    int nRead;
+                    byte[] data = new byte[1024];
+                    while ((nRead = rafFinal.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, nRead);
+                    }
+                    return buffer.toByteArray();
+                }
+
+                @Override
+                public long seek(String whence, long offset) throws IOException {
+                    long newPos;
+                    switch (whence) {
+                        case "set":
+                            newPos = offset;
+                            break;
+                        case "cur":
+                            newPos = rafFinal.getFilePointer() + offset;
+                            break;
+                        case "end":
+                            newPos = rafFinal.length() + offset;
+                            break;
+                        default:
+                            throw new IOException("Invalid whence value");
+                    }
+                    if (newPos < 0) throw new IOException("Cannot seek before the beginning of the file");
+                    rafFinal.seek(newPos);
+                    return newPos;
+                }
+
+                @Override
+                public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void flush() throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void close() throws IOException {
+                    removeFile(this, rafFinal);
+                }
+            };
+            addFile(file);
+            return file;
+        }
+
+        // Fall back to stream-based reading (seek not supported by this mount).
+        InputStream stream = mount.openForRead(path);
+        if (stream == null) return null;
+        final PushbackInputStream reader = new PushbackInputStream(new BufferedInputStream(stream));
+        IMountedFileNormal file = new IMountedFileNormal() {
+
+            @Override
+            public byte[] readLine() throws IOException {
+                return readLine(false);
+            }
+
+            @Override
+            public byte[] readLine(boolean withTrailing) throws IOException {
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+                int val;
+                while ((val = reader.read()) != -1) {
+                    if (val == '\r') {
+                        int next = reader.read();
+                        if (next != '\n' && next != -1) {
+                            reader.unread(next);
+                        }
+                        if (withTrailing) buffer.write('\n');
+                        return buffer.toByteArray();
+                    } else if (val == '\n') {
+                        if (withTrailing) buffer.write('\n');
+                        return buffer.toByteArray();
+                    } else {
+                        buffer.write(val);
+                    }
+                }
+                return buffer.size() > 0 ? buffer.toByteArray() : null;
+            }
+
+            @Override
+            public byte[] read(int count) throws IOException {
+                if (count <= 0) return new byte[0];
+                byte[] buf = new byte[count];
+                int n = reader.read(buf, 0, count);
+                if (n == -1) return null;
+                return n == count ? buf : Arrays.copyOf(buf, n);
+            }
+
+            @Override
+            public byte[] readAll() throws IOException {
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
+                int nRead;
+                byte[] data = new byte[1024];
+                while ((nRead = reader.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+                return buffer.toByteArray();
+            }
+
+            @Override
+            public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void flush() throws IOException {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void close() throws IOException {
+                removeFile(this, reader);
+            }
+            // seek() inherits the default: throws IOException("seek not supported by this handle")
+        };
+        addFile(file);
+        return file;
+    }
+
+    /**
+     * Open a file for seekable text writing (mode {@code "w"} or {@code "a"}).
+     *
+     * <p>
+     * The returned handle is backed by a {@link RandomAccessFile} and exposes
+     * {@code write}, {@code seek}, {@code flush}, and {@code close}. Read methods
+     * throw {@link UnsupportedOperationException}.
+     * </p>
+     *
+     * @param append {@code true} for append mode ({@code "a"}), {@code false} for truncate ({@code "w"})
+     * @return the file handle (never {@code null}; throws on error)
+     */
+    public synchronized IMountedFileNormal openForWriteSeekable(String path, boolean append)
+        throws FileSystemException {
+        path = sanitizePath(path);
+        MountWrapper mount = getMount(path);
+        final RandomAccessFile raf = mount.openForWriteRandom(path, append);
+        IMountedFileNormal file = new IMountedFileNormal() {
+
+            @Override
+            public byte[] readLine() throws IOException {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public byte[] readAll() throws IOException {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
+                raf.write(data, start, length);
+                if (newLine) raf.write('\n');
+            }
+
+            @Override
+            public long seek(String whence, long offset) throws IOException {
+                long newPos;
+                switch (whence) {
+                    case "set":
+                        newPos = offset;
+                        break;
+                    case "cur":
+                        newPos = raf.getFilePointer() + offset;
+                        break;
+                    case "end":
+                        newPos = raf.length() + offset;
+                        break;
+                    default:
+                        throw new IOException("Invalid whence value");
+                }
+                if (newPos < 0) throw new IOException("Cannot seek before the beginning of the file");
+                raf.seek(newPos);
+                return newPos;
+            }
+
+            @Override
+            public void flush() throws IOException {
+                // RandomAccessFile writes are unbuffered; no-op
+            }
+
+            @Override
+            public void close() throws IOException {
+                removeFile(this, raf);
+            }
+        };
+        addFile(file);
+        return file;
+    }
+
     public long getFreeSpace(String path) throws FileSystemException {
         path = sanitizePath(path);
         FileSystem.MountWrapper mount = this.getMount(path);
@@ -580,6 +853,18 @@ public class FileSystem {
         return result;
     }
 
+    /**
+     * Returns {@code true} if {@code path} is the mount point of a drive (i.e. a path that has been
+     * passed to {@link #mount} or {@link #mountWritable}). The root {@code ""} is always a drive root.
+     *
+     * @param path the path to test (will be sanitised)
+     * @return {@code true} if the path is a drive-root mount point
+     */
+    public synchronized boolean isDriveRoot(String path) {
+        path = sanitizePath(path);
+        return m_mounts.containsKey(path);
+    }
+
     private FileSystem.MountWrapper getMount(String path) throws FileSystemException {
         Iterator<FileSystem.MountWrapper> it = this.m_mounts.values()
             .iterator();
@@ -610,7 +895,9 @@ public class FileSystem {
 
     private static String sanitizePath(String path, boolean allowWildcards) {
         path = path.replace('\\', '/');
-        char[] specialChars = new char[] { '"', ':', '<', '>', '?', '|' };
+        // When allowWildcards is true, '?' is also permitted as a single-character wildcard.
+        char[] specialChars = allowWildcards ? new char[] { '"', ':', '<', '>', '|' }
+            : new char[] { '"', ':', '<', '>', '?', '|' };
         StringBuilder cleanName = new StringBuilder();
 
         for (int i = 0; i < path.length(); i++) {
@@ -940,6 +1227,59 @@ public class FileSystem {
                     throw new FileSystemException("Cannot write to directory");
                 }
                 return this.m_writableMount.openForReadWrite(path, truncate);
+            } catch (IOException e) {
+                throw new FileSystemException(e.getMessage());
+            }
+        }
+
+        /**
+         * Attempt to open the file at {@code path} for seekable reading.
+         *
+         * @return the RAF, or {@code null} if random access is not supported by this mount
+         * @throws FileSystemException if the file does not exist or another I/O error occurs
+         */
+        public RandomAccessFile openForReadRandom(String path) throws FileSystemException {
+            String localPath = this.toLocal(path);
+            try {
+                if (!this.m_mount.exists(localPath) || this.m_mount.isDirectory(localPath)) {
+                    throw new FileSystemException("No such file");
+                }
+                return this.m_mount.openForReadRandom(localPath);
+            } catch (FileSystemException e) {
+                throw e;
+            } catch (IOException e) {
+                // "seek not supported by this mount" from the default IMount implementation,
+                // or any other IOException indicating RAF is unavailable. Return null so
+                // the caller can fall back to the stream-based path.
+                return null;
+            }
+        }
+
+        /**
+         * Open the file at {@code path} for seekable writing.
+         *
+         * @param append {@code true} for append mode, {@code false} to create/truncate
+         * @throws FileSystemException if access is denied, the path is a directory, or an I/O error occurs
+         */
+        public RandomAccessFile openForWriteRandom(String path, boolean append) throws FileSystemException {
+            if (this.m_writableMount == null) {
+                throw new FileSystemException("Access Denied");
+            }
+            try {
+                path = this.toLocal(path);
+                if (this.m_mount.exists(path) && this.m_mount.isDirectory(path)) {
+                    throw new FileSystemException("Cannot write to directory");
+                }
+                // Ensure parent directory exists for new files
+                if (!path.isEmpty()) {
+                    String dir = FileSystem.getDirectory(path);
+                    if (!dir.isEmpty() && !this.m_mount.exists(path)) {
+                        this.m_writableMount.makeDirectory(dir);
+                    }
+                }
+                return this.m_writableMount.openForWriteRandom(path, append);
+            } catch (FileSystemException e) {
+                throw e;
             } catch (IOException e) {
                 throw new FileSystemException(e.getMessage());
             }

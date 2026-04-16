@@ -9,6 +9,7 @@ import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemRecord;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -66,11 +67,16 @@ import dan200.computercraft.shared.peripheral.common.ItemPeripheral;
 import dan200.computercraft.shared.peripheral.common.PeripheralItemFactory;
 import dan200.computercraft.shared.peripheral.diskdrive.ContainerDiskDrive;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
+import dan200.computercraft.shared.peripheral.generic.energy.rf.RFIntegration;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.peripheral.printer.ContainerPrinter;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
+import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
+import dan200.computercraft.shared.peripheral.redstone.TileRedstoneRelay;
+import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
+import dan200.computercraft.shared.peripheral.speaker.TileSpeaker;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
@@ -139,6 +145,12 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
     public abstract File getWorldDir(World var1);
 
     @Override
+    public abstract void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume);
+
+    @Override
+    public abstract void stopSpeaker(int x, int y, int z);
+
+    @Override
     public void handlePacket(ComputerCraftPacket packet, EntityPlayer player) {
         switch (packet.m_packetType) {
             case 1:
@@ -178,6 +190,21 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                     Packet description = generic.getDescriptionPacket();
                     ((EntityPlayerMP) player).playerNetServerHandler.sendPacket(description);
                 }
+                break;
+            case ComputerCraftPacket.SpeakerAudio: {
+                int sx = packet.m_dataInt[0];
+                int sy = packet.m_dataInt[1];
+                int sz = packet.m_dataInt[2];
+                float vol = packet.m_dataInt[3] / 1000.0f;
+                byte[] dfpwm = (packet.m_dataByte != null && packet.m_dataByte.length > 0
+                    && packet.m_dataByte[0] != null) ? packet.m_dataByte[0] : new byte[0];
+                ComputerCraft.proxy.playSpeakerAudio(sx, sy, sz, dfpwm, vol);
+                break;
+            }
+            case ComputerCraftPacket.SpeakerStop: {
+                ComputerCraft.proxy.stopSpeaker(packet.m_dataInt[0], packet.m_dataInt[1], packet.m_dataInt[2]);
+                break;
+            }
         }
     }
 
@@ -191,6 +218,8 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerBlock(ComputerCraft.Blocks.cable, ItemCable.class, "CC-Cable");
         ComputerCraft.Blocks.commandComputer = BlockCommandComputer.createComputerBlock();
         GameRegistry.registerBlock(ComputerCraft.Blocks.commandComputer, ItemCommandComputer.class, "command_computer");
+        ComputerCraft.Blocks.redstoneRelay = new BlockRedstoneRelay();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.redstoneRelay, "CC-RedstoneRelay");
         ComputerCraft.Items.disk = new ItemDiskLegacy();
         GameRegistry.registerItem(ComputerCraft.Items.disk, "disk");
         ComputerCraft.Items.diskExpanded = new ItemDiskExpanded();
@@ -344,6 +373,34 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         ItemStack cloudyHead = new ItemStack(Items.skull, 1, 3);
         cloudyHead.setTagCompound(tag);
         GameRegistry.addShapelessRecipe(cloudyHead, monitor, new ItemStack(Items.skull, 1, 1));
+        ItemStack redstoneRelayItem = new ItemStack(ComputerCraft.Blocks.redstoneRelay, 1);
+        ItemStack wiredModemForRelay = PeripheralItemFactory.create(PeripheralType.WiredModem, null, 1);
+        GameRegistry.addRecipe(
+            redstoneRelayItem,
+            "XRX",
+            "RWR",
+            "XRX",
+            'X',
+            Blocks.stone,
+            'R',
+            Items.redstone,
+            'W',
+            wiredModemForRelay);
+        // Speaker block + crafting recipe
+        ComputerCraft.Blocks.speaker = new BlockSpeaker();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.speaker, ItemBlock.class, "speaker");
+        ItemStack speakerStack = new ItemStack(ComputerCraft.Blocks.speaker);
+        GameRegistry.addRecipe(
+            speakerStack,
+            "SSS",
+            "SNS",
+            "SRS",
+            'S',
+            Blocks.stone,
+            'N',
+            Blocks.noteblock,
+            'R',
+            Items.redstone);
     }
 
     private void registerTileEntities() {
@@ -354,10 +411,17 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TilePrinter.class, "ccprinter");
         GameRegistry.registerTileEntity(TileCable.class, "wiredmodem");
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
-        ComputerCraftAPI.registerPeripheralProvider(new DefaultPeripheralProvider());
+        GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
+        GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
         }
+
+        DefaultPeripheralProvider defaultProvider = new DefaultPeripheralProvider();
+        try {
+            RFIntegration.register(defaultProvider);
+        } catch (NoClassDefFoundError ignored) {}
+        ComputerCraftAPI.registerPeripheralProvider(defaultProvider);
 
         ComputerCraftAPI.registerBundledRedstoneProvider(new DefaultBundledRedstoneProvider());
         ComputerCraftAPI.registerMediaProvider(new DefaultMediaProvider());
