@@ -2,7 +2,8 @@ package dan200.computercraft.shared.peripheral.generic.energy.rf;
 
 import net.minecraftforge.common.util.ForgeDirection;
 
-import cofh.api.energy.IEnergyHandler;
+import cofh.api.energy.IEnergyProvider;
+import cofh.api.energy.IEnergyReceiver;
 import cofh.api.energy.IEnergyStorage;
 import dan200.computercraft.shared.peripheral.generic.IEnergyStorageAdapter;
 
@@ -10,40 +11,64 @@ import dan200.computercraft.shared.peripheral.generic.IEnergyStorageAdapter;
  * {@link IEnergyStorageAdapter} backed by CoFH's RF API.
  *
  * <p>
- * {@link IEnergyHandler} is preferred (directional, used by most GTNH machines such as
- * Thermal Expansion and EnderIO) with {@link ForgeDirection#UNKNOWN}. {@link IEnergyStorage}
- * is used as a fallback for blocks that only implement the simpler storage interface.
+ * Three paths, tried in priority order by {@link RFEnergyAdapterFactory}:
+ * </p>
+ * <ol>
+ * <li>{@link IEnergyReceiver} (preferred, directional) — covers {@code IEnergyHandler} too,
+ *     since {@code IEnergyHandler extends IEnergyReceiver}.</li>
+ * <li>{@link IEnergyProvider} (directional, generator/source-only blocks).</li>
+ * <li>{@link IEnergyStorage} (non-directional fallback).</li>
+ * </ol>
+ * <p>
+ * Directional calls use {@link ForgeDirection#UNKNOWN}; most machines accept this as a
+ * side-agnostic query.
  * </p>
  */
 public class RFEnergyStorageAdapter implements IEnergyStorageAdapter {
 
-    private final IEnergyHandler m_handler;
+    private final IEnergyReceiver m_receiver;
+    private final IEnergyProvider m_provider;
     private final IEnergyStorage m_storage;
 
-    /** Construct an adapter backed by {@link IEnergyHandler} (preferred path). */
-    public RFEnergyStorageAdapter(IEnergyHandler handler) {
-        this.m_handler = handler;
+    /** Construct an adapter backed by {@link IEnergyReceiver} (primary path). */
+    public RFEnergyStorageAdapter(IEnergyReceiver receiver) {
+        this.m_receiver = receiver;
+        this.m_provider = null;
+        this.m_storage = null;
+    }
+
+    /** Construct an adapter backed by {@link IEnergyProvider} (secondary path). */
+    public RFEnergyStorageAdapter(IEnergyProvider provider) {
+        this.m_receiver = null;
+        this.m_provider = provider;
         this.m_storage = null;
     }
 
     /** Construct an adapter backed by {@link IEnergyStorage} (fallback path). */
     public RFEnergyStorageAdapter(IEnergyStorage storage) {
-        this.m_handler = null;
+        this.m_receiver = null;
+        this.m_provider = null;
         this.m_storage = storage;
     }
 
     @Override
     public int getEnergy() {
-        if (m_handler != null) {
-            return m_handler.getEnergyStored(ForgeDirection.UNKNOWN);
+        if (m_receiver != null) {
+            return m_receiver.getEnergyStored(ForgeDirection.UNKNOWN);
+        }
+        if (m_provider != null) {
+            return m_provider.getEnergyStored(ForgeDirection.UNKNOWN);
         }
         return m_storage.getEnergyStored();
     }
 
     @Override
     public int getEnergyCapacity() {
-        if (m_handler != null) {
-            return m_handler.getMaxEnergyStored(ForgeDirection.UNKNOWN);
+        if (m_receiver != null) {
+            return m_receiver.getMaxEnergyStored(ForgeDirection.UNKNOWN);
+        }
+        if (m_provider != null) {
+            return m_provider.getMaxEnergyStored(ForgeDirection.UNKNOWN);
         }
         return m_storage.getMaxEnergyStored();
     }
@@ -57,14 +82,14 @@ public class RFEnergyStorageAdapter implements IEnergyStorageAdapter {
         if (this == obj) return true;
         if (!(obj instanceof RFEnergyStorageAdapter)) return false;
         RFEnergyStorageAdapter other = (RFEnergyStorageAdapter) obj;
-        if (m_handler != null) {
-            return m_handler == other.m_handler;
-        }
-        return m_storage == other.m_storage;
+        Object mine = m_receiver != null ? m_receiver : m_provider != null ? m_provider : m_storage;
+        Object theirs = other.m_receiver != null ? other.m_receiver : other.m_provider != null ? other.m_provider : other.m_storage;
+        return mine == theirs;
     }
 
     @Override
     public int hashCode() {
-        return m_handler != null ? System.identityHashCode(m_handler) : System.identityHashCode(m_storage);
+        Object target = m_receiver != null ? m_receiver : m_provider != null ? m_provider : m_storage;
+        return System.identityHashCode(target);
     }
 }
