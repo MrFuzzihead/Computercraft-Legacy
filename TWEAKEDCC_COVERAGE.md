@@ -39,6 +39,7 @@
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
 | Drive peripheral | `DiskDrivePeripheral.java` | `isDiskPresent`, `getDiskLabel`, `setDiskLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `ejectDisk`, `getDiskID` |
+| `inventory` generic peripheral | `InventoryPeripheral.java` | `size`, `list`, `getItemDetail`, `getItemLimit`, `pushItems`, `pullItems` |
 | Speaker peripheral | `SpeakerPeripheral.java` | `playNote`, `playSound`, `playAudio`, `stop` |
 
 ---
@@ -473,6 +474,32 @@ consistently accept both string sides and wrapped tables.
 
 ---
 
+### 20. ~~`inventory` generic peripheral~~ ✅ Done
+
+Wraps any `IInventory` tile entity as an `"inventory"` peripheral exposing the six CC:Tweaked methods.
+Auto-registered by `DefaultPeripheralProvider` for any tile entity that implements `IInventory` and
+does not already have a more specific peripheral (printers, computers, turtles take priority).
+
+| Method | Notes |
+|---|---|
+| `size()` | Returns `getSizeInventory()`. Dispatches to main thread. |
+| `list()` | Returns a 1-indexed table of `{name, count, damage}` maps, skipping empty slots. Dispatches to main thread. |
+| `getItemDetail(slot)` | Returns `null` for an empty slot; otherwise `{name, count, damage, maxCount, displayName}`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `getItemLimit(slot)` | Returns `getInventoryStackLimit()`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `pushItems(toName, fromSlot [, limit [, toSlot]])` | Moves items from this inventory to a named modem-network inventory. Throws if the target does not exist or is not an inventory. Dispatches to main thread. |
+| `pullItems(fromName, fromSlot [, limit [, toSlot]])` | Moves items from a named modem-network inventory to this one. Throws if the source does not exist or is not an inventory. Dispatches to main thread. |
+
+`IComputerAccess.getAvailablePeripherals()` was added as a `default` method returning
+`Collections.emptyMap()` (backward-compatible). `TileCable.RemotePeripheralWrapper` overrides it
+to return a snapshot of the cable network's peripheral name map.
+
+**Double-chest support**: `InventoryUtil.getInventory` is called on every main-thread task so
+adjacent double-chest halves automatically merge to a 54-slot view.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/inventory/InventoryPeripheralTest.java` — 20 cases, all green.
+
+---
+
 ### 21. ~~Speaker peripheral~~ ✅ Done
 
 Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`.  Full design rationale in
@@ -530,6 +557,7 @@ returns, and the `shouldStop` flag).
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
+| ✅ Done | `inventory` generic peripheral                                  | Medium | Java |
 | ✅ Done | `redstone_relay` peripheral                                     | Medium | Java |
 | ✅ Done  | Speaker peripheral — see [SPEAKER_PLAN.md](SPEAKER_PLAN.md)    | Large | Java + Client |
 
