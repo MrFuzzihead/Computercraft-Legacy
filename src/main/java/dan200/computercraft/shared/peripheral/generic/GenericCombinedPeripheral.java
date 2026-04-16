@@ -2,6 +2,9 @@ package dan200.computercraft.shared.peripheral.generic;
 
 import java.util.List;
 
+import net.minecraftforge.common.util.ForgeDirection;
+import net.minecraftforge.fluids.IFluidHandler;
+
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
@@ -28,7 +31,7 @@ import dan200.computercraft.api.peripheral.IPeripheralTargeted;
  * to the module list passed to this constructor — no changes to this class are required.
  * </p>
  */
-public class GenericCombinedPeripheral implements IMultiTypePeripheral, IPeripheralTargeted {
+public class GenericCombinedPeripheral implements IMultiTypePeripheral, IPeripheralTargeted, IFluidHandlerPeripheral {
 
     private final List<IPeripheral> m_modules;
     /** Inclusive start index (in the merged array) of each module's methods. */
@@ -123,6 +126,33 @@ public class GenericCombinedPeripheral implements IMultiTypePeripheral, IPeriphe
         for (IPeripheral module : m_modules) {
             module.detach(computer);
         }
+    }
+
+    /**
+     * Returns the {@link IFluidHandler} from the first module that implements
+     * {@link IFluidHandlerPeripheral}, or {@code null} if no fluid module is present.
+     * Satisfies the {@link IFluidHandlerPeripheral} contract so that combined peripherals
+     * (e.g. inventory + fluid_storage + energy_storage) can participate in cross-peripheral
+     * fluid transfer via {@code pushFluid}/{@code pullFluid}.
+     */
+    @Override
+    public IFluidHandler getHandler() {
+        for (IPeripheral module : m_modules) {
+            if (module instanceof IFluidHandlerPeripheral) {
+                return ((IFluidHandlerPeripheral) module).getHandler();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public ForgeDirection getFace() {
+        for (IPeripheral module : m_modules) {
+            if (module instanceof IFluidHandlerPeripheral) {
+                return ((IFluidHandlerPeripheral) module).getFace();
+            }
+        }
+        return ForgeDirection.UNKNOWN;
     }
 
     @Override

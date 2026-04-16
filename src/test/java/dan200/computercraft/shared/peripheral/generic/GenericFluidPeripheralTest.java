@@ -319,7 +319,7 @@ class GenericFluidPeripheralTest {
                 return false;
             }
         };
-        GenericFluidPeripheral p = new GenericFluidPeripheral(nullTankHandler);
+        GenericFluidPeripheral p = new GenericFluidPeripheral(nullTankHandler, ForgeDirection.UNKNOWN);
 
         Object[] result = p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_TANKS, new Object[0]);
 
@@ -503,8 +503,8 @@ class GenericFluidPeripheralTest {
     @Test
     void equalsReturnsTrueForSameHandler() {
         EmptyTank handler = new EmptyTank(1000);
-        GenericFluidPeripheral a = new GenericFluidPeripheral(handler);
-        GenericFluidPeripheral b = new GenericFluidPeripheral(handler);
+        GenericFluidPeripheral a = new GenericFluidPeripheral(handler, ForgeDirection.UNKNOWN);
+        GenericFluidPeripheral b = new GenericFluidPeripheral(handler, ForgeDirection.UNKNOWN);
         assertTrue(a.equals(b));
     }
 
