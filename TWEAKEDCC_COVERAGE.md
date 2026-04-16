@@ -39,6 +39,8 @@
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
 | Drive peripheral | `DiskDrivePeripheral.java` | `isDiskPresent`, `getDiskLabel`, `setDiskLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `ejectDisk`, `getDiskID` |
+| `inventory` generic peripheral | `InventoryPeripheral.java` | `size`, `list`, `getItemDetail`, `getItemLimit`, `pushItems`, `pullItems` |
+| Speaker peripheral | `SpeakerPeripheral.java` | `playNote`, `playSound`, `playAudio`, `stop` |
 
 ---
 
@@ -216,7 +218,7 @@ this environment.
 
 ---
 
-### 8b. `cc.audio.dfpwm` — ✅ Done
+### 9. `cc.audio.dfpwm` — ✅ Done
 
 Pure-Lua port of CC:Tweaked's DFPWM audio codec module.
 
@@ -235,7 +237,7 @@ Algorithm constants match upstream exactly: `PREC_SHIFT = 10`, `PREC_CEIL = 1024
 
 ---
 
-### 8c. `cc.shell.completion` — ✅ Done
+### 10. `cc.shell.completion` — ✅ Done
 
 Pure-Lua module at `rom/modules/main/cc/shell/completion.lua`.  Provides
 completion functions whose signature (`shell, index, text, previous`) matches
@@ -267,7 +269,7 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
-### 20. ~~`commands` — Method parity gaps~~ ✅ Done (2026-04-14)
+### 11. ~~`commands` — Method parity gaps~~ ✅ Done (2026-04-14)
 
 | Method / Feature | Notes |
 |---|---|
@@ -283,20 +285,85 @@ the contract of [`shell.setCompletionFunction`].  Each function delegates to
 
 ---
 
+### 12. ~~`redstone_relay` peripheral~~ ✅ Done (2026-04-14)
 
+New standalone block that exposes the full redstone API surface as an `IPeripheral`, letting
+computers interact with redstone through wired or wireless modems without the computer block
+itself needing to be adjacent to the circuit.
 
-CC:Tweaked adds a `speaker` peripheral (no equivalent in 1.7.10 base):
-- `speaker.playNote(instrument, volume, pitch)`
-- `speaker.playSound(id, volume, pitch)`
-- `speaker.playAudio(chunk, volume)` *(newer CC:Tweaked)*
-- `speaker.stop()`
+**Reference**: [tweaked.cc/peripheral/redstone_relay](https://tweaked.cc/peripheral/redstone_relay.html)
+and upstream [`RedstoneMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/core/src/main/java/dan200/computercraft/core/apis/RedstoneMethods.java).
 
-**Implementation**: Requires a new `TileSpeaker` block + `SpeakerPeripheral.java` wired to
-Minecraft's sound engine. Significant scope — flag as out-of-scope until explicitly requested.
+#### Peripheral methods (same surface as `redstone` / `rs` global API)
+
+| Method | Notes |
+|---|---|
+| `getSides()` | Returns a table of the six side-name strings. |
+| `setOutput(side, bool)` | Digital write: sets the specified side to signal strength 15 (true) or 0 (false). |
+| `getOutput(side)` | Returns `true` if the current output on `side` is > 0. |
+| `getInput(side)` | Returns `true` if the current redstone input on `side` is > 0. |
+| `setBundledOutput(side, number)` | Sets the 16-bit bundled-cable output mask on `side`. |
+| `getBundledOutput(side)` | Returns the current bundled output mask on `side`. |
+| `getBundledInput(side)` | Returns the current bundled input mask on `side`. |
+| `testBundledInput(side, mask)` | Returns `true` if all bits of `mask` are set in the bundled input on `side`. |
+| `setAnalogOutput(side, level)` / `setAnalogueOutput` | Sets analog output (0–15) on `side`. British alias shares the same case body. |
+| `getAnalogOutput(side)` / `getAnalogueOutput` | Returns the analog output level (0–15) on `side`. |
+| `getAnalogInput(side)` / `getAnalogueInput` | Returns the analog input level (0–15) on `side`. |
+
+Sides are in local coordinates (relative to the relay's facing direction): `"bottom"`, `"top"`,
+`"back"`, `"front"`, `"right"`, `"left"`. This mirrors the computer-block `redstone` API exactly.
+
+Input changes (detected on neighbor-change and processed on the next server tick) fire a
+`"redstone"` event on all computers attached to the relay via modem.
+
+Output state is persisted in NBT (`"output"` and `"bundledOutput"` int arrays). Direction is
+stored in block metadata (2–5) and propagated to the client via `writeDescription`.
+
+Recipe: 4 × stone (corners) + 4 × redstone dust (cardinal sides) + 1 × wired modem (centre),
+shaped 3×3 (`S R S / R W R / S R S` where S=stone, R=redstone, W=wired modem).
+
+**Textures**: four PNGs already present under `assets/computercraft/textures/blocks/`:
+`redstoneRelayTop.png`, `redstoneRelayBottom.png`, `redstoneRelayFront.png`,
+`redstoneRelaySide.png`.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/redstone/RedstoneRelayPeripheralTest.java` — 21 cases, all green.
 
 ---
 
-### 10. ~~`shell` — Missing CC:Tweaked additions~~ ✅ Done
+### 13. Speaker peripheral — ✅ Done
+
+Standalone `BlockSpeaker` + `TileSpeaker` + `SpeakerPeripheral`.  Full design rationale in
+[SPEAKER_PLAN.md](SPEAKER_PLAN.md).
+
+| Method | Implementation | Notes |
+|---|---|---|
+| `playNote(instrument[, volume[, pitch]])` | Non-blocking; queues a `PendingNote` in `TileSpeaker.m_pendingNotes`; flushed to `world.playSoundEffect` in `updateEntity()`. Rate-limited to `speaker_max_notes_per_tick` (default 8) per tick. | All 16 CC:Tweaked instrument names accepted; 11 post-1.7.10 ones are silent in vanilla 1.7.10 but activate with a resource pack. |
+| `playSound(name[, volume[, pitch]])` | Non-blocking; queues a `PendingSound`; `world.playSoundEffect` called in `updateEntity()`. | Rejected while audio stream is active. |
+| `playAudio(audio[, volume])` | Non-blocking; validates and DFPWM-encodes the PCM table; sends a `SpeakerAudio` packet from `updateEntity()`. Back-pressure via nanosecond timer (500 ms `CLIENT_BUFFER`). | `speaker_audio_empty` is queued on attached computers after each batch dispatch. |
+| `stop()` | Sets `m_shouldStop` flag; `updateEntity()` clears state and sends `SpeakerStop` to all players. | Does not queue `speaker_audio_empty`. |
+
+**Network packets**: `SpeakerAudio = 10` (DFPWM bytes + volume×1000 as int), `SpeakerStop = 11`
+(coordinates only) — both added to `ComputerCraftPacket`.
+
+**Client audio**: `SpeakerManager` (`@SideOnly(CLIENT)`) decodes DFPWM → PCM via `DfpwmDecoder`
+(same PREC_SHIFT/PREC_CEIL/LPF_STRENGTH constants as the server encoder) and plays via
+`javax.sound.sampled.SourceDataLine` at 48 kHz / 8-bit signed mono.  Volume is applied by
+linearly scaling PCM sample values.
+
+**Config keys**: `speaker_max_notes_per_tick` (default 8) and `speaker_audio_range` (default
+256 blocks ≈ 16-chunk view distance, approximating upstream's `sendToAllTracking`).
+
+**Bug fixed**: `ComputerCraftPacket.fromBytes` previously used `getBytes` (non-advancing) to
+read `m_dataByte` entries; replaced with `readBytes` so the reader index advances correctly.
+This was required for the new `SpeakerAudio` packet to deserialize its payload.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/speaker/SpeakerPeripheralTest.java`
+— 26 cases, all green (covers all argument-validation paths, rate-limit / buffer-full false
+returns, and the `shouldStop` flag).
+
+---
+
+### 14. ~~`shell` — Missing CC:Tweaked additions~~ ✅ Done
 
 | Feature | Notes |
 |---|---|
@@ -310,7 +377,7 @@ Minecraft's sound engine. Significant scope — flag as out-of-scope until expli
 
 ---
 
-### 11. ~~`window` — Missing 3 methods~~ ✅ Done
+### 15. ~~`window` — Missing 3 methods~~ ✅ Done
 
 | Method | Notes |
 |---|---|
@@ -322,7 +389,7 @@ Minecraft's sound engine. Significant scope — flag as out-of-scope until expli
 
 ---
 
-### 12. ~~`help` — Extension-aware lookup~~ ✅ Done
+### 16. ~~`help` — Extension-aware lookup~~ ✅ Done
 
 | Change | Notes |
 |---|---|
@@ -333,7 +400,7 @@ Minecraft's sound engine. Significant scope — flag as out-of-scope until expli
 
 ---
 
-### 13. ~~`paintutils` — Missing `parseImage`~~ ✅ Done
+### 17. ~~`paintutils` — Missing `parseImage`~~ ✅ Done
 
 | Method | Notes |
 |---|---|
@@ -343,7 +410,7 @@ Minecraft's sound engine. Significant scope — flag as out-of-scope until expli
 
 ---
 
-### 14. ~~`bios.lua` `require` sentinel bug~~ ✅ Fixed
+### 18. ~~`bios.lua` `require` sentinel bug~~ ✅ Fixed
 
 **Problem**: When `package.loaded[name]` was set during module loading, the sentinel value was
 `true`. Any module that returned `nil` would cause the slot to be overwritten with `true`, and
@@ -364,7 +431,7 @@ package.loaded[_name] = (result ~= nil) and result or loading
 
 ---
 
-### 15. ~~`cc.expect` `table.pack.n` compatibility bug~~ ✅ Fixed
+### 19. ~~`cc.expect` `table.pack.n` compatibility bug~~ ✅ Fixed
 
 **Problem**: `get_type_names` in `cc/expect.lua` iterated over its type-list argument using
 `table.pack` and then indexed `.n` to get the count. The `table.pack` polyfill installed by
@@ -378,7 +445,7 @@ retrieve each one, with no dependency on `table.pack.n`.
 
 ---
 
-### 16. ~~`rednet` — Test coverage~~ ✅ Done
+### 20. ~~`rednet` — Test coverage~~ ✅ Done
 
 No functional changes to the `rednet` Lua API. A full unit-test suite has been added covering:
 `open`/`close`/`isOpen` (with and without modems), `send` (loopback, open modem, no modem),
@@ -388,7 +455,7 @@ No functional changes to the `rednet` Lua API. A full unit-test suite has been a
 
 ---
 
-### 17. ~~`peripheral` — `getType` wrapped-table support + test coverage~~ ✅ Done
+### 21. ~~`peripheral` — `getType` wrapped-table support + test coverage~~ ✅ Done
 
 **Change**: `peripheral.getType` now accepts either a string side name or a wrapped peripheral
 table (looked up via the weak-keyed `wrapNames` registry, the same mechanism used by `getName`
@@ -402,7 +469,7 @@ consistently accept both string sides and wrapped tables.
 
 ---
 
-### 18. ~~`_G` — `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param~~ ✅ Done
+### 22. ~~`_G` — `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param~~ ✅ Done
 
 | Feature | Notes |
 |---|---|
@@ -414,7 +481,7 @@ consistently accept both string sides and wrapped tables.
 
 ---
 
-### 19. ~~`textutils` — `serialize` opts + `serializeJSON` opts + `unserializeJSON` opts~~ ✅ Done
+### 23. ~~`textutils` — `serialize` opts + `serializeJSON` opts + `unserializeJSON` opts~~ ✅ Done
 
 | Feature | Notes |
 |---|---|
@@ -424,6 +491,80 @@ consistently accept both string sides and wrapped tables.
 
 **Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsSerializeTest.java` — 14 cases, all green.
 **Tests**: `src/test/java/dan200/computercraft/core/lua/TextUtilsJsonTest.java` — 42 cases, all green.
+
+---
+
+### 24. ~~`inventory` generic peripheral~~ ✅ Done
+
+Wraps any `IInventory` tile entity as an `"inventory"` peripheral exposing the six CC:Tweaked methods.
+Auto-registered by `DefaultPeripheralProvider` for any tile entity that implements `IInventory` and
+does not already have a more specific peripheral (printers, computers, turtles take priority).
+
+| Method | Notes |
+|---|---|
+| `size()` | Returns `getSizeInventory()`. Dispatches to main thread. |
+| `list()` | Returns a 1-indexed table of `{name, count, damage}` maps, skipping empty slots. Dispatches to main thread. |
+| `getItemDetail(slot)` | Returns `null` for an empty slot; otherwise `{name, count, damage, maxCount, displayName}`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `getItemLimit(slot)` | Returns `getInventoryStackLimit()`. Throws `LuaException` for an out-of-range slot. Dispatches to main thread. |
+| `pushItems(toName, fromSlot [, limit [, toSlot]])` | Moves items from this inventory to a named modem-network inventory. Throws if the target does not exist or is not an inventory. Dispatches to main thread. |
+| `pullItems(fromName, fromSlot [, limit [, toSlot]])` | Moves items from a named modem-network inventory to this one. Throws if the source does not exist or is not an inventory. Dispatches to main thread. |
+
+`IComputerAccess.getAvailablePeripherals()` was added as a `default` method returning
+`Collections.emptyMap()` (backward-compatible). `TileCable.RemotePeripheralWrapper` overrides it
+to return a snapshot of the cable network's peripheral name map.
+
+**Double-chest support**: `InventoryUtil.getInventory` is called on every main-thread task so
+adjacent double-chest halves automatically merge to a 54-slot view.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/inventory/InventoryPeripheralTest.java` — 20 cases, all green.
+
+---
+
+### 25. `fluid_storage` generic peripheral — ✅ Done (2026-04-14)
+
+Upstream reference: [tweaked.cc/generic_peripheral/fluid_storage](https://tweaked.cc/generic_peripheral/fluid_storage.html),
+[`AbstractFluidMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/common/src/main/java/dan200/computercraft/shared/peripheral/generic/methods/AbstractFluidMethods.java)
+
+Wraps any tile entity that implements Forge 1.7.10's `net.minecraftforge.fluids.IFluidHandler`
+(the 1.7.10 equivalent of the 1.12+ capability system) and exposes it as a peripheral of type
+`"fluid_storage"` with three methods.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `tanks()` | `tanks()` → `{ { name, amount, capacity }, … }` | Calls `getTankInfo(ForgeDirection.UNKNOWN)`. Each `FluidTankInfo` becomes a table with `capacity` (int→double). If the tank is non-empty, `name` (`Fluid.getName()`) and `amount` are also included. Empty-tank entries have only `capacity`. |
+| `pushFluid()` | `pushFluid(toName [, limit [, fluidName]])` → `number` | Resolves `toName` to an `IFluidHandler` via `computer.getAvailablePeripheral(toName)`. Transfers up to `limit` mB of `fluidName` (or any fluid if omitted). Returns the number of mB actually moved. Runs on the main thread. |
+| `pullFluid()` | `pullFluid(fromName [, limit [, fluidName]])` → `number` | Mirror of `pushFluid` with source and destination swapped. |
+
+#### Design decisions
+
+| # | Decision |
+|---|---|
+| 1 | **Fluid name format**: `Fluid.getName()` as-is (raw Forge fluid name, e.g. `"water"`). |
+| 2 | **Mixed `IPeripheralTile` + `IFluidHandler`**: `IPeripheralTile` check takes priority in `DefaultPeripheralProvider`; those tiles keep their own peripheral. Only "plain" `IFluidHandler` tiles without a custom peripheral are wrapped. |
+| 3 | **`ForgeDirection` for transfer**: `ForgeDirection.UNKNOWN` for both source and target (omnidirectional). Consistent with CC:Tweaked. |
+
+#### Files added / modified
+
+| File | Change |
+|---|---|
+| `api/peripheral/IComputerAccess.java` | Added `default IPeripheral getAvailablePeripheral(String name)` (returns `null`). |
+| `core/apis/PeripheralAPI.java` | `PeripheralWrapper` overrides `getAvailablePeripheral` — scans 6-side array by `m_side`. |
+| `shared/peripheral/modem/TileCable.java` | `RemotePeripheralWrapper` gains a `TileCable m_entity` field; overrides `getAvailablePeripheral` via `m_peripheralsByName.get(name)`. |
+| `shared/util/FluidUtil.java` | New. Static `moveFluid` helper implementing simulate-drain → simulate-fill → execute-drain → execute-fill. |
+| `shared/peripheral/generic/GenericFluidPeripheral.java` | New. `IPeripheral` implementation wrapping `IFluidHandler`. |
+| `shared/peripheral/common/DefaultPeripheralProvider.java` | Added `IFluidHandler` fallback after `TileComputerBase` check. |
+
+#### Test note
+
+`FluidStack(Fluid, int)` calls `FluidRegistry.makeDelegate()`, which triggers
+`FluidRegistry.<clinit>` and crashes outside a running Minecraft server (requires
+`Blocks.water` to be initialized). Unit tests therefore cover method surface, empty-tank
+`tanks()`, all error paths, and end-to-end zero-transfer smoke tests (empty tank → drain
+returns `null` → `FluidUtil.moveFluid` returns 0 without constructing any `FluidStack`).
+Actual fluid transfer, fluid-name filtering, and multi-tank scenarios are verified by the
+in-game test script `run/saves/Test World/computer/37/test_fluid_storage.lua`.
+
+**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/generic/GenericFluidPeripheralTest.java` — **20 cases**, all green.
 
 ---
 
@@ -451,116 +592,10 @@ consistently accept both string sides and wrapped tables.
 | ✅ Done | `_HOST`, `_CC_DEFAULT_SETTINGS`, `read` default param           | Small | Java + Lua |
 | ✅ Done | `textutils.serialize` opts + `serializeJSON` opts + `unserializeJSON` opts | Small | Lua |
 | ✅ Done | `commands` method parity (`exec` affected count, `list` prefix filter, `getBlockInfo` state/nbt/dimension, `getBlockInfos`) | Medium | Java |
-| **✅ Done** | `energy_storage` generic peripheral (`getEnergy`, `getEnergyCapacity`) | Medium | Java |
-| Deferred | Speaker peripheral                                              | Large | Java + Client |
-
----
-
-### 21. ~~`energy_storage` generic peripheral~~ ✅ Done (2026-04-14)
-
-Implements CC:Tweaked's [`energy_storage`](https://tweaked.cc/generic_peripheral/energy_storage.html)
-generic peripheral module for 1.7.10 using CoFH's RF API as the primary backend.
-Upstream reference:
-[`AbstractEnergyMethods.java`](https://github.com/cc-tweaked/CC-Tweaked/blob/db32ddfec5e8c2bdefb3232b471328a3e92cc43f/projects/common/src/main/java/dan200/computercraft/shared/peripheral/generic/methods/AbstractEnergyMethods.java).
-
-#### Methods
-
-| Method | Returns | Notes |
-|---|---|---|
-| `getEnergy()` | `number` | Current energy stored in RF (delegates to `IEnergyHandler.getEnergyStored(ForgeDirection.UNKNOWN)` or `IEnergyStorage.getEnergyStored()`) |
-| `getEnergyCapacity()` | `number` | Maximum energy capacity in RF (delegates to `IEnergyHandler.getMaxEnergyStored(ForgeDirection.UNKNOWN)` or `IEnergyStorage.getMaxEnergyStored()`) |
-
-#### Design
-
-**Abstraction layer** — all peripheral logic is decoupled from the CoFH RF API through two
-internal interfaces, allowing future energy systems (IC² EU, Mekanism Joules, …) to be added
-without touching the peripheral or provider code:
-
-```
-shared/peripheral/generic/
-│
-├── IEnergyAdapterFactory.java       — tryAdapt(TileEntity) → IEnergyStorageAdapter | null
-├── IEnergyStorageAdapter.java       — getEnergy() : int; getEnergyCapacity() : int
-├── EnergyStoragePeripheral.java     — IPeripheral wrapper; type = "energy_storage";
-│                                      methods = { "getEnergy", "getEnergyCapacity" }
-├── GenericPeripheralProvider.java   — IPeripheralProvider; holds List<IEnergyAdapterFactory>;
-│                                      addFactory(f) for external extensibility
-└── energy/
-    └── rf/
-        ├── RFEnergyStorageAdapter.java  — IEnergyStorageAdapter backed by IEnergyHandler
-        │                                  (preferred, ForgeDirection.UNKNOWN) or IEnergyStorage
-        ├── RFEnergyAdapterFactory.java  — IEnergyAdapterFactory; checks instanceof
-        │                                  IEnergyHandler first, then IEnergyStorage
-        └── RFIntegration.java           — static register(GenericPeripheralProvider);
-                                           isolates all cofh.api.energy imports so the JVM
-                                           never loads this class if CoFH is absent
-```
-
-**Dependency** — `compileOnly(rfg.deobf("curse.maven:cofh-core-69162:2388751"))` in
-`dependencies.gradle`. CoFH Core is always present in GTNH at runtime; `compileOnly` avoids
-publishing it as a hard Maven dependency.
-
-**Registration** — in `ComputerCraftProxyCommon.registerTileEntities()`, after the existing
-`DefaultPeripheralProvider` registration:
-
-```java
-GenericPeripheralProvider genericProvider = new GenericPeripheralProvider();
-try {
-    RFIntegration.register(genericProvider);   // no-op if CoFH absent at runtime
-} catch (NoClassDefFoundError ignored) {}
-ComputerCraftAPI.registerPeripheralProvider(genericProvider);
-```
-
-No reflection is used. The `try/catch (NoClassDefFoundError)` is a standard 1.7.10
-class-load guard — `RFIntegration` is a separate compilation unit so the JVM defers
-loading its CoFH imports until `register()` is actually called.
-
-**Peripheral type disambiguation** — `GenericPeripheralProvider.getPeripheral()` does NOT
-check `IPeripheralTile`; it only matches blocks that no earlier provider claimed. CC's own
-blocks are always returned by `DefaultPeripheralProvider` first and are never re-wrapped.
-
-**`IEnergyHandler` vs. `IEnergyStorage` priority** — in GTNH 1.7.10, most machines
-(Thermal Expansion, EnderIO, …) implement `IEnergyHandler` (directional). The factory
-checks `IEnergyHandler` first with `ForgeDirection.UNKNOWN`, falling back to
-`IEnergyStorage`. Blocks that implement only `IEnergyStorage` are handled correctly by
-the fallback path.
-
-#### Files to create
-
-| File | Description |
-|---|---|
-| `shared/peripheral/generic/IEnergyAdapterFactory.java` | Factory interface |
-| `shared/peripheral/generic/IEnergyStorageAdapter.java` | Energy abstraction |
-| `shared/peripheral/generic/EnergyStoragePeripheral.java` | `IPeripheral` implementation |
-| `shared/peripheral/generic/GenericPeripheralProvider.java` | `IPeripheralProvider` implementation |
-| `shared/peripheral/generic/energy/rf/RFEnergyStorageAdapter.java` | CoFH RF adapter |
-| `shared/peripheral/generic/energy/rf/RFEnergyAdapterFactory.java` | CoFH RF factory |
-| `shared/peripheral/generic/energy/rf/RFIntegration.java` | CoFH class-load isolation shim |
-
-#### Files to modify
-
-| File | Change |
-|---|---|
-| `dependencies.gradle` | Add `compileOnly(rfg.deobf("curse.maven:cofh-core-69162:2388751"))` |
-| `shared/proxy/ComputerCraftProxyCommon.java` | Register `GenericPeripheralProvider` after `DefaultPeripheralProvider` |
-
-#### Tests
-
-`src/test/java/dan200/computercraft/shared/peripheral/generic/EnergyStoragePeripheralTest.java` —
-unit-tests via anonymous `IEnergyStorageAdapter` stub (no Minecraft world required):
-
-| Test | Verifies |
-|---|---|
-| `peripheralTypeIsEnergyStorage` | `getType()` returns `"energy_storage"` |
-| `methodCountIsTwo` | `getMethodNames().length == 2` |
-| `getEnergyAtIndexZero` | `getMethodNames()[0].equals("getEnergy")` |
-| `getEnergyCapacityAtIndexOne` | `getMethodNames()[1].equals("getEnergyCapacity")` |
-| `getEnergyReturnsAdapterValue` | `callMethod(…, 0, …)` returns `{ adapterValue }` |
-| `getEnergyCapacityReturnsAdapterValue` | `callMethod(…, 1, …)` returns `{ adapterValue }` |
-| `equalsReturnsTrueForSameAdapter` | same adapter → `equals()` true |
-| `equalsReturnsFalseForDifferentAdapter` | different adapter → `equals()` false |
-
-**Tests**: `src/test/java/dan200/computercraft/shared/peripheral/generic/EnergyStoragePeripheralTest.java` — **8 cases**, all green.
+| ✅ Done | `fluid_storage` generic peripheral (`tanks`, `pushFluid`, `pullFluid`)          | Medium | Java |
+| ✅ Done | `inventory` generic peripheral                                  | Medium | Java |
+| ✅ Done | `redstone_relay` peripheral                                     | Medium | Java |
+| ✅ Done  | Speaker peripheral — see [SPEAKER_PLAN.md](SPEAKER_PLAN.md)    | Large | Java + Client |
 
 ---
 
@@ -570,6 +605,5 @@ unit-tests via anonymous `IEnergyStorageAdapter` stub (no Minecraft world requir
    CC:Tweaked on Lua 5.2+ dropped `bit` entirely. For 1.7.10/Lua 5.1 compatibility the current
    approach is correct — no change needed.
 
-2. **Speaker**: Requires new async Java infrastructure (`TileSpeaker` + `SpeakerPeripheral`) wired
-   to Minecraft's sound engine with no clear 1.7.10 equivalent. Mark as out-of-scope unless
-   explicitly requested.
+2. **Speaker**: ✅ Implemented — see `### 13` above and [SPEAKER_PLAN.md](SPEAKER_PLAN.md) for
+   full design rationale.  Advanced speaker (streaming synthesis) is deferred.
