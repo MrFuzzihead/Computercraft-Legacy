@@ -74,7 +74,7 @@ public class DefaultPeripheralProvider implements IPeripheralProvider {
             }
 
             if (modules.size() > 1) {
-                return new GenericCombinedPeripheral(modules, tile);
+                return GenericCombinedPeripheral.create(modules, tile);
             }
             if (modules.size() == 1) {
                 return modules.get(0);

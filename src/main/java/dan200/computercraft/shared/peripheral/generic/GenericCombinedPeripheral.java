@@ -31,9 +31,25 @@ import dan200.computercraft.api.peripheral.IPeripheralTargeted;
  * to the module list passed to this constructor — no changes to this class are required.
  * </p>
  */
-public class GenericCombinedPeripheral implements IMultiTypePeripheral, IPeripheralTargeted, IFluidHandlerPeripheral {
+public class GenericCombinedPeripheral implements IMultiTypePeripheral, IPeripheralTargeted {
 
-    private final List<IPeripheral> m_modules;
+    /**
+     * Creates a {@link GenericCombinedPeripheral} that also implements {@link IFluidHandlerPeripheral}
+     * when a fluid module is present, or a plain one otherwise. This ensures the {@code instanceof}
+     * check in {@code pushFluid}/{@code pullFluid} only passes when fluid transfer is actually supported.
+     */
+    public static GenericCombinedPeripheral create(List<IPeripheral> modules, Object target) {
+        boolean hasFluid = false;
+        for (IPeripheral module : modules) {
+            if (module instanceof IFluidHandlerPeripheral) {
+                hasFluid = true;
+                break;
+            }
+        }
+        return hasFluid ? new WithFluid(modules, target) : new GenericCombinedPeripheral(modules, target);
+    }
+
+    protected final List<IPeripheral> m_modules;
     /** Inclusive start index (in the merged array) of each module's methods. */
     private final int[] m_moduleStart;
     private final String[] m_methodNames;
@@ -128,38 +144,45 @@ public class GenericCombinedPeripheral implements IMultiTypePeripheral, IPeriphe
         }
     }
 
-    /**
-     * Returns the {@link IFluidHandler} from the first module that implements
-     * {@link IFluidHandlerPeripheral}, or {@code null} if no fluid module is present.
-     * Satisfies the {@link IFluidHandlerPeripheral} contract so that combined peripherals
-     * (e.g. inventory + fluid_storage + energy_storage) can participate in cross-peripheral
-     * fluid transfer via {@code pushFluid}/{@code pullFluid}.
-     */
-    @Override
-    public IFluidHandler getHandler() {
-        for (IPeripheral module : m_modules) {
-            if (module instanceof IFluidHandlerPeripheral) {
-                return ((IFluidHandlerPeripheral) module).getHandler();
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public ForgeDirection getFace() {
-        for (IPeripheral module : m_modules) {
-            if (module instanceof IFluidHandlerPeripheral) {
-                return ((IFluidHandlerPeripheral) module).getFace();
-            }
-        }
-        return ForgeDirection.UNKNOWN;
-    }
-
     @Override
     public boolean equals(IPeripheral other) {
         if (other instanceof GenericCombinedPeripheral) {
             return m_target == ((GenericCombinedPeripheral) other).m_target;
         }
         return false;
+    }
+
+    /**
+     * Subtype of {@link GenericCombinedPeripheral} that additionally implements
+     * {@link IFluidHandlerPeripheral}. Only created by {@link #create} when at least one of the
+     * merged modules is a fluid module, so {@code instanceof IFluidHandlerPeripheral} is a
+     * reliable capability check with no risk of a {@code null} handler.
+     */
+    private static final class WithFluid extends GenericCombinedPeripheral implements IFluidHandlerPeripheral {
+
+        WithFluid(List<IPeripheral> modules, Object target) {
+            super(modules, target);
+        }
+
+        @Override
+        public IFluidHandler getHandler() {
+            for (IPeripheral module : m_modules) {
+                if (module instanceof IFluidHandlerPeripheral) {
+                    return ((IFluidHandlerPeripheral) module).getHandler();
+                }
+            }
+            // Unreachable: WithFluid is only created when a fluid module is present.
+            throw new IllegalStateException("WithFluid has no IFluidHandlerPeripheral module");
+        }
+
+        @Override
+        public ForgeDirection getFace() {
+            for (IPeripheral module : m_modules) {
+                if (module instanceof IFluidHandlerPeripheral) {
+                    return ((IFluidHandlerPeripheral) module).getFace();
+                }
+            }
+            return ForgeDirection.UNKNOWN;
+        }
     }
 }

@@ -115,7 +115,9 @@ public class SpeakerAudioState {
                 int inp = (i * 8 + j < samples.length) ? samples[i * 8 + j] : 0;
 
                 // Comparator: decide the output bit.
-                boolean bit = inp > q || (inp == q && q == 127);
+                // The -128 tie-break matches the cc.audio.dfpwm Lua spec:
+                // emit 1 when level > q, or when both are at the minimum (-128).
+                boolean bit = inp > q || (inp == -128 && q == -128);
 
                 // Predictor (charge) update — delta = s >> PREC_SHIFT.
                 int t = bit ? Math.min(q + (s >> PREC_SHIFT), 127) : Math.max(q - (s >> PREC_SHIFT), -128);
