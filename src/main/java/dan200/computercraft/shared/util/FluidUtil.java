@@ -25,12 +25,13 @@ public final class FluidUtil {
      * Transfer up to {@code limit} millibuckets of fluid from {@code from} to {@code to}.
      *
      * <p>
-     * The transfer is performed in four steps:
+     * The transfer is performed in five steps:
      * </p>
      * <ol>
      * <li>Simulate a drain from {@code from} to discover what is available.</li>
      * <li>Simulate a fill into {@code to} to discover how much it accepts.</li>
-     * <li>Execute the drain (capped at what the destination can accept).</li>
+     * <li>Build the actual transfer stack limited by what the destination accepts.</li>
+     * <li>Execute the drain.</li>
      * <li>Execute the fill and return the amount inserted.</li>
      * </ol>
      *

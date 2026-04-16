@@ -972,6 +972,17 @@ public class TileCable extends TileModemBase implements INetwork {
             }
             return Collections.unmodifiableMap(peripherals);
         }
+
+        @Override
+        public IPeripheral getAvailablePeripheral(String name) {
+            synchronized (m_entity.m_peripheralsByName) {
+                IPeripheral peripheral = m_entity.m_peripheralsByName.get(name);
+                if (peripheral != null) {
+                    return peripheral;
+                }
+            }
+            return m_computer.getAvailablePeripheral(name);
+        }
     }
 
     private static class SearchLoc {

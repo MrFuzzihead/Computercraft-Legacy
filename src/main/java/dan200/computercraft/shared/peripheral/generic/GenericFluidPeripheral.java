@@ -60,28 +60,33 @@ public class GenericFluidPeripheral implements IPeripheral {
     }
 
     @Override
-    public Object[] callMethod(IComputerAccess computer, ILuaContext context, int method, Object[] arguments)
+    public Object[] callMethod(IComputerAccess computer, final ILuaContext context, int method, Object[] arguments)
         throws LuaException, InterruptedException {
         switch (method) {
             case TANKS: {
-                // Read-only snapshot — safe to call off the main thread.
-                FluidTankInfo[] tanks = m_handler.getTankInfo(ForgeDirection.UNKNOWN);
-                Map<Object, Object> result = new HashMap<>();
-                if (tanks != null) {
-                    for (int i = 0; i < tanks.length; i++) {
-                        Map<Object, Object> tank = new HashMap<>();
-                        tank.put("capacity", (double) tanks[i].capacity);
-                        if (tanks[i].fluid != null && tanks[i].fluid.amount > 0) {
-                            tank.put(
-                                "name",
-                                tanks[i].fluid.getFluid()
-                                    .getName());
-                            tank.put("amount", (double) tanks[i].fluid.amount);
+                return context.executeMainThreadTask(new ILuaTask() {
+
+                    @Override
+                    public Object[] execute() throws LuaException {
+                        FluidTankInfo[] tanks = m_handler.getTankInfo(ForgeDirection.UNKNOWN);
+                        Map<Object, Object> result = new HashMap<>();
+                        if (tanks != null) {
+                            for (int i = 0; i < tanks.length; i++) {
+                                Map<Object, Object> tank = new HashMap<>();
+                                tank.put("capacity", (double) tanks[i].capacity);
+                                if (tanks[i].fluid != null && tanks[i].fluid.amount > 0) {
+                                    tank.put(
+                                        "name",
+                                        tanks[i].fluid.getFluid()
+                                            .getName());
+                                    tank.put("amount", (double) tanks[i].fluid.amount);
+                                }
+                                result.put(i + 1, tank);
+                            }
                         }
-                        result.put(i + 1, tank);
+                        return new Object[] { result };
                     }
-                }
-                return new Object[] { result };
+                });
             }
 
             case PUSH_FLUID: {

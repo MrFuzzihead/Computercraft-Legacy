@@ -3,11 +3,14 @@ package dan200.computercraft.shared.peripheral.modem;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import dan200.computercraft.api.peripheral.IPeripheral;
 
 /**
  * Unit tests for the wired-modem-specific additions to {@link TileCable}'s
@@ -170,6 +173,30 @@ class WiredModemPeripheralTest {
     @Test
     void peripheralTypeIsModem() {
         assertEquals("modem", peripheral.getType());
+    }
+
+    // =========================================================================
+    // RemotePeripheralWrapper.getAvailablePeripheral contract
+    // =========================================================================
+
+    /**
+     * Verifies that {@code RemotePeripheralWrapper} explicitly declares
+     * {@code getAvailablePeripheral(String)} — i.e. the override is present and
+     * not merely inherited from the {@code default} on {@link dan200.computercraft.api.peripheral.IComputerAccess},
+     * which always returns {@code null}.
+     */
+    @Test
+    void remotePeripheralWrapperDeclaresGetAvailablePeripheral() throws Exception {
+        Class<?> wrapperClass = Arrays.stream(TileCable.class.getDeclaredClasses())
+            .filter(
+                c -> c.getSimpleName()
+                    .equals("RemotePeripheralWrapper"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("TileCable$RemotePeripheralWrapper not found"));
+
+        Method method = wrapperClass.getDeclaredMethod("getAvailablePeripheral", String.class);
+        assertNotNull(method, "RemotePeripheralWrapper must declare getAvailablePeripheral(String)");
+        assertEquals(IPeripheral.class, method.getReturnType());
     }
 
 }

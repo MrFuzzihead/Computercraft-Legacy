@@ -16,6 +16,7 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaObjectWithArguments;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
+import dan200.computercraft.api.peripheral.IMultiTypePeripheral;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.ComputerThread;
@@ -159,18 +160,20 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
 
                 return new Object[] { present };
             case 1:
-                String type = null;
                 int sidex = this.parseSide(args);
                 if (sidex >= 0) {
                     synchronized (this.m_peripherals) {
                         PeripheralAPI.PeripheralWrapper p = this.m_peripherals[sidex];
                         if (p != null) {
-                            type = p.getType();
+                            IPeripheral periph = p.getPeripheral();
+                            if (periph instanceof IMultiTypePeripheral) {
+                                String[] types = ((IMultiTypePeripheral) periph).getTypes();
+                                Object[] result = new Object[types.length];
+                                System.arraycopy(types, 0, result, 0, types.length);
+                                return result;
+                            }
+                            return new Object[] { p.getType() };
                         }
-                    }
-
-                    if (type != null) {
-                        return new Object[] { type };
                     }
                 }
 
