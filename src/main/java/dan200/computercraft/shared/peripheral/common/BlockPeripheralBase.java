@@ -30,11 +30,11 @@ public abstract class BlockPeripheralBase extends BlockDirectional {
         return this.blockRenderID;
     }
 
-    public final boolean renderAsNormalBlock() {
+    public boolean renderAsNormalBlock() {
         return false;
     }
 
-    public final boolean isOpaqueCube() {
+    public boolean isOpaqueCube() {
         return false;
     }
 

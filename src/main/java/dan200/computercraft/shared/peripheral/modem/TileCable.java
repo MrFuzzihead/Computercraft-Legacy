@@ -34,6 +34,7 @@ import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
+import dan200.computercraft.api.peripheral.IMultiTypePeripheral;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.shared.common.BlockGeneric;
 import dan200.computercraft.shared.peripheral.PeripheralType;
@@ -49,8 +50,8 @@ public class TileCable extends TileModemBase implements INetwork {
     private static int s_nextUniqueSearchID = 1;
     private Map<Integer, Set<IReceiver>> m_receivers = new HashMap<>();
     private Queue<TileCable.Packet> m_transmitQueue = new LinkedList<>();
-    private boolean m_peripheralAccessAllowed = false;
-    private int m_attachedPeripheralID = -1;
+    protected boolean m_peripheralAccessAllowed = false;
+    protected int m_attachedPeripheralID = -1;
     private Map<String, IPeripheral> m_peripheralsByName = new HashMap<>();
     private Map<String, TileCable.RemotePeripheralWrapper> m_peripheralWrappersByName = new HashMap<>();
     private boolean m_peripheralsKnown = false;
@@ -69,6 +70,17 @@ public class TileCable extends TileModemBase implements INetwork {
         s_modemIcons[7] = iconRegister.registerIcon("computercraft:wiredModemSidePeripheralOn");
         s_cableIcons[0] = iconRegister.registerIcon("computercraft:cableSide");
         s_cableIcons[1] = iconRegister.registerIcon("computercraft:cableCore");
+    }
+
+    /**
+     * Returns the face (non-side) icon for the given animation state.
+     * Used by {@link TileWiredModemFull} to render all six faces uniformly.
+     *
+     * @param anim 0 = off/no-periph, 1 = on/no-periph, 2 = off/periph, 3 = on/periph
+     */
+    @SideOnly(Side.CLIENT)
+    public static IIcon getModemFaceIcon(int anim) {
+        return s_modemIcons[anim * 2];
     }
 
     public static IIcon getModemItemTexture(int side, boolean on) {
@@ -241,7 +253,7 @@ public class TileCable extends TileModemBase implements INetwork {
 
     @Override
     public boolean onActivate(EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
-        if (this.getPeripheralType() == PeripheralType.WiredModemWithCable && !player.isSneaking()) {
+        if (this.canExposePeripheral() && !player.isSneaking()) {
             if (this.worldObj.isRemote) {
                 return true;
             }
@@ -530,24 +542,34 @@ public class TileCable extends TileModemBase implements INetwork {
         }
     }
 
+    /**
+     * Hook for subclasses to inject peripherals from the origin node itself into
+     * the peripheral map during {@link #findPeripherals()}. The default
+     * implementation is a no-op; {@link TileWiredModemFull} overrides this to
+     * expose all six adjacent faces on the origin node.
+     */
+    protected void collectLocalPeripherals(Map<String, IPeripheral> map) {
+        // no-op for regular wall modems — their own peripheral is exposed via
+        // getNameLocal / getConnectedPeripheralName, not via the remote map.
+    }
+
     private void findPeripherals() {
         final TileCable origin = this;
         synchronized (this.m_peripheralsByName) {
             final Map<String, IPeripheral> newPeripheralsByName = new HashMap<>();
-            if (this.getPeripheralType() == PeripheralType.WiredModemWithCable) {
+            if (this.canExposePeripheral()) {
                 this.searchNetwork(new TileCable.ICableVisitor() {
 
                     @Override
                     public void visit(TileCable modem, int distance) {
                         if (modem != origin) {
-                            IPeripheral peripheral = modem.getConnectedPeripheral();
-                            String periphName = modem.getConnectedPeripheralName();
-                            if (peripheral != null && periphName != null) {
-                                newPeripheralsByName.put(periphName, peripheral);
-                            }
+                            modem.collectConnectedPeripherals(newPeripheralsByName);
                         }
                     }
                 });
+                // Allow the origin node itself to inject local peripherals (used by
+                // TileWiredModemFull to expose its own adjacent blocks).
+                this.collectLocalPeripherals(newPeripheralsByName);
             }
 
             Iterator<String> it = this.m_peripheralsByName.keySet()
@@ -605,7 +627,29 @@ public class TileCable extends TileModemBase implements INetwork {
         }
     }
 
-    private IPeripheral getConnectedPeripheral() {
+    /**
+     * Adds all peripherals that this modem node exposes to the given map.
+     * The default implementation delegates to the single-peripheral
+     * {@link #getConnectedPeripheral()} / {@link #getConnectedPeripheralName()} pair.
+     * {@link TileWiredModemFull} overrides this to expose all six faces at once.
+     */
+    protected void collectConnectedPeripherals(Map<String, IPeripheral> map) {
+        IPeripheral peripheral = this.getConnectedPeripheral();
+        String periphName = this.getConnectedPeripheralName();
+        if (peripheral != null && periphName != null) {
+            map.put(periphName, peripheral);
+        }
+    }
+
+    /**
+     * Returns whether this modem node can expose a connected peripheral to the
+     * wired network. Subclasses may override to change this condition.
+     */
+    protected boolean canExposePeripheral() {
+        return this.getPeripheralType() == PeripheralType.WiredModemWithCable;
+    }
+
+    protected IPeripheral getConnectedPeripheral() {
         if (this.m_peripheralAccessAllowed && this.getPeripheralType() == PeripheralType.WiredModemWithCable) {
             int dir = this.getDirection();
             int x = this.xCoord + Facing.offsetsXForSide[dir];
@@ -712,12 +756,22 @@ public class TileCable extends TileModemBase implements INetwork {
         private Packet() {}
     }
 
-    private static class Peripheral extends ModemPeripheral {
+    protected static class Peripheral extends ModemPeripheral implements IMultiTypePeripheral {
 
         private TileCable m_entity;
 
         public Peripheral(TileCable entity) {
             this.m_entity = entity;
+        }
+
+        @Override
+        public String getType() {
+            return "modem";
+        }
+
+        @Override
+        public String[] getTypes() {
+            return new String[] { "modem", "peripheral_hub" };
         }
 
         @Override
@@ -880,7 +934,12 @@ public class TileCable extends TileModemBase implements INetwork {
             this.m_computer = computer;
             this.m_name = name;
             this.m_entity = entity;
-            this.m_type = peripheral.getType();
+            if (peripheral instanceof IMultiTypePeripheral) {
+                String[] types = ((IMultiTypePeripheral) peripheral).getTypes();
+                this.m_type = String.join(";", types);
+            } else {
+                this.m_type = peripheral.getType();
+            }
             this.m_methods = peripheral.getMethodNames();
 
             assert this.m_type != null;

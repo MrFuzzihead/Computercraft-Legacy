@@ -64,6 +64,7 @@ import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.modem.BlockAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.BlockWiredModemFull;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
 import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
 import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
@@ -460,7 +461,7 @@ public class ComputerCraft {
                 if (peripheral != null) {
                     return peripheral;
                 }
-            } catch (Exception var8) {}
+            } catch (Throwable var8) {}
         }
 
         return null;
@@ -657,6 +658,7 @@ public class ComputerCraft {
         public static BlockSpeaker speaker;
         public static BlockRedstoneRelay redstoneRelay;
         public static BlockAdvancedWirelessModem advancedWirelessModem;
+        public static BlockWiredModemFull wiredModemFull;
     }
 
     public static class Items {

@@ -69,9 +69,12 @@ import dan200.computercraft.shared.peripheral.diskdrive.ContainerDiskDrive;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.generic.energy.rf.RFIntegration;
 import dan200.computercraft.shared.peripheral.modem.BlockAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.BlockWiredModemFull;
 import dan200.computercraft.shared.peripheral.modem.ItemAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.ItemWiredModemFull;
 import dan200.computercraft.shared.peripheral.modem.TileAdvancedWirelessModem;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
+import dan200.computercraft.shared.peripheral.modem.TileWiredModemFull;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.peripheral.printer.ContainerPrinter;
@@ -440,6 +443,13 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             "CC-AdvancedWirelessModem");
         ItemStack enderModem = new ItemStack(ComputerCraft.Blocks.advancedWirelessModem, 1, 0);
         GameRegistry.addRecipe(enderModem, "GGG", "GEG", "GGG", 'G', Items.gold_ingot, 'E', Items.ender_eye);
+        // Wired Modem Full Block + conversion recipes
+        ComputerCraft.Blocks.wiredModemFull = new BlockWiredModemFull();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.wiredModemFull, ItemWiredModemFull.class, "CC-WiredModemFull");
+        ItemStack wiredModemFullStack = new ItemStack(ComputerCraft.Blocks.wiredModemFull, 1, 0);
+        ItemStack wiredModemForConvert = PeripheralItemFactory.create(PeripheralType.WiredModem, null, 1);
+        GameRegistry.addShapelessRecipe(wiredModemFullStack, wiredModemForConvert);
+        GameRegistry.addShapelessRecipe(wiredModemForConvert, wiredModemFullStack);
         // Ender Pocket Computer recipes
         ItemStack enderPocketComputer = PocketComputerItemFactory.createWithEnderModem(-1, null, ComputerFamily.Normal);
         ItemStack advancedEnderPocketComputer = PocketComputerItemFactory
@@ -463,6 +473,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TileMonitor.class, "monitor");
         GameRegistry.registerTileEntity(TilePrinter.class, "ccprinter");
         GameRegistry.registerTileEntity(TileCable.class, "wiredmodem");
+        GameRegistry.registerTileEntity(TileWiredModemFull.class, "wiredmodemfull");
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
         GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
