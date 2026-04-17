@@ -77,6 +77,7 @@ import dan200.computercraft.shared.turtle.upgrades.TurtleCraftingTable;
 import dan200.computercraft.shared.turtle.upgrades.TurtleHoe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleModem;
 import dan200.computercraft.shared.turtle.upgrades.TurtleShovel;
+import dan200.computercraft.shared.turtle.upgrades.TurtleSpeaker;
 import dan200.computercraft.shared.turtle.upgrades.TurtleSword;
 import dan200.computercraft.shared.turtle.upgrades.TurtleTool;
 import dan200.computercraft.shared.util.Colour;
@@ -677,5 +678,6 @@ public class ComputerCraft {
         public static TurtleAxe diamondAxe;
         public static TurtleHoe diamondHoe;
         public static dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem enderModem;
+        public static TurtleSpeaker speaker;
     }
 }

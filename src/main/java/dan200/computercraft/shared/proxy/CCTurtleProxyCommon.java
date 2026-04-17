@@ -42,6 +42,7 @@ import dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem;
 import dan200.computercraft.shared.turtle.upgrades.TurtleHoe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleModem;
 import dan200.computercraft.shared.turtle.upgrades.TurtleShovel;
+import dan200.computercraft.shared.turtle.upgrades.TurtleSpeaker;
 import dan200.computercraft.shared.turtle.upgrades.TurtleSword;
 import dan200.computercraft.shared.turtle.upgrades.TurtleTool;
 import dan200.computercraft.shared.util.IEntityDropConsumer;
@@ -340,6 +341,8 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
         this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.diamondHoe);
         ComputerCraft.Upgrades.enderModem = new TurtleEnderModem(8);
         this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.enderModem);
+        ComputerCraft.Upgrades.speaker = new TurtleSpeaker(9);
+        this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.speaker);
     }
 
     private void registerTileEntities() {

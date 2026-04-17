@@ -28,4 +28,12 @@ public class PocketComputerItemFactory {
                 return null;
         }
     }
+
+    public static ItemStack createWithSpeaker(int id, String label, ComputerFamily family) {
+        ItemPocketComputer computer = ComputerCraft.Items.pocketComputer;
+        return switch (family) {
+            case Normal, Advanced -> computer.createWithSpeaker(id, label, family);
+            default -> null;
+        };
+    }
 }
