@@ -76,6 +76,16 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     private final LuaTable globals;
     private LuaThread mainThread;
 
+    @SuppressWarnings("unused")
+    public LuaState getLuaState() {
+        return this.state;
+    }
+
+    @SuppressWarnings("unused")
+    public LuaTable getGlobals() {
+        return this.globals;
+    }
+
     private String eventFilter = null;
     private String hardAbort = null;
     private String softAbort = null;

@@ -226,7 +226,7 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         s_icons[9] = iconRegister.registerIcon("computercraft:pocketComputerBlinkAdvancedModemOn");
     }
 
-    private ServerComputer createServerComputer(World world, IInventory inventory, ItemStack stack) {
+    public ServerComputer createServerComputer(World world, IInventory inventory, ItemStack stack) {
         if (world.isRemote) {
             return null;
         } else {

@@ -64,6 +64,11 @@ public class ServerComputer extends ServerTerminal implements IComputer, IComput
         return this.m_computer.getAPIEnvironment();
     }
 
+    @SuppressWarnings("unused")
+    public Computer getInternalComputer() {
+        return this.m_computer;
+    }
+
     @Override
     public void update() {
         super.update();

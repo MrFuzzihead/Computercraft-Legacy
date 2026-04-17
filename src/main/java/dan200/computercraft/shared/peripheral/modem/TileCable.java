@@ -79,6 +79,21 @@ public class TileCable extends TileModemBase implements INetwork {
         return side != 2 && side != 3 ? s_cableIcons[0] : s_cableIcons[1];
     }
 
+    @SuppressWarnings("unused")
+    public int getAttachedPeripheralID() {
+        return this.m_attachedPeripheralID;
+    }
+
+    @SuppressWarnings("unused")
+    public static IIcon[] getCableIcons() {
+        return s_cableIcons;
+    }
+
+    @SuppressWarnings("unused")
+    public static IIcon[] getModemIcons() {
+        return s_modemIcons;
+    }
+
     public TileCable() {
         super(s_modemIcons);
     }

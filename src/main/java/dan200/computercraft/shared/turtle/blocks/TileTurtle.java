@@ -62,6 +62,11 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
         return this.m_moved;
     }
 
+    @SuppressWarnings("unused")
+    public void setMoved(boolean moved) {
+        this.m_moved = moved;
+    }
+
     protected TurtleBrain createBrain() {
         return new TurtleBrain(this);
     }

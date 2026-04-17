@@ -381,4 +381,9 @@ public abstract class TileComputerBase extends TileGeneric implements IComputerT
 
         copy.m_instanceID = -1;
     }
+
+    @SuppressWarnings("unused")
+    public static void callTransferStateFrom(TileComputerBase target, TileComputerBase source) {
+        target.transferStateFrom(source);
+    }
 }

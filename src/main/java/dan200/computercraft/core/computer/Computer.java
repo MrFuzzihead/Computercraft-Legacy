@@ -84,6 +84,11 @@ public class Computer {
         return this.m_apiEnvironment;
     }
 
+    @SuppressWarnings("unused")
+    public ILuaMachine getLuaMachine() {
+        return this.m_machine;
+    }
+
     public void turnOn() {
         if (this.m_state == Computer.State.Off) {
             this.m_startRequested = true;
