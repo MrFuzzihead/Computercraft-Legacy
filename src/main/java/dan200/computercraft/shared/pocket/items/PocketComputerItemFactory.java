@@ -17,4 +17,15 @@ public class PocketComputerItemFactory {
                 return null;
         }
     }
+
+    public static ItemStack createWithEnderModem(int id, String label, ComputerFamily family) {
+        ItemPocketComputer computer = ComputerCraft.Items.pocketComputer;
+        switch (family) {
+            case Normal:
+            case Advanced:
+                return computer.createWithEnderModem(id, label, family);
+            default:
+                return null;
+        }
+    }
 }
