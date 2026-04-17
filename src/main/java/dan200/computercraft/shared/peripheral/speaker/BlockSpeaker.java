@@ -66,7 +66,7 @@ public class BlockSpeaker extends BlockGeneric {
     protected IIcon getItemTexture(int damage, int side) {
         // Used for inventory / item rendering – no direction context.
         if (side == 0 || side == 1) return s_icons[0];
-        if (side == 2) return s_icons[2]; // show front on the default north face
+        if (side == 4) return s_icons[2]; // show front on the south face (right face in isometric inventory view)
         return s_icons[1];
     }
 
