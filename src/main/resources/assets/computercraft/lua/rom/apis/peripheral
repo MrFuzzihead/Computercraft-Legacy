@@ -39,8 +39,8 @@ function hasType(periph, peripheral_type)
             error("value is not a peripheral", 2)
         end
     end
-    local types = table.pack(getType(name))
-    for i = 1, types.n do
+    local types = { getType(name) }
+    for i = 1, #types do
         if types[i] == peripheral_type then
             return true
         end
