@@ -82,6 +82,7 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
         ComputerCraft.Blocks.peripheral.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
         ComputerCraft.Blocks.cable.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
         ComputerCraft.Blocks.commandComputer.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
+        ComputerCraft.Blocks.advancedWirelessModem.blockRenderID = RenderingRegistry.getNextAvailableRenderId();
         // Speaker uses the standard cube renderer; no custom blockRenderID needed.
         ClientRegistry.bindTileEntitySpecialRenderer(TileMonitor.class, new TileEntityMonitorRenderer());
         this.registerForgeHandlers();
@@ -188,6 +189,8 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
         RenderingRegistry.registerBlockHandler(peripheralHandler);
         ComputerCraftProxyClient.CableBlockRenderingHandler cableHandler = new ComputerCraftProxyClient.CableBlockRenderingHandler();
         RenderingRegistry.registerBlockHandler(cableHandler);
+        ComputerCraftProxyClient.AdvancedWirelessModemBlockRenderingHandler advancedWirelessModemHandler = new ComputerCraftProxyClient.AdvancedWirelessModemBlockRenderingHandler();
+        RenderingRegistry.registerBlockHandler(advancedWirelessModemHandler);
     }
 
     private static void renderStandardInvBlock(RenderBlocks renderblocks, Block block, int damage) {
@@ -567,6 +570,43 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
                         ComputerCraftProxyClient.renderStandardInvBlock(renderblocks, block, damage);
                         GL11.glPopMatrix();
                 }
+            }
+        }
+    }
+
+    private class AdvancedWirelessModemBlockRenderingHandler implements ISimpleBlockRenderingHandler {
+
+        public AdvancedWirelessModemBlockRenderingHandler() {}
+
+        public boolean shouldRender3DInInventory(int modelID) {
+            return true;
+        }
+
+        public int getRenderId() {
+            return ComputerCraft.Blocks.advancedWirelessModem.blockRenderID;
+        }
+
+        public boolean renderWorldBlock(IBlockAccess world, int x, int y, int z, Block block, int modelID,
+            RenderBlocks renderblocks) {
+            if (modelID != this.getRenderId()) {
+                return false;
+            }
+            block.setBlockBoundsBasedOnState(world, x, y, z);
+            ComputerCraftProxyClient.this.m_fixedRenderBlocks.setWorld(world);
+            ComputerCraftProxyClient.this.m_fixedRenderBlocks.setRenderBoundsFromBlock(block);
+            ComputerCraftProxyClient.this.m_fixedRenderBlocks.renderStandardBlock(block, x, y, z);
+            return true;
+        }
+
+        public void renderInventoryBlock(Block block, int damage, int modelID, RenderBlocks renderblocks) {
+            if (modelID == this.getRenderId()) {
+                GL11.glPushMatrix();
+                GL11.glScalef(1.333F, 1.333F, 1.333F);
+                GL11.glTranslatef(-0.5F, -0.5F, -0.09375F);
+                block.setBlockBounds(0.125F, 0.125F, 0.0F, 0.875F, 0.875F, 0.1875F);
+                renderblocks.setRenderBoundsFromBlock(block);
+                ComputerCraftProxyClient.renderStandardInvBlock(renderblocks, block, damage);
+                GL11.glPopMatrix();
             }
         }
     }

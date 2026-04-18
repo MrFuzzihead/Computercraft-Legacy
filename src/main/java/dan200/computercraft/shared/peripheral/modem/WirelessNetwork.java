@@ -12,7 +12,15 @@ import net.minecraft.world.World;
 public class WirelessNetwork implements INetwork {
 
     private static Map<World, WirelessNetwork> s_networks = new WeakHashMap<>();
+    private static final WirelessNetwork s_globalNetwork = new WirelessNetwork();
     private Map<Integer, Set<IReceiver>> m_receivers = new HashMap<>();
+
+    /**
+     * Returns the global cross-dimensional wireless network used by the Ender Modem.
+     */
+    public static WirelessNetwork getGlobal() {
+        return s_globalNetwork;
+    }
 
     public static WirelessNetwork get(World world) {
         if (world != null) {
@@ -29,6 +37,27 @@ public class WirelessNetwork implements INetwork {
     }
 
     private WirelessNetwork() {}
+
+    /**
+     * ThreadLocal flag used to suppress the per-world → global forward during an
+     * AdvancedWirelessModem compound transmit, preventing ender modems from
+     * receiving the same message twice.
+     */
+    static final ThreadLocal<Boolean> s_suppressGlobalForward = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /**
+     * Runs {@code action} with the per-world → global forwarding suppressed for
+     * the current thread.
+     */
+    static void suppressGlobalForward(Runnable action) {
+        Boolean previous = s_suppressGlobalForward.get();
+        s_suppressGlobalForward.set(Boolean.TRUE);
+        try {
+            action.run();
+        } finally {
+            s_suppressGlobalForward.set(previous);
+        }
+    }
 
     @Override
     public synchronized void addReceiver(IReceiver receiver) {
@@ -59,6 +88,12 @@ public class WirelessNetwork implements INetwork {
             for (IReceiver receiver : receivers) {
                 this.tryTransmit(receiver, replyChannel, payload, range, xPos, yPos, zPos, senderObject);
             }
+        }
+        // Forward to the global network so Ender Modems in other dimensions can receive
+        // transmissions from normal wireless modems. Suppressed when an Ender Modem is
+        // already dispatching directly to the global network to prevent double-delivery.
+        if (this != s_globalNetwork && !s_suppressGlobalForward.get()) {
+            s_globalNetwork.transmit(channel, replyChannel, payload, range, xPos, yPos, zPos, senderObject);
         }
     }
 

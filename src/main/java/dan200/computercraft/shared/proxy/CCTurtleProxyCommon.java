@@ -38,6 +38,7 @@ import dan200.computercraft.shared.turtle.recipes.TurtleRecipe;
 import dan200.computercraft.shared.turtle.recipes.TurtleUpgradeRecipe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleAxe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleCraftingTable;
+import dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem;
 import dan200.computercraft.shared.turtle.upgrades.TurtleHoe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleModem;
 import dan200.computercraft.shared.turtle.upgrades.TurtleShovel;
@@ -337,6 +338,8 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
             "upgrade.minecraft:diamond_hoe.adjective",
             Items.diamond_hoe);
         this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.diamondHoe);
+        ComputerCraft.Upgrades.enderModem = new TurtleEnderModem(8);
+        this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.enderModem);
     }
 
     private void registerTileEntities() {

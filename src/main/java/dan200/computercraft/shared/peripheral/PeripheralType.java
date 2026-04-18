@@ -6,6 +6,7 @@ public enum PeripheralType {
     Monitor,
     AdvancedMonitor,
     WirelessModem,
+    AdvancedWirelessModem,
     WiredModem,
     Cable,
     WiredModemWithCable,

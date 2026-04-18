@@ -22,6 +22,13 @@ public class PeripheralItemFactory {
             case AdvancedMonitor:
             case WirelessModem:
                 return peripheral.create(type, label, quantity);
+            case AdvancedWirelessModem: {
+                ItemStack stack = new ItemStack(ComputerCraft.Blocks.advancedWirelessModem, quantity, 0);
+                if (label != null) {
+                    stack.setStackDisplayName(label);
+                }
+                return stack;
+            }
             case WiredModem:
             case Cable:
                 return cable.create(type, label, quantity);

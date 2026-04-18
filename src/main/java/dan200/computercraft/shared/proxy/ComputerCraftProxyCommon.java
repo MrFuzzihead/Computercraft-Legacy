@@ -68,6 +68,9 @@ import dan200.computercraft.shared.peripheral.common.PeripheralItemFactory;
 import dan200.computercraft.shared.peripheral.diskdrive.ContainerDiskDrive;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.generic.energy.rf.RFIntegration;
+import dan200.computercraft.shared.peripheral.modem.BlockAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.ItemAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.TileAdvancedWirelessModem;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
@@ -79,6 +82,7 @@ import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
 import dan200.computercraft.shared.peripheral.speaker.TileSpeaker;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
+import dan200.computercraft.shared.pocket.recipes.PocketComputerEnderUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 import dan200.computercraft.shared.turtle.inventory.ContainerTurtle;
@@ -245,6 +249,11 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             PocketComputerUpgradeRecipe.class,
             Category.SHAPELESS,
             "after:minecraft:shapeless");
+        RecipeSorter.register(
+            "computercraft:pocket_computer_ender_upgrade",
+            PocketComputerEnderUpgradeRecipe.class,
+            Category.SHAPELESS,
+            "after:minecraft:shapeless");
         ItemStack computer = ComputerItemFactory.create(-1, null, ComputerFamily.Normal);
         GameRegistry
             .addRecipe(computer, "XXX", "XYX", "XZX", 'X', Blocks.stone, 'Y', Items.redstone, 'Z', Blocks.glass_pane);
@@ -363,6 +372,9 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 2,
                 new ItemStack[] { wirelessModem, advancedPocketComputer },
                 advancedWirelessPocketComputer));
+        // Ender Modem pocket computer recipes are registered separately.
+        // Actual crafting is handled by PocketComputerEnderUpgradeRecipe; ImpostorRecipes
+        // provide the NEI/JEI display entries.
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString("SkullOwner", "dan200");
         ItemStack danHead = new ItemStack(Items.skull, 1, 3);
@@ -401,12 +413,34 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             Blocks.noteblock,
             'R',
             Items.redstone);
+        // Ender Modem (Advanced Wireless Modem) block + crafting recipe
+        ComputerCraft.Blocks.advancedWirelessModem = new BlockAdvancedWirelessModem();
+        GameRegistry.registerBlock(
+            ComputerCraft.Blocks.advancedWirelessModem,
+            ItemAdvancedWirelessModem.class,
+            "CC-AdvancedWirelessModem");
+        ItemStack enderModem = new ItemStack(ComputerCraft.Blocks.advancedWirelessModem, 1, 0);
+        GameRegistry.addRecipe(enderModem, "GGG", "GEG", "GGG", 'G', Items.gold_ingot, 'E', Items.ender_eye);
+        // Ender Pocket Computer recipes
+        ItemStack enderPocketComputer = PocketComputerItemFactory.createWithEnderModem(-1, null, ComputerFamily.Normal);
+        ItemStack advancedEnderPocketComputer = PocketComputerItemFactory
+            .createWithEnderModem(-1, null, ComputerFamily.Advanced);
+        GameRegistry.addRecipe(new PocketComputerEnderUpgradeRecipe());
+        GameRegistry
+            .addRecipe(new ImpostorRecipe(1, 2, new ItemStack[] { enderModem, pocketComputer }, enderPocketComputer));
+        GameRegistry.addRecipe(
+            new ImpostorRecipe(
+                1,
+                2,
+                new ItemStack[] { enderModem, advancedPocketComputer },
+                advancedEnderPocketComputer));
     }
 
     private void registerTileEntities() {
         GameRegistry.registerTileEntity(TileComputer.class, "computer");
         GameRegistry.registerTileEntity(TileDiskDrive.class, "diskdrive");
         GameRegistry.registerTileEntity(TileWirelessModem.class, "wirelessmodem");
+        GameRegistry.registerTileEntity(TileAdvancedWirelessModem.class, "advancedwirelessmodem");
         GameRegistry.registerTileEntity(TileMonitor.class, "monitor");
         GameRegistry.registerTileEntity(TilePrinter.class, "ccprinter");
         GameRegistry.registerTileEntity(TileCable.class, "wiredmodem");
