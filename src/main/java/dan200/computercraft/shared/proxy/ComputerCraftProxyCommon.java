@@ -367,8 +367,8 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 2,
                 new ItemStack[] { wirelessModem, advancedPocketComputer },
                 advancedWirelessPocketComputer));
-        // Ender Modem pocket computer recipes (registered after the Ender Modem block)
-        // Actual crafting handled by PocketComputerEnderUpgradeRecipe; ImpostorRecipes
+        // Ender Modem pocket computer recipes are registered separately.
+        // Actual crafting is handled by PocketComputerEnderUpgradeRecipe; ImpostorRecipes
         // provide the NEI/JEI display entries.
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString("SkullOwner", "dan200");
