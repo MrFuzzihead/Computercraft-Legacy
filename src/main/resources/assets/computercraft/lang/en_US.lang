@@ -37,6 +37,7 @@ upgrade.minecraft:diamond_axe.adjective=Felling
 upgrade.minecraft:diamond_hoe.adjective=Farming
 upgrade.computercraft:wireless_modem.adjective=Wireless
 upgrade.computercraft:advanced_wireless_modem.adjective=Ender
+upgrade.computercraft:speaker.adjective=Noisy
 upgrade.minecraft:crafting_table.adjective=Crafty
 
 gui.computercraft:wired_modem.peripheral_connected=Peripheral "%s" connected to network
