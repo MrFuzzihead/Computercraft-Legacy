@@ -30,7 +30,9 @@ import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.items.IComputerItem;
 import dan200.computercraft.shared.pocket.apis.PocketAPI;
+import dan200.computercraft.shared.pocket.peripherals.PocketEnderModemPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketModemPeripheral;
+import dan200.computercraft.shared.pocket.peripherals.PocketSpeakerPeripheral;
 
 public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
 
@@ -90,11 +92,59 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         }
     }
 
+    /**
+     * Creates a pocket-computer item stack with a Speaker installed
+     * ({@code upgrade=3}).
+     */
+    public ItemStack createWithSpeaker(int id, String label, ComputerFamily family) {
+        if (family != ComputerFamily.Normal && family != ComputerFamily.Advanced) {
+            return null;
+        }
+        int damage = family == ComputerFamily.Advanced ? 1 : 0;
+        ItemStack result = new ItemStack(this, 1, damage);
+        NBTTagCompound compound = new NBTTagCompound();
+        if (id >= 0) {
+            compound.setInteger("computerID", id);
+        }
+        compound.setInteger("upgrade", 3);
+        result.setTagCompound(compound);
+        if (label != null) {
+            result.setStackDisplayName(label);
+        }
+        return result;
+    }
+
+    /**
+     * Creates a pocket-computer item stack with an Ender Modem installed
+     * ({@code upgrade=2}).
+     */
+    public ItemStack createWithEnderModem(int id, String label, ComputerFamily family) {
+        if (family != ComputerFamily.Normal && family != ComputerFamily.Advanced) {
+            return null;
+        }
+        int damage = family == ComputerFamily.Advanced ? 1 : 0;
+        ItemStack result = new ItemStack(this, 1, damage);
+        NBTTagCompound compound = new NBTTagCompound();
+        if (id >= 0) {
+            compound.setInteger("computerID", id);
+        }
+        compound.setInteger("upgrade", 2);
+        result.setTagCompound(compound);
+        if (label != null) {
+            result.setStackDisplayName(label);
+        }
+        return result;
+    }
+
     public void getSubItems(Item itemID, CreativeTabs tabs, List list) {
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Normal, false));
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Normal, true));
+        list.add(PocketComputerItemFactory.createWithEnderModem(-1, null, ComputerFamily.Normal));
+        list.add(PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Normal));
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Advanced, false));
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Advanced, true));
+        list.add(PocketComputerItemFactory.createWithEnderModem(-1, null, ComputerFamily.Advanced));
+        list.add(PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Advanced));
     }
 
     public void onUpdate(ItemStack stack, World world, Entity entity, int slotNum, boolean selected) {
@@ -141,6 +191,15 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                         modemNBT.setBoolean("modemLight", modemLight);
                         computer.updateUserData();
                     }
+                } else if (peripheral instanceof PocketSpeakerPeripheral) {
+                    PocketSpeakerPeripheral speaker = (PocketSpeakerPeripheral) peripheral;
+                    if (entity instanceof EntityLivingBase) {
+                        EntityLivingBase living = (EntityLivingBase) entity;
+                        speaker.setLocation(world, living.posX, living.posY + living.getEyeHeight(), living.posZ);
+                    } else {
+                        speaker.setLocation(world, entity.posX, entity.posY, entity.posZ);
+                    }
+                    speaker.tick();
                 }
             }
         } else {
@@ -174,12 +233,22 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
 
     public String getItemStackDisplayName(ItemStack stack) {
         String baseString = this.getUnlocalizedName(stack);
-        boolean modem = this.getHasModem(stack);
-        return modem
-            ? StatCollector.translateToLocalFormatted(
+        if (this.getHasEnderModem(stack)) {
+            return StatCollector.translateToLocalFormatted(
                 baseString + ".upgraded.name",
-                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:wireless_modem.adjective") })
-            : StatCollector.translateToLocal(baseString + ".name");
+                new Object[] {
+                    StatCollector.translateToLocal("upgrade.computercraft:advanced_wireless_modem.adjective") });
+        } else if (this.getHasModem(stack)) {
+            return StatCollector.translateToLocalFormatted(
+                baseString + ".upgraded.name",
+                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:wireless_modem.adjective") });
+        } else if (this.getHasSpeaker(stack)) {
+            return StatCollector.translateToLocalFormatted(
+                baseString + ".upgraded.name",
+                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:speaker.adjective") });
+        } else {
+            return StatCollector.translateToLocal(baseString + ".name");
+        }
     }
 
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean debug) {
@@ -268,6 +337,10 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                 s_pocketAPIs.put(instanceID, pocketAPI);
                 if (this.getHasModem(stack)) {
                     computer.setPeripheral(2, new PocketModemPeripheral());
+                } else if (this.getHasEnderModem(stack)) {
+                    computer.setPeripheral(2, new PocketEnderModemPeripheral());
+                } else if (this.getHasSpeaker(stack)) {
+                    computer.setPeripheral(2, new PocketSpeakerPeripheral());
                 }
 
                 ComputerCraft.serverComputerRegistry.add(instanceID, computer);
@@ -404,5 +477,15 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
     public boolean getHasModem(ItemStack stack) {
         NBTTagCompound compound = stack.getTagCompound();
         return compound != null && compound.hasKey("upgrade") ? compound.getInteger("upgrade") == 1 : false;
+    }
+
+    public boolean getHasEnderModem(ItemStack stack) {
+        NBTTagCompound compound = stack.getTagCompound();
+        return compound != null && compound.hasKey("upgrade") && compound.getInteger("upgrade") == 2;
+    }
+
+    public boolean getHasSpeaker(ItemStack stack) {
+        NBTTagCompound compound = stack.getTagCompound();
+        return compound != null && compound.hasKey("upgrade") && compound.getInteger("upgrade") == 3;
     }
 }

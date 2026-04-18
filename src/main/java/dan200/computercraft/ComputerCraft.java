@@ -63,6 +63,7 @@ import dan200.computercraft.shared.network.PacketHandler;
 import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
+import dan200.computercraft.shared.peripheral.modem.BlockAdvancedWirelessModem;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
 import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
 import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
@@ -76,6 +77,7 @@ import dan200.computercraft.shared.turtle.upgrades.TurtleCraftingTable;
 import dan200.computercraft.shared.turtle.upgrades.TurtleHoe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleModem;
 import dan200.computercraft.shared.turtle.upgrades.TurtleShovel;
+import dan200.computercraft.shared.turtle.upgrades.TurtleSpeaker;
 import dan200.computercraft.shared.turtle.upgrades.TurtleSword;
 import dan200.computercraft.shared.turtle.upgrades.TurtleTool;
 import dan200.computercraft.shared.util.Colour;
@@ -654,6 +656,7 @@ public class ComputerCraft {
         public static BlockCommandComputer commandComputer;
         public static BlockSpeaker speaker;
         public static BlockRedstoneRelay redstoneRelay;
+        public static BlockAdvancedWirelessModem advancedWirelessModem;
     }
 
     public static class Items {
@@ -674,5 +677,7 @@ public class ComputerCraft {
         public static TurtleTool diamondPickaxe;
         public static TurtleAxe diamondAxe;
         public static TurtleHoe diamondHoe;
+        public static dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem enderModem;
+        public static TurtleSpeaker speaker;
     }
 }
