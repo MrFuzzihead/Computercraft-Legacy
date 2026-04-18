@@ -348,7 +348,7 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
 
     private Object[] playAudio(Object[] args) throws LuaException {
         if (args.length < 1 || args[0] == null) throw new LuaException("Expected table");
-        if (!(args[0] instanceof Map<?, ?> audioMap)) throw new LuaException("Expected table");
+        if (!(args[0] instanceof Map<?, ?>audioMap)) throw new LuaException("Expected table");
         int audioLength = audioMap.size();
         if (audioLength == 0) throw new LuaException("Cannot play empty audio");
         if (audioLength > 128 * 1024) throw new LuaException("Audio too large");
