@@ -82,6 +82,16 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
     /** Computers currently attached to this peripheral. */
     private final Set<IComputerAccess> m_computers = new HashSet<>();
 
+    /**
+     * Last integer coords sent in an audio or stop packet; used to send a
+     * SpeakerStop to the correct (possibly stale) position when the speaker
+     * moves or {@code stop()} is called.
+     */
+    private int m_lastIx = 0, m_lastIy = 0, m_lastIz = 0;
+
+    /** {@code true} once {@link #tick} has been called at least once. */
+    private boolean m_hasPosition = false;
+
     // -------------------------------------------------------------------------
     // IPeripheral
     // -------------------------------------------------------------------------
@@ -99,18 +109,13 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
     @Override
     public Object[] callMethod(IComputerAccess computer, ILuaContext context, int method, Object[] arguments)
         throws LuaException {
-        switch (method) {
-            case METHOD_PLAY_NOTE:
-                return playNote(arguments);
-            case METHOD_PLAY_SOUND:
-                return playSound(arguments);
-            case METHOD_PLAY_AUDIO:
-                return playAudio(arguments);
-            case METHOD_STOP:
-                return stop();
-            default:
-                return null;
-        }
+        return switch (method) {
+            case METHOD_PLAY_NOTE -> playNote(arguments);
+            case METHOD_PLAY_SOUND -> playSound(arguments);
+            case METHOD_PLAY_AUDIO -> playAudio(arguments);
+            case METHOD_STOP -> stop();
+            default -> null;
+        };
     }
 
     @Override
@@ -141,9 +146,41 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
      * @param z     Z position
      */
     public void tick(World world, double x, double y, double z) {
-        int ix = (int) Math.round(x);
-        int iy = (int) Math.round(y);
-        int iz = (int) Math.round(z);
+        // Use floor so that block-center positions (e.g. pos + 0.5) map to the
+        // correct block coordinate rather than rounding up to the next block.
+        int ix = (int) Math.floor(x);
+        int iy = (int) Math.floor(y);
+        int iz = (int) Math.floor(z);
+
+        // ---- 0. Handle position change — release orphaned decoder/line ----
+        // If the speaker moved while audio was streaming, the client's
+        // SpeakerManager still holds a DfpwmDecoder and SourceDataLine keyed
+        // to the old ChunkCoordinates. Send a SpeakerStop there so those
+        // resources are freed before we start using the new position.
+        int prevX, prevY, prevZ;
+        boolean sendOldStop;
+        synchronized (this) {
+            boolean posChanged = m_hasPosition && (ix != m_lastIx || iy != m_lastIy || iz != m_lastIz);
+            sendOldStop = posChanged && m_audioState != null;
+            prevX = m_lastIx;
+            prevY = m_lastIy;
+            prevZ = m_lastIz;
+            if (sendOldStop) {
+                // Decoder continuity is lost; discard server-side state so the
+                // client can start a fresh decoder at the new position.
+                m_audioState = null;
+            }
+            m_lastIx = ix;
+            m_lastIy = iy;
+            m_lastIz = iz;
+            m_hasPosition = true;
+        }
+        if (sendOldStop) {
+            ComputerCraftPacket stopPacket = new ComputerCraftPacket();
+            stopPacket.m_packetType = ComputerCraftPacket.SpeakerStop;
+            stopPacket.m_dataInt = new int[] { prevX, prevY, prevZ };
+            ComputerCraft.sendToAllPlayers(stopPacket);
+        }
 
         // ---- 1. Handle stop ----
         boolean shouldStop;
@@ -228,9 +265,9 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
      */
     public void destroy(World world, double x, double y, double z) {
         if (world == null || world.isRemote) return;
-        int ix = (int) Math.round(x);
-        int iy = (int) Math.round(y);
-        int iz = (int) Math.round(z);
+        int ix = (int) Math.floor(x);
+        int iy = (int) Math.floor(y);
+        int iz = (int) Math.floor(z);
         synchronized (this) {
             m_audioState = null;
             m_pendingSound = null;
@@ -249,8 +286,7 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
 
     private Object[] playNote(Object[] args) throws LuaException {
         if (args.length < 1 || args[0] == null) throw new LuaException("Expected string");
-        if (!(args[0] instanceof String)) throw new LuaException("Expected string");
-        String instrumentName = (String) args[0];
+        if (!(args[0] instanceof String instrumentName)) throw new LuaException("Expected string");
         String soundEvent = INSTRUMENTS.get(instrumentName);
         if (soundEvent == null) throw new LuaException("Invalid instrument '" + instrumentName + "'");
 
@@ -281,8 +317,7 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
 
     private Object[] playSound(Object[] args) throws LuaException {
         if (args.length < 1 || args[0] == null) throw new LuaException("Expected string");
-        if (!(args[0] instanceof String)) throw new LuaException("Expected string");
-        String name = (String) args[0];
+        if (!(args[0] instanceof String name)) throw new LuaException("Expected string");
         if (name.isEmpty()) throw new LuaException("Sound name must not be empty");
         if (name.length() > 512) throw new LuaException("Sound name too long");
 
@@ -313,8 +348,7 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
 
     private Object[] playAudio(Object[] args) throws LuaException {
         if (args.length < 1 || args[0] == null) throw new LuaException("Expected table");
-        if (!(args[0] instanceof Map)) throw new LuaException("Expected table");
-        Map<?, ?> audioMap = (Map<?, ?>) args[0];
+        if (!(args[0] instanceof Map<?, ?> audioMap)) throw new LuaException("Expected table");
         int audioLength = audioMap.size();
         if (audioLength == 0) throw new LuaException("Cannot play empty audio");
         if (audioLength > 128 * 1024) throw new LuaException("Audio too large");
