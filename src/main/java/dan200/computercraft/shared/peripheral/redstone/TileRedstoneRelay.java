@@ -67,18 +67,13 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
         s_icons[3] = iconRegister.registerIcon("computercraft:redstoneRelayBottom");
     }
 
-    /** Returns the icon for an item-stack rendering (assumes front faces east, direction=5). */
     public static IIcon getItemTexture(int side) {
-        switch (side) {
-            case 0:
-                return s_icons[3]; // bottom
-            case 1:
-                return s_icons[0]; // top
-            case 4:
-                return s_icons[2]; // front (east — appears on the left in the isometric inventory view)
-            default:
-                return s_icons[1]; // side
-        }
+        return switch (side) {
+            case 0 -> s_icons[3]; // bottom
+            case 1 -> s_icons[0]; // top
+            case 4 -> s_icons[2]; // front (east — appears on the left in the isometric inventory view)
+            default -> s_icons[1]; // side
+        };
     }
 
     // =========================================================================
@@ -87,14 +82,11 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
 
     @Override
     public IIcon getTexture(int worldSide) {
-        switch (worldSide) {
-            case 0:
-                return s_icons[3]; // bottom
-            case 1:
-                return s_icons[0]; // top
-            default:
-                return worldSide == m_dir ? s_icons[2] : s_icons[1];
-        }
+        return switch (worldSide) {
+            case 0 -> s_icons[3]; // bottom
+            case 1 -> s_icons[0]; // top
+            default -> worldSide == m_dir ? s_icons[2] : s_icons[1];
+        };
     }
 
     // =========================================================================

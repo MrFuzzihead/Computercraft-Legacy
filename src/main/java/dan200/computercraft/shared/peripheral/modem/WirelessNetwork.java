@@ -50,11 +50,12 @@ public class WirelessNetwork implements INetwork {
      * the current thread.
      */
     static void suppressGlobalForward(Runnable action) {
+        Boolean previous = s_suppressGlobalForward.get();
         s_suppressGlobalForward.set(Boolean.TRUE);
         try {
             action.run();
         } finally {
-            s_suppressGlobalForward.set(Boolean.FALSE);
+            s_suppressGlobalForward.set(previous);
         }
     }
 

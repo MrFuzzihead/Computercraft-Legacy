@@ -249,6 +249,11 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             PocketComputerUpgradeRecipe.class,
             Category.SHAPELESS,
             "after:minecraft:shapeless");
+        RecipeSorter.register(
+            "computercraft:pocket_computer_ender_upgrade",
+            PocketComputerEnderUpgradeRecipe.class,
+            Category.SHAPELESS,
+            "after:minecraft:shapeless");
         ItemStack computer = ComputerItemFactory.create(-1, null, ComputerFamily.Normal);
         GameRegistry
             .addRecipe(computer, "XXX", "XYX", "XZX", 'X', Blocks.stone, 'Y', Items.redstone, 'Z', Blocks.glass_pane);

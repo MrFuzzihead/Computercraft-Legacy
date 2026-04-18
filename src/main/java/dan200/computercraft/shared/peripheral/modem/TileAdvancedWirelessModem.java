@@ -16,7 +16,6 @@ public class TileAdvancedWirelessModem extends TileModemBase {
 
     @SideOnly(Side.CLIENT)
     public static void registerIcons(IIconRegister iconRegister) {
-        // Note: the off-state face texture file has a typo in its name ("wireLss" not "wireless")
         s_icons[0] = iconRegister.registerIcon("computercraft:wirelessModemAdvancedFace");
         s_icons[1] = iconRegister.registerIcon("computercraft:wirelessModemSide");
         s_icons[2] = iconRegister.registerIcon("computercraft:wirelessModemAdvancedFaceOn");
