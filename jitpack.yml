@@ -3,4 +3,4 @@ jdk:
 before_install:
   - ./gradlew setupCIWorkspace
 install:
-  - ./gradlew build
+  - ./gradlew build publishToMavenLocal
