@@ -95,6 +95,6 @@ Cobalt Maven repository: `https://maven.squiddev.cc` (see `repositories.gradle`)
 
 ## References & Further Reading
 
-- [TWEAKEDCC_COVERAGE.md](TWEAKEDCC_COVERAGE.md): API/features coverage
-- [COBALT_UPGRADE_PLAN.md](COBALT_UPGRADE_PLAN.md): Lua runtime migration
+- [TWEAKEDCC_COVERAGE.md](docs/TWEAKEDCC_COVERAGE.md): API/features coverage
+- [COBALT_UPGRADE_PLAN.md](docs/COBALT_UPGRADE_PLAN.md): Lua runtime migration
 - For legacy/historical notes and upgrade logs, see `COBALT_UPGRADE_PLAN.md` or project history.
