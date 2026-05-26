@@ -1,8 +1,11 @@
 package dan200.computercraft.shared.proxy;
 
 import java.io.File;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
@@ -17,6 +20,9 @@ import net.minecraft.network.Packet;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.CommandEvent;
+import net.minecraftforge.event.ServerChatEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.world.WorldEvent.Load;
 import net.minecraftforge.event.world.WorldEvent.Unload;
 import net.minecraftforge.oredict.RecipeSorter;
@@ -58,6 +64,9 @@ import dan200.computercraft.shared.media.recipes.DiskRecipe;
 import dan200.computercraft.shared.media.recipes.PrintoutRecipe;
 import dan200.computercraft.shared.network.ComputerCraftPacket;
 import dan200.computercraft.shared.peripheral.PeripheralType;
+import dan200.computercraft.shared.peripheral.chatbox.BlockChatBox;
+import dan200.computercraft.shared.peripheral.chatbox.ChatBoxManager;
+import dan200.computercraft.shared.peripheral.chatbox.TileChatBox;
 import dan200.computercraft.shared.peripheral.commandblock.CommandBlockPeripheralProvider;
 import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
@@ -419,6 +428,21 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             Blocks.noteblock,
             'R',
             Items.redstone);
+        // Chat Box block + crafting recipe
+        ComputerCraft.Blocks.chatBox = new BlockChatBox();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.chatBox, ItemBlock.class, "chat_box");
+        ItemStack chatBoxStack = new ItemStack(ComputerCraft.Blocks.chatBox);
+        GameRegistry.addRecipe(
+            chatBoxStack,
+            "GGG",
+            "GNS",
+            "GGG",
+            'G',
+            Blocks.glass,
+            'N',
+            Blocks.noteblock,
+            'S',
+            Items.redstone);
         // Speaker Pocket Computer recipes
         ItemStack speakerPocketComputer = PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Normal);
         ItemStack advancedSpeakerPocketComputer = PocketComputerItemFactory
@@ -466,6 +490,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
         GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
+        GameRegistry.registerTileEntity(TileChatBox.class, "ccchatbox");
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
         }
@@ -590,5 +615,48 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
 
         @SubscribeEvent
         public void onWorldUnload(Unload event) {}
+
+        // -------------------------------------------------------------------------
+        // Chat Box events
+        // -------------------------------------------------------------------------
+
+        @SubscribeEvent
+        public void onServerChat(ServerChatEvent event) {
+            ChatBoxManager.dispatchChat(event.username, event.message);
+        }
+
+        @SubscribeEvent
+        public void onPlayerCommand(CommandEvent event) {
+            // Observe-only: the command is not cancelled.
+            if (!(event.sender instanceof EntityPlayer)) return;
+            String playerName = ((EntityPlayer) event.sender).getGameProfile()
+                .getName();
+            String commandName = event.command.getCommandName();
+            String[] params = event.parameters;
+            Map<Integer, String> arguments = new LinkedHashMap<>();
+            arguments.put(1, commandName); // index 1 = command name
+            for (int i = 0; i < params.length; i++) {
+                arguments.put(i + 2, params[i]); // 2-based for remaining tokens
+            }
+            ChatBoxManager.dispatchCommand(playerName, arguments);
+        }
+
+        @SubscribeEvent
+        public void onLivingDeath(LivingDeathEvent event) {
+            if (!(event.entity instanceof EntityPlayer)) return;
+            EntityPlayer player = (EntityPlayer) event.entity;
+            String playerName = player.getGameProfile()
+                .getName();
+            String damageType = event.source.getDamageType();
+            String killer = "";
+            Entity killerEntity = event.source.getSourceOfDamage();
+            if (killerEntity instanceof EntityPlayer) {
+                killer = ((EntityPlayer) killerEntity).getGameProfile()
+                    .getName();
+            } else if (killerEntity != null) {
+                killer = killerEntity.getCommandSenderName();
+            }
+            ChatBoxManager.dispatchDeath(playerName, killer, damageType);
+        }
     }
 }

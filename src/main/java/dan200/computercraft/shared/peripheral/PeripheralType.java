@@ -11,5 +11,6 @@ public enum PeripheralType {
     Cable,
     WiredModemWithCable,
     RedstoneRelay,
-    Speaker;
+    Speaker,
+    ChatBox;
 }

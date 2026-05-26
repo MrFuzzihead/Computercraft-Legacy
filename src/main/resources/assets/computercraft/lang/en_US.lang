@@ -11,6 +11,7 @@ tile.computercraft:cable.name=Networking Cable
 tile.computercraft:command_computer.name=Command Computer
 tile.computercraft:speaker.name=Speaker
 tile.computercraft:redstone_relay.name=Redstone Relay
+tile.computercraft:chat_box.name=Chat Box
 
 tile.computercraft:turtle.name=Turtle
 tile.computercraft:turtle.upgraded.name=%s Turtle
