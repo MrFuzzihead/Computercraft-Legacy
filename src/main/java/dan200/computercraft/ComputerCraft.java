@@ -74,6 +74,7 @@ import dan200.computercraft.shared.proxy.IComputerCraftProxy;
 import dan200.computercraft.shared.turtle.blocks.BlockTurtle;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 import dan200.computercraft.shared.turtle.upgrades.TurtleAxe;
+import dan200.computercraft.shared.turtle.upgrades.TurtleChatBox;
 import dan200.computercraft.shared.turtle.upgrades.TurtleCraftingTable;
 import dan200.computercraft.shared.turtle.upgrades.TurtleHoe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleModem;
@@ -685,5 +686,6 @@ public class ComputerCraft {
         public static TurtleHoe diamondHoe;
         public static dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem enderModem;
         public static TurtleSpeaker speaker;
+        public static TurtleChatBox chatBox;
     }
 }

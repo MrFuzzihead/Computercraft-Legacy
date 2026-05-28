@@ -1,6 +1,7 @@
 package dan200.computercraft.shared.peripheral.chatbox;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import net.minecraft.item.ItemStack;
@@ -14,7 +15,7 @@ import dan200.computercraft.shared.common.TileGeneric;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.peripheral.common.IPeripheralTile;
 
-public class TileChatBox extends TileGeneric implements IPeripheralTile {
+public class TileChatBox extends TileGeneric implements IPeripheralTile, IChatBoxReceiver {
 
     // -------------------------------------------------------------------------
     // State
@@ -70,20 +71,34 @@ public class TileChatBox extends TileGeneric implements IPeripheralTile {
 
     /**
      * Queues a Lua event on all currently attached computers.
-     * The first element of {@code args} must be the event name string.
      */
-    void queueEvent(Object[] args) {
+    private void queueEvent(String eventName, Object... params) {
         Set<IComputerAccess> snapshot;
         synchronized (this) {
             snapshot = new HashSet<>(m_computers);
         }
-        String eventName = (String) args[0];
-        // Build parameter array (everything after the event name)
-        Object[] params = new Object[args.length - 1];
-        System.arraycopy(args, 1, params, 0, params.length);
         for (IComputerAccess computer : snapshot) {
             computer.queueEvent(eventName, params);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // IChatBoxReceiver
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void onChatEvent(String playerName, String message) {
+        queueEvent("chat", playerName, message);
+    }
+
+    @Override
+    public void onDeathEvent(String player, String killer, String damageType) {
+        queueEvent("death", player, killer, damageType);
+    }
+
+    @Override
+    public void onCommandEvent(String player, Map<Integer, String> arguments) {
+        queueEvent("command", player, arguments);
     }
 
     // -------------------------------------------------------------------------

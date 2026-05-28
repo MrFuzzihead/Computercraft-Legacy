@@ -30,6 +30,7 @@ import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.items.IComputerItem;
 import dan200.computercraft.shared.pocket.apis.PocketAPI;
+import dan200.computercraft.shared.pocket.peripherals.PocketChatBoxPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketEnderModemPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketModemPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketSpeakerPeripheral;
@@ -136,15 +137,39 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         return result;
     }
 
+    /**
+     * Creates a pocket-computer item stack with a Chat Box installed
+     * ({@code upgrade=4}).
+     */
+    public ItemStack createWithChatBox(int id, String label, ComputerFamily family) {
+        if (family != ComputerFamily.Normal && family != ComputerFamily.Advanced) {
+            return null;
+        }
+        int damage = family == ComputerFamily.Advanced ? 1 : 0;
+        ItemStack result = new ItemStack(this, 1, damage);
+        NBTTagCompound compound = new NBTTagCompound();
+        if (id >= 0) {
+            compound.setInteger("computerID", id);
+        }
+        compound.setInteger("upgrade", 4);
+        result.setTagCompound(compound);
+        if (label != null) {
+            result.setStackDisplayName(label);
+        }
+        return result;
+    }
+
     public void getSubItems(Item itemID, CreativeTabs tabs, List list) {
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Normal, false));
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Normal, true));
         list.add(PocketComputerItemFactory.createWithEnderModem(-1, null, ComputerFamily.Normal));
         list.add(PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Normal));
+        list.add(PocketComputerItemFactory.createWithChatBox(-1, null, ComputerFamily.Normal));
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Advanced, false));
         list.add(PocketComputerItemFactory.create(-1, null, ComputerFamily.Advanced, true));
         list.add(PocketComputerItemFactory.createWithEnderModem(-1, null, ComputerFamily.Advanced));
         list.add(PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Advanced));
+        list.add(PocketComputerItemFactory.createWithChatBox(-1, null, ComputerFamily.Advanced));
     }
 
     public void onUpdate(ItemStack stack, World world, Entity entity, int slotNum, boolean selected) {
@@ -200,6 +225,15 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                         speaker.setLocation(world, entity.posX, entity.posY, entity.posZ);
                     }
                     speaker.tick();
+                } else if (peripheral instanceof PocketChatBoxPeripheral) {
+                    PocketChatBoxPeripheral chatBox = (PocketChatBoxPeripheral) peripheral;
+                    int dimId = world.provider.dimensionId;
+                    if (entity instanceof EntityLivingBase) {
+                        EntityLivingBase living = (EntityLivingBase) entity;
+                        chatBox.setLocation(dimId, living.posX, living.posY + living.getEyeHeight(), living.posZ);
+                    } else {
+                        chatBox.setLocation(dimId, entity.posX, entity.posY, entity.posZ);
+                    }
                 }
             }
         } else {
@@ -246,6 +280,10 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
             return StatCollector.translateToLocalFormatted(
                 baseString + ".upgraded.name",
                 new Object[] { StatCollector.translateToLocal("upgrade.computercraft:speaker.adjective") });
+        } else if (this.getHasChatBox(stack)) {
+            return StatCollector.translateToLocalFormatted(
+                baseString + ".upgraded.name",
+                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:chatbox.adjective") });
         } else {
             return StatCollector.translateToLocal(baseString + ".name");
         }
@@ -341,6 +379,8 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                     computer.setPeripheral(2, new PocketEnderModemPeripheral());
                 } else if (this.getHasSpeaker(stack)) {
                     computer.setPeripheral(2, new PocketSpeakerPeripheral());
+                } else if (this.getHasChatBox(stack)) {
+                    computer.setPeripheral(2, new PocketChatBoxPeripheral());
                 }
 
                 ComputerCraft.serverComputerRegistry.add(instanceID, computer);
@@ -487,5 +527,10 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
     public boolean getHasSpeaker(ItemStack stack) {
         NBTTagCompound compound = stack.getTagCompound();
         return compound != null && compound.hasKey("upgrade") && compound.getInteger("upgrade") == 3;
+    }
+
+    public boolean getHasChatBox(ItemStack stack) {
+        NBTTagCompound compound = stack.getTagCompound();
+        return compound != null && compound.hasKey("upgrade") && compound.getInteger("upgrade") == 4;
     }
 }

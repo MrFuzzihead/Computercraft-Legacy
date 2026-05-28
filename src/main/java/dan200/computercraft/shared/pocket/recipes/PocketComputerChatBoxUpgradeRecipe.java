@@ -12,18 +12,18 @@ import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 
 /**
- * Crafting recipe: Speaker (above) + Pocket Computer → Speaker Pocket Computer.
- * Mirrors {@link PocketComputerEnderUpgradeRecipe} but uses the Speaker block
- * and produces a pocket computer with {@code upgrade=3}.
+ * Crafting recipe: Chat Box (above) + Pocket Computer → Chatty Pocket Computer.
+ * Mirrors {@link PocketComputerSpeakerUpgradeRecipe} but uses the Chat Box block
+ * and produces a pocket computer with {@code upgrade=4}.
  */
-public class PocketComputerSpeakerUpgradeRecipe implements IRecipe {
+public class PocketComputerChatBoxUpgradeRecipe implements IRecipe {
 
     public int getRecipeSize() {
         return 2;
     }
 
     public ItemStack getRecipeOutput() {
-        return PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Normal);
+        return PocketComputerItemFactory.createWithChatBox(-1, null, ComputerFamily.Normal);
     }
 
     public boolean matches(InventoryCrafting inventory, World world) {
@@ -45,15 +45,10 @@ public class PocketComputerSpeakerUpgradeRecipe implements IRecipe {
                     break;
                 }
             }
-
-            if (computer != null) {
-                break;
-            }
+            if (computer != null) break;
         }
 
-        if (computer == null) {
-            return null;
-        }
+        if (computer == null) return null;
 
         ItemStack upgrade = null;
 
@@ -62,10 +57,9 @@ public class PocketComputerSpeakerUpgradeRecipe implements IRecipe {
                 ItemStack item = inventory.getStackInRowAndColumn(xx, y);
                 if (xx != computerX || y != computerY) {
                     if (xx == computerX && y == computerY - 1) {
-                        if (item == null || item.getItem() != Item.getItemFromBlock(ComputerCraft.Blocks.speaker)) {
+                        if (item == null || item.getItem() != Item.getItemFromBlock(ComputerCraft.Blocks.chatBox)) {
                             return null;
                         }
-
                         upgrade = item;
                     } else if (item != null) {
                         return null;
@@ -74,9 +68,7 @@ public class PocketComputerSpeakerUpgradeRecipe implements IRecipe {
             }
         }
 
-        if (upgrade == null) {
-            return null;
-        }
+        if (upgrade == null) return null;
 
         ItemPocketComputer itemComputer = (ItemPocketComputer) computer.getItem();
         // Prevent double-upgrading
@@ -89,6 +81,6 @@ public class PocketComputerSpeakerUpgradeRecipe implements IRecipe {
         ComputerFamily family = itemComputer.getFamily(computer);
         int computerID = itemComputer.getComputerID(computer);
         String label = itemComputer.getLabel(computer);
-        return PocketComputerItemFactory.createWithSpeaker(computerID, label, family);
+        return PocketComputerItemFactory.createWithChatBox(computerID, label, family);
     }
 }

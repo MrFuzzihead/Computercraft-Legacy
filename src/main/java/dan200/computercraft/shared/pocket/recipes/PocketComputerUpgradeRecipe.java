@@ -74,7 +74,9 @@ public class PocketComputerUpgradeRecipe implements IRecipe {
                 return null;
             } else {
                 ItemPocketComputer itemComputer = (ItemPocketComputer) computer.getItem();
-                if (itemComputer.getHasModem(computer)) {
+                if (itemComputer.getHasModem(computer) || itemComputer.getHasEnderModem(computer)
+                    || itemComputer.getHasSpeaker(computer)
+                    || itemComputer.getHasChatBox(computer)) {
                     return null;
                 } else {
                     ComputerFamily family = itemComputer.getFamily(computer);

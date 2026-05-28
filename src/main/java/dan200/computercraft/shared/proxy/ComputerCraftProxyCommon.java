@@ -91,6 +91,7 @@ import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
 import dan200.computercraft.shared.peripheral.speaker.TileSpeaker;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
+import dan200.computercraft.shared.pocket.recipes.PocketComputerChatBoxUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerEnderUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerSpeakerUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
@@ -267,6 +268,11 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         RecipeSorter.register(
             "computercraft:pocket_computer_speaker_upgrade",
             PocketComputerSpeakerUpgradeRecipe.class,
+            Category.SHAPELESS,
+            "after:minecraft:shapeless");
+        RecipeSorter.register(
+            "computercraft:pocket_computer_chatbox_upgrade",
+            PocketComputerChatBoxUpgradeRecipe.class,
             Category.SHAPELESS,
             "after:minecraft:shapeless");
         ItemStack computer = ComputerItemFactory.create(-1, null, ComputerFamily.Normal);
@@ -456,6 +462,19 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 2,
                 new ItemStack[] { speakerStack, advancedPocketComputer },
                 advancedSpeakerPocketComputer));
+        // Chat Box pocket computer recipes
+        ItemStack chatBoxPocketComputer = PocketComputerItemFactory.createWithChatBox(-1, null, ComputerFamily.Normal);
+        ItemStack advancedChatBoxPocketComputer = PocketComputerItemFactory
+            .createWithChatBox(-1, null, ComputerFamily.Advanced);
+        GameRegistry.addRecipe(new PocketComputerChatBoxUpgradeRecipe());
+        GameRegistry.addRecipe(
+            new ImpostorRecipe(1, 2, new ItemStack[] { chatBoxStack, pocketComputer }, chatBoxPocketComputer));
+        GameRegistry.addRecipe(
+            new ImpostorRecipe(
+                1,
+                2,
+                new ItemStack[] { chatBoxStack, advancedPocketComputer },
+                advancedChatBoxPocketComputer));
         // Ender Modem (Advanced Wireless Modem) block + crafting recipe
         ComputerCraft.Blocks.advancedWirelessModem = new BlockAdvancedWirelessModem();
         GameRegistry.registerBlock(
