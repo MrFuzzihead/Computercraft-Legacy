@@ -213,6 +213,24 @@ class ChatBoxTest {
     }
 
     @Test
+    void parseLabel_throwsOnTooLong() {
+        char[] chars = new char[33];
+        java.util.Arrays.fill(chars, 'A');
+        String longLabel = new String(chars);
+        assertThrows(
+            dan200.computercraft.api.lua.LuaException.class,
+            () -> ChatBoxPeripheral.parseLabel(new Object[] { longLabel }, 0));
+    }
+
+    @Test
+    void parseLabel_acceptsLabelAtMaxLength() throws Exception {
+        char[] chars = new char[32];
+        java.util.Arrays.fill(chars, 'A');
+        String maxLabel = new String(chars);
+        assertEquals(maxLabel, ChatBoxPeripheral.parseLabel(new Object[] { maxLabel }, 0));
+    }
+
+    @Test
     void parseLabel_defaultsToHash() throws Exception {
         String label = ChatBoxPeripheral.parseLabel(new Object[0], 0);
         assertEquals("#", label);

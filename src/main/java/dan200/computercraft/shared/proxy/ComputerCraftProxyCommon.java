@@ -668,7 +668,10 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 .getName();
             String damageType = event.source.getDamageType();
             String killer = "";
-            Entity killerEntity = event.source.getSourceOfDamage();
+            Entity killerEntity = event.source.getEntity();
+            if (killerEntity == null) {
+                killerEntity = event.source.getSourceOfDamage();
+            }
             if (killerEntity instanceof EntityPlayer) {
                 killer = ((EntityPlayer) killerEntity).getGameProfile()
                     .getName();

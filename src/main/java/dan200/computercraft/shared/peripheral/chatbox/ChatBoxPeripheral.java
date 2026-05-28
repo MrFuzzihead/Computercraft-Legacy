@@ -26,6 +26,7 @@ public class ChatBoxPeripheral implements IPeripheral {
 
     private static final String DEFAULT_LABEL = "#";
     private static final int MAX_TEXT_LENGTH = 256;
+    private static final int MAX_LABEL_LENGTH = 32;
 
     private final TileChatBox m_tile;
 
@@ -207,7 +208,11 @@ public class ChatBoxPeripheral implements IPeripheral {
             if (!(args[index] instanceof String)) {
                 throw new LuaException("Expected string for label");
             }
-            return (String) args[index];
+            String label = (String) args[index];
+            if (label.length() > MAX_LABEL_LENGTH) {
+                throw new LuaException("Label too long (max " + MAX_LABEL_LENGTH + " characters)");
+            }
+            return label;
         }
         return DEFAULT_LABEL;
     }

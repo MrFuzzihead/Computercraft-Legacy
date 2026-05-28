@@ -8,13 +8,14 @@ This guide covers adding a new pocket computer upgrade (like the wireless modem 
 
 ## Existing Upgrade IDs
 
-| ID | Upgrade | Peripheral class |
-|---|---|---|
-| 1 | Wireless Modem | `PocketModemPeripheral` |
-| 2 | Ender Modem | `PocketEnderModemPeripheral` |
-| 3 | Speaker | `PocketSpeakerPeripheral` |
+| ID | Upgrade        | Peripheral class             |
+|----|----------------|------------------------------|
+| 1  | Wireless Modem | `PocketModemPeripheral`      |
+| 2  | Ender Modem    | `PocketEnderModemPeripheral` |
+| 3  | Speaker        | `PocketSpeakerPeripheral`    |
+| 4  | Chat Box       | `PocketChatBoxPeripheral`    |
 
-**Next available ID: 4.**
+**Next available ID: 5.**
 
 The upgrade peripheral is always attached to **side 2** (`"back"`), which is the only supported slot for pocket upgrades. Lua programs access it as `peripheral.wrap("back")`.
 

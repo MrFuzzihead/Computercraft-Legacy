@@ -345,15 +345,16 @@ This produces the item name **"Gadget Turtle"** in-game.
 | 7 | `diamondHoe` | `TurtleHoe` | Tool | Diamond Hoe |
 | 8 | `enderModem` | `TurtleEnderModem` | Peripheral | Ender Modem |
 | 9 | `speaker` | `TurtleSpeaker` | Peripheral | Speaker |
+| 10 | `chatBox` | `TurtleChatBox` | Peripheral | Chat Box |
 
-**Next available ID: 10.**
+**Next available ID: 11.**
 
 ---
 
 ## Checklist for Adding a New Upgrade
 
 1. **Choose a type** — `Peripheral`, `Tool`, or both (`IExtendedTurtleUpgrade`).
-2. **Pick an ID** — must be unique; IDs 1–9 are taken. Use the next free ID.
+2. **Pick an ID** — must be unique; IDs 1–10 are taken. Use the next free ID.
 3. **Create the upgrade class** in `dan200.computercraft.shared.turtle.upgrades`.
 4. **Implement `createPeripheral`** — return a new inner `Peripheral` instance (Peripheral type) or `null` (Tool type).
 5. **Implement `useTool`** — handle `TurtleVerb.Dig` and `TurtleVerb.Attack` (Tool type) or return `null` (Peripheral type).

@@ -184,9 +184,9 @@ public abstract class PortableChatBoxPeripheral implements IPeripheral, IChatBox
     }
 
     private boolean isInRange(EntityPlayerMP player, double range) {
-        if (range < 0) return true;
         int dim = getDimensionId();
         if (dim == Integer.MIN_VALUE) return false;
+        if (range < 0) return true;
         if (player.worldObj.provider.dimensionId != dim) return false;
         double dx = player.posX - getPositionX();
         double dy = player.posY - getPositionY();
