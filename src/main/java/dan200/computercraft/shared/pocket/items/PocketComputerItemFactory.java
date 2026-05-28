@@ -30,4 +30,12 @@ public class PocketComputerItemFactory {
             default -> null;
         };
     }
+
+    public static ItemStack createWithChatBox(int id, String label, ComputerFamily family) {
+        ItemPocketComputer computer = ComputerCraft.Items.pocketComputer;
+        return switch (family) {
+            case Normal, Advanced -> computer.createWithChatBox(id, label, family);
+            default -> null;
+        };
+    }
 }

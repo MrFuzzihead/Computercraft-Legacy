@@ -60,6 +60,7 @@ import dan200.computercraft.shared.media.items.ItemPrintout;
 import dan200.computercraft.shared.media.items.ItemTreasureDisk;
 import dan200.computercraft.shared.network.ComputerCraftPacket;
 import dan200.computercraft.shared.network.PacketHandler;
+import dan200.computercraft.shared.peripheral.chatbox.BlockChatBox;
 import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
@@ -73,6 +74,7 @@ import dan200.computercraft.shared.proxy.IComputerCraftProxy;
 import dan200.computercraft.shared.turtle.blocks.BlockTurtle;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 import dan200.computercraft.shared.turtle.upgrades.TurtleAxe;
+import dan200.computercraft.shared.turtle.upgrades.TurtleChatBox;
 import dan200.computercraft.shared.turtle.upgrades.TurtleCraftingTable;
 import dan200.computercraft.shared.turtle.upgrades.TurtleHoe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleModem;
@@ -134,6 +136,7 @@ public class ComputerCraft {
     public static int modem_highAltitudeRangeDuringStorm = 96;
     public static int speaker_max_notes_per_tick = 8;
     public static int speaker_audio_range = 256;
+    public static int chatbox_max_range = -1;
     public static int computerSpaceLimit = 1000000;
     public static int floppySpaceLimit = 125000;
     public static int treasureDiskLootFrequency = 1;
@@ -190,6 +193,9 @@ public class ComputerCraft {
         prop = config.get("general", "speaker_audio_range", speaker_audio_range);
         prop.comment = "The range (in blocks) over which Speaker audio packets are sent; approximates chunk-tracking (default 256 ≈ 16 chunks)";
         speaker_audio_range = Math.max(1, prop.getInt());
+        prop = config.get("general", "chatbox_max_range", chatbox_max_range);
+        prop.comment = "Maximum range (in blocks) for the Chat Box say/tell methods. -1 = infinite.";
+        chatbox_max_range = prop.getInt();
         prop = config.get("general", "computerSpaceLimit", computerSpaceLimit);
         prop.comment = "The disk space limit for computers and turtles, in bytes";
         computerSpaceLimit = prop.getInt();
@@ -655,6 +661,7 @@ public class ComputerCraft {
         public static BlockTurtle turtleAdvanced;
         public static BlockCommandComputer commandComputer;
         public static BlockSpeaker speaker;
+        public static BlockChatBox chatBox;
         public static BlockRedstoneRelay redstoneRelay;
         public static BlockAdvancedWirelessModem advancedWirelessModem;
     }
@@ -679,5 +686,6 @@ public class ComputerCraft {
         public static TurtleHoe diamondHoe;
         public static dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem enderModem;
         public static TurtleSpeaker speaker;
+        public static TurtleChatBox chatBox;
     }
 }

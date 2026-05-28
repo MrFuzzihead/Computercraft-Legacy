@@ -83,7 +83,9 @@ public class PocketComputerEnderUpgradeRecipe implements IRecipe {
 
         ItemPocketComputer itemComputer = (ItemPocketComputer) computer.getItem();
         // Prevent double-upgrading
-        if (itemComputer.getHasModem(computer) || itemComputer.getHasEnderModem(computer)) {
+        if (itemComputer.getHasModem(computer) || itemComputer.getHasEnderModem(computer)
+            || itemComputer.getHasSpeaker(computer)
+            || itemComputer.getHasChatBox(computer)) {
             return null;
         }
 
