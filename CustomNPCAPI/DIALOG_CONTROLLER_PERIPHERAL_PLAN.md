@@ -975,3 +975,10 @@ if (AbstractNpcAPI.IsAvailable()) {
 6. **Crafting recipe conflict**: Confirm the shapeless recipe (Book + Redstone + Advanced
    Computer) does not collide with an existing CC recipe before finalizing.
 
+7. **Turtle / Pocket upgrade variant**: The Dialog Controller is **stateful** (it stores a
+   watched dialog ID or "watch all" flag in NBT and maintains an event subscription). A
+   turtle upgrade would need NBT-carried state rather than a tile entity. This differs from
+   the stateless `TurtleNpcDetector` pattern and is deferred to a follow-up plan.
+   In the meantime, turtles can access a placed `dialog_controller` block as an external
+   peripheral via a wired modem.
+

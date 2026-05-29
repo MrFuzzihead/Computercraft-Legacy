@@ -346,6 +346,10 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
         this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.speaker);
         ComputerCraft.Upgrades.chatBox = new TurtleChatBox(10);
         this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.chatBox);
+        if (cpw.mods.fml.common.Loader.isModLoaded("customnpcs")) {
+            ComputerCraft.Upgrades.npcDetector = new dan200.computercraft.shared.turtle.upgrades.TurtleNpcDetector(11);
+            this.registerTurtleUpgradeInternal(ComputerCraft.Upgrades.npcDetector);
+        }
     }
 
     private void registerTileEntities() {

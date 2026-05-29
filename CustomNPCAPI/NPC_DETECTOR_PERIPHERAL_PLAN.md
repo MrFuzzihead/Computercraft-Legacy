@@ -475,9 +475,16 @@ C = Computer (basic), E = Ender Pearl, S = Stone
 |-----------------------------------------------------|-------------------------------------------|
 | `peripheral/npcdetector/BlockNpcDetector.java`      | New                                       |
 | `peripheral/npcdetector/TileNpcDetector.java`       | New                                       |
-| `peripheral/npcdetector/NpcDetectorPeripheral.java` | New                                       |
+| `peripheral/npcdetector/NpcDetectorPeripheral.java` | New (abstract; `forTile()` factory)       |
 | `peripheral/PeripheralType.java`                    | Add `NpcDetector`                         |
-| `ComputerCraft.java`                                | Register block, tile entity, config field |
+| `turtle/upgrades/TurtleNpcDetector.java`            | New (upgrade ID 11; gated on customnpcs)  |
+| `pocket/peripherals/PocketNpcDetectorPeripheral.java` | New (upgrade=5; gated on customnpcs)    |
+| `pocket/recipes/PocketComputerNpcDetectorUpgradeRecipe.java` | New                            |
+| `pocket/items/ItemPocketComputer.java`              | Add upgrade=5, getHasNpcDetector, onUpdate, getSubItems (gated) |
+| `pocket/items/PocketComputerItemFactory.java`       | Add createWithNpcDetector                 |
+| `ComputerCraft.java`                                | Register block, tile entity, config field; add Upgrades.npcDetector |
+| `proxy/ComputerCraftProxyCommon.java`               | Block/recipe/pocket recipe (all gated on customnpcs mod ID) |
+| `proxy/CCTurtleProxyCommon.java`                    | Register TurtleNpcDetector (gated on customnpcs) |
 | `assets/computercraft/textures/npcDetector*.png`    | New (2 placeholder textures)              |
 | `test/.../NpcDetectorPeripheralTest.java`           | New                                       |
 
@@ -506,12 +513,18 @@ C = Computer (basic), E = Ender Pearl, S = Stone
    `getNpcsInFaction(factionId: number [, radius])` would be more robust — names can change,
    IDs are stable. Could be method 10 or replace/augment method 2.
 
-4. **Turtle upgrade**: The detector is a natural turtle tool (read-only, mobile). A
-   `TurtleNpcDetector` wrapping `NpcDetectorPeripheral` with position sourced from
-   `ITurtleAccess#getPosition()` would follow the same pattern as `TurtleSpeaker`.
-   Defer to a follow-up plan.
+4. ~~**Turtle upgrade**~~: **Implemented.** `TurtleNpcDetector` (upgrade ID 11) extends the
+   abstract `NpcDetectorPeripheral`, sourcing position and world from `ITurtleAccess`.
+   Only registered when mod ID `customnpcs` is loaded. Crafting item is the
+   `npc_detector` block.
 
-5. **Dimension filtering**: `getEntitiesNear` uses the tile's own world object, so it will
+5. ~~**Pocket computer upgrade**~~: **Implemented.** `PocketNpcDetectorPeripheral` extends
+   the abstract `NpcDetectorPeripheral`, with `setLocation(World, x, y, z)` called each
+   tick by `ItemPocketComputer#onUpdate`. Upgrade value `upgrade=5` in NBT.
+   Recipe and `ImpostorRecipe` entries are registered gated on mod ID `customnpcs`.
+   Creative tab shows the item only when `customnpcs` is loaded.
+
+6. **Dimension filtering**: `getEntitiesNear` uses the tile's own world object, so it will
    only ever see NPCs in the same dimension as the block — correct and expected, but worth
    documenting in any API reference.
 

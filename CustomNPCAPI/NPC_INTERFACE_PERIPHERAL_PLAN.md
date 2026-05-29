@@ -5,6 +5,12 @@ state-read, control, and event-forwarding Lua methods. Fully gated: if CustomNPC
 the block registers but its peripheral exposes zero NPC methods and throws `LuaException`
 on any NPC call. Linking/management methods (0–4) always work.
 
+> **Note on block registration gating:** Unlike the plan's original description, the block
+> itself should also only be registered when `Loader.isModLoaded("customnpcs")` is true
+> (matching the pattern used for `npc_detector`). The "block registers but NPC methods throw"
+> approach is now considered incorrect — compat blocks must not pollute the registry when the
+> compat mod is absent.
+
 ---
 
 ## Architecture Overview
@@ -703,12 +709,14 @@ A = Advanced Computer, S = Stone, R = Redstone
 
 ## Files NOT Changed
 
-| File                             | Reason                          |
-|----------------------------------|---------------------------------|
-| `BlockChatBox.java`              | No changes needed               |
-| `ChatBoxPeripheral.java`         | Separate peripheral; no overlap |
-| `TileChatBox.java`               | No changes needed               |
-| `PortableChatBoxPeripheral.java` | No changes needed               |
+| File                                 | Reason                          |
+|--------------------------------------|---------------------------------|
+| `BlockChatBox.java`                  | No changes needed               |
+| `ChatBoxPeripheral.java`             | Separate peripheral; no overlap |
+| `TileChatBox.java`                   | No changes needed               |
+| `PortableChatBoxPeripheral.java`     | No changes needed               |
+| `TurtleNpcDetector.java`             | Separate peripheral; no overlap |
+| `PocketNpcDetectorPeripheral.java`   | Separate peripheral; no overlap |
 
 ---
 
@@ -729,7 +737,10 @@ A = Advanced Computer, S = Stone, R = Redstone
 4. **Crafting recipe**: The suggested recipe uses Advanced Computer as ingredient (not a valid
    item in the recipe system). Finalize recipe with the correct ingredient list.
 
-5. **Turtle / Pocket upgrade variant**: The plan covers only the block peripheral. A turtle
-   upgrade (`TurtleNpcInterface`) could follow the same pattern as `TurtleChatBox` →
-   `PortableChatBoxPeripheral`. Defer to a follow-up plan.
+5. **Turtle / Pocket upgrade variant**: Because the NPC Interface is **stateful** (it stores
+   a linked NPC UUID and maintains event subscriptions), a turtle or pocket upgrade would
+   need to carry that state in item NBT rather than in a tile entity. This is a significantly
+   different design from the stateless `TurtleNpcDetector` / `PocketNpcDetectorPeripheral`
+   pattern and is deferred to a follow-up plan. In the meantime, turtles and pocket computers
+   can access a placed `npc_interface` block as an external peripheral via a wired modem.
 

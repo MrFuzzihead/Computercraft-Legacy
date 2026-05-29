@@ -418,7 +418,9 @@ C = Computer (basic), G = Gold Ingot
 4. **`getQuestObjectives` for unstarted quests**: `IQuest#getObjectives(player)` behavior
    when the player has not started the quest is unspecified by the API. Test and handle
    gracefully (return empty array or throw a descriptive error).
-5. **Turtle upgrade**: A read-only turtle variant could follow `TurtleSpeaker`. Push events
+5. **Turtle upgrade**: A read-only turtle variant could follow the `TurtleNpcDetector` pattern
+   (abstract `NpcDetectorPeripheral`-style base with position/world overrides). Push events
    would not be meaningful on a moving turtle (no fixed tile to register with
    `PlayerSensorManager`), so the turtle upgrade would be pull-only (methods 0-6, 11-16,
-   19-20). Defer to a follow-up plan.
+   19-20). Defer to a follow-up plan. In the meantime, a stationary turtle can access a placed
+   `quest_faction_sensor` block as an external peripheral via a wired modem.

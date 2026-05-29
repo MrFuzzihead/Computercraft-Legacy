@@ -12,6 +12,7 @@ tile.computercraft:command_computer.name=Command Computer
 tile.computercraft:speaker.name=Speaker
 tile.computercraft:redstone_relay.name=Redstone Relay
 tile.computercraft:chat_box.name=Chat Box
+tile.computercraft:npc_detector.name=NPC Detector
 
 tile.computercraft:turtle.name=Turtle
 tile.computercraft:turtle.upgraded.name=%s Turtle
@@ -40,6 +41,7 @@ upgrade.computercraft:wireless_modem.adjective=Wireless
 upgrade.computercraft:advanced_wireless_modem.adjective=Ender
 upgrade.computercraft:speaker.adjective=Noisy
 upgrade.computercraft:chatbox.adjective=Chatty
+upgrade.computercraft:npc_detector.adjective=Sensing
 upgrade.minecraft:crafting_table.adjective=Crafty
 
 gui.computercraft:wired_modem.peripheral_connected=Peripheral "%s" connected to network

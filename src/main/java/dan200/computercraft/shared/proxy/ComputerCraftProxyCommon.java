@@ -1,5 +1,7 @@
 package dan200.computercraft.shared.proxy;
 
+import static cpw.mods.fml.common.Loader.isModLoaded;
+
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -83,6 +85,8 @@ import dan200.computercraft.shared.peripheral.modem.TileAdvancedWirelessModem;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
+import dan200.computercraft.shared.peripheral.npcdetector.BlockNpcDetector;
+import dan200.computercraft.shared.peripheral.npcdetector.TileNpcDetector;
 import dan200.computercraft.shared.peripheral.printer.ContainerPrinter;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
 import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
@@ -93,6 +97,7 @@ import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerChatBoxUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerEnderUpgradeRecipe;
+import dan200.computercraft.shared.pocket.recipes.PocketComputerNpcDetectorUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerSpeakerUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
@@ -449,6 +454,41 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             Blocks.noteblock,
             'S',
             Items.redstone);
+        // NPC Detector block + crafting recipe — only when CustomNPC+ is loaded
+        if (isModLoaded("customnpcs")) {
+            ComputerCraft.Blocks.npcDetector = new BlockNpcDetector();
+            GameRegistry.registerBlock(ComputerCraft.Blocks.npcDetector, ItemBlock.class, "npc_detector");
+            ItemStack npcDetectorStack = new ItemStack(ComputerCraft.Blocks.npcDetector);
+            GameRegistry.addRecipe(
+                npcDetectorStack,
+                "SSS",
+                "ECE",
+                "SSS",
+                'S',
+                Blocks.stone,
+                'E',
+                Items.ender_pearl,
+                'C',
+                ComputerItemFactory.create(-1, null, ComputerFamily.Normal));
+            // Pocket Computer NPC Detector upgrade recipe
+            ItemStack npcDetectorPocketComputer = PocketComputerItemFactory
+                .createWithNpcDetector(-1, null, ComputerFamily.Normal);
+            ItemStack advancedNpcDetectorPocketComputer = PocketComputerItemFactory
+                .createWithNpcDetector(-1, null, ComputerFamily.Advanced);
+            GameRegistry.addRecipe(new PocketComputerNpcDetectorUpgradeRecipe());
+            GameRegistry.addRecipe(
+                new ImpostorRecipe(
+                    1,
+                    2,
+                    new ItemStack[] { npcDetectorStack, pocketComputer },
+                    npcDetectorPocketComputer));
+            GameRegistry.addRecipe(
+                new ImpostorRecipe(
+                    1,
+                    2,
+                    new ItemStack[] { npcDetectorStack, advancedPocketComputer },
+                    advancedNpcDetectorPocketComputer));
+        }
         // Speaker Pocket Computer recipes
         ItemStack speakerPocketComputer = PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Normal);
         ItemStack advancedSpeakerPocketComputer = PocketComputerItemFactory
@@ -510,6 +550,9 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
         GameRegistry.registerTileEntity(TileChatBox.class, "ccchatbox");
+        if (isModLoaded("customnpcs")) {
+            GameRegistry.registerTileEntity(TileNpcDetector.class, "ccnpcdetector");
+        }
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
         }

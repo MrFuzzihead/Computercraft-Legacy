@@ -669,6 +669,11 @@ GameRegistry.addRecipe(new ItemStack(Blocks.traderRole), new Object[]{
    `CustomNPCs` source before implementation, as the enum backing these may differ between
    CustomNPCs versions bundled with this mod.
 
-5. **Turtle / Pocket upgrade variant**: Deferring a `TurtleTraderRole` / portable upgrade
+5. **Turtle / Pocket upgrade variant**: Because the Trader Role peripheral is **stateful**
+   (it stores a linked NPC UUID like the NPC Interface) and has no position-only dependency,
+   a turtle/pocket upgrade would require carrying UUID state in item NBT. This differs from
+   the stateless `TurtleNpcDetector` / `PocketNpcDetectorPeripheral` approach and is deferred
    to a follow-up plan, consistent with the approach used for `NPC_INTERFACE_PERIPHERAL_PLAN.md`.
+   In the meantime, turtles and pocket computers can access a placed `trader_role` block as an
+   external peripheral via a wired modem.
 
