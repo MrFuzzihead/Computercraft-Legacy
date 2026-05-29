@@ -27,6 +27,7 @@ import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.Mod.Instance;
 import cpw.mods.fml.common.SidedProxy;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartedEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
@@ -275,6 +276,26 @@ public class ComputerCraft {
     public void init(FMLInitializationEvent event) {
         proxy.init();
         turtleProxy.init();
+    }
+
+    @EventHandler
+    public void postInit(FMLPostInitializationEvent event) {
+        // Deferred until postInit so all mods (including CustomNPCs) have completed their own init.
+        registerCustomNpcCompat();
+    }
+
+    private static void registerCustomNpcCompat() {
+        try {
+            if (noppes.npcs.api.AbstractNpcAPI.IsAvailable()) {
+                noppes.npcs.api.AbstractNpcAPI.Instance()
+                    .events()
+                    .register(new dan200.computercraft.compat.customnpcs.chatbox.CustomNpcChatBoxBridge());
+                logger.info("[ComputerCraft] CustomNPCs detected — ChatBox NPC integration enabled.");
+            }
+        } catch (Throwable t) {
+            // CustomNPCs is absent or incompatible — silently skip registration.
+            logger.debug("[ComputerCraft] CustomNPCs not available: {}", t.getMessage());
+        }
     }
 
     @EventHandler

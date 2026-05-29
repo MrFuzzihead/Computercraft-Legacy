@@ -53,4 +53,78 @@ public final class ChatBoxManager {
             r.onCommandEvent(player, arguments);
         }
     }
+
+    // -------------------------------------------------------------------------
+    // CustomNPCs integration dispatchers
+    // -------------------------------------------------------------------------
+
+    public static void dispatchNpcInteract(String playerName, String npcName) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcInteractEvent(playerName, npcName);
+        }
+    }
+
+    public static void dispatchNpcDialog(String playerName, String npcName, int dialogId, int optionId) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcDialogEvent(playerName, npcName, dialogId, optionId);
+        }
+    }
+
+    public static void dispatchNpcDialogClosed(String playerName, String npcName, int dialogId, int optionId) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcDialogClosedEvent(playerName, npcName, dialogId, optionId);
+        }
+    }
+
+    public static void dispatchNpcDied(String npcName, String killerName, String damageType) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcDiedEvent(npcName, killerName, damageType);
+        }
+    }
+
+    public static void dispatchNpcSpawned(String npcName) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcSpawnedEvent(npcName);
+        }
+    }
+
+    public static void dispatchNpcDamaged(String npcName, String attackerName, float damage, String damageType) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcDamagedEvent(npcName, attackerName, damage, damageType);
+        }
+    }
+
+    public static void dispatchNpcKilledEntity(String npcName, String entityName, String entityType) {
+        Set<IChatBoxReceiver> snapshot;
+        synchronized (RECEIVERS) {
+            snapshot = new HashSet<>(RECEIVERS);
+        }
+        for (IChatBoxReceiver r : snapshot) {
+            r.onNpcKilledEntityEvent(npcName, entityName, entityType);
+        }
+    }
 }
