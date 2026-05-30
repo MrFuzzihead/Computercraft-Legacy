@@ -13,6 +13,7 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.compat.customnpcs.peripheral.NpcTypeNames;
 import noppes.npcs.api.IWorld;
 import noppes.npcs.api.entity.ICustomNpc;
 import noppes.npcs.api.entity.IEntity;
@@ -41,30 +42,7 @@ import noppes.npcs.api.roles.IRole;
  */
 public abstract class NpcDetectorPeripheral implements IPeripheral {
 
-    // -------------------------------------------------------------------------
-    // Type name tables (sourced from CustomNPCs scripted constants classes)
-    // -------------------------------------------------------------------------
-
-    /** EnumMovingType ordinals: 0=Standing, 1=Wandering, 2=MovingPath */
-    private static final String[] MOVING_TYPE_NAMES = { "standing", "wandering", "path" };
-
-    /**
-     * scripted.constants.JobType: 0=none, 1=bard, 2=healer, 3=guard,
-     * 4=follower, 5=itemgiver, 6=spawner, 7=conversation, 8=puppet
-     */
-    private static final String[] JOB_TYPE_NAMES = { "none", "bard", "healer", "guard", "follower", "itemgiver",
-        "spawner", "conversation", "puppet" };
-
-    /**
-     * scripted.constants.RoleType: 0=none, 1=trader, 2=follower,
-     * 3=bank, 4=transporter, 5=postman, 6=companion
-     */
-    private static final String[] ROLE_TYPE_NAMES = { "none", "trader", "follower", "bank", "transporter", "postman",
-        "companion" };
-
-    private static String nameFromTable(String[] table, int type) {
-        return type >= 0 && type < table.length ? table[type] : "unknown";
-    }
+    // Type-name tables are shared with NpcInterfacePeripheral — see NpcTypeNames.
 
     static final String[] METHOD_NAMES = { "getNpcs", // 0
         "getNpcsByName", // 1
@@ -90,6 +68,21 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
 
     /** Z coordinate of the scan origin. */
     protected abstract double getPositionZ();
+
+    /**
+     * Returns the scan-origin coordinates as {@code {x, y, z}}.
+     *
+     * <p>
+     * Subclasses may override this to compute all three coordinates in a single
+     * operation — e.g. a turtle-based subclass can call
+     * {@code ITurtleAccess.getPosition()} once instead of three times.
+     * The default implementation delegates to {@link #getPositionX()},
+     * {@link #getPositionY()}, and {@link #getPositionZ()}.
+     * </p>
+     */
+    protected double[] getOriginXYZ() {
+        return new double[] { getPositionX(), getPositionY(), getPositionZ() };
+    }
 
     /**
      * The Minecraft world used to resolve the CustomNPCs {@link IWorld}.
@@ -231,8 +224,10 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
     // -------------------------------------------------------------------------
 
     private Map<Object, Object> scanNpcs(double radius, String nameFilter, String factionFilter) throws LuaException {
+        double[] origin = getOriginXYZ();
+        double ox = origin[0], oy = origin[1], oz = origin[2];
         IWorld world = resolveWorld();
-        IEntity<?>[] entities = world.getEntitiesNear(getPositionX(), getPositionY(), getPositionZ(), radius);
+        IEntity<?>[] entities = world.getEntitiesNear(ox, oy, oz, radius);
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (IEntity<?> e : entities) {
@@ -243,37 +238,41 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
                 IFaction f = npc.getFaction();
                 if (f == null || !factionFilter.equals(f.getName())) continue;
             }
-            result.add(buildNpcTable(npc));
+            result.add(buildNpcTable(npc, ox, oy, oz));
         }
         result.sort(Comparator.comparingDouble(t -> (Double) t.get("distance")));
         return toIndexedTable(result);
     }
 
     private Map<Object, Object> scanPlayers(double radius) throws LuaException {
+        double[] origin = getOriginXYZ();
+        double ox = origin[0], oy = origin[1], oz = origin[2];
         IWorld world = resolveWorld();
-        IEntity<?>[] entities = world.getEntitiesNear(getPositionX(), getPositionY(), getPositionZ(), radius);
+        IEntity<?>[] entities = world.getEntitiesNear(ox, oy, oz, radius);
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (IEntity<?> e : entities) {
             if (!(e instanceof IPlayer)) continue;
-            result.add(buildPlayerTable((IPlayer<?>) e));
+            result.add(buildPlayerTable((IPlayer<?>) e, ox, oy, oz));
         }
         result.sort(Comparator.comparingDouble(t -> (Double) t.get("distance")));
         return toIndexedTable(result);
     }
 
     private Map<Object, Object> scanAll(double radius) throws LuaException {
+        double[] origin = getOriginXYZ();
+        double ox = origin[0], oy = origin[1], oz = origin[2];
         IWorld world = resolveWorld();
-        IEntity<?>[] entities = world.getEntitiesNear(getPositionX(), getPositionY(), getPositionZ(), radius);
+        IEntity<?>[] entities = world.getEntitiesNear(ox, oy, oz, radius);
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (IEntity<?> e : entities) {
             if (e instanceof ICustomNpc) {
-                Map<String, Object> t = buildNpcTable((ICustomNpc<?>) e);
+                Map<String, Object> t = buildNpcTable((ICustomNpc<?>) e, ox, oy, oz);
                 t.put("type", "npc");
                 result.add(t);
             } else if (e instanceof IPlayer) {
-                Map<String, Object> t = buildPlayerTable((IPlayer<?>) e);
+                Map<String, Object> t = buildPlayerTable((IPlayer<?>) e, ox, oy, oz);
                 t.put("type", "player");
                 result.add(t);
             }
@@ -295,7 +294,17 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
     // Table builders (package-private for unit testing)
     // -------------------------------------------------------------------------
 
+    /**
+     * Builds an NPC data table using the peripheral's current position as the
+     * distance origin. Prefer {@link #buildNpcTable(ICustomNpc, double, double, double)}
+     * inside scan loops to avoid re-reading the origin for each entity.
+     */
     Map<String, Object> buildNpcTable(ICustomNpc<?> npc) {
+        return buildNpcTable(npc, getPositionX(), getPositionY(), getPositionZ());
+    }
+
+    /** Builds an NPC data table using an already-cached scan origin. */
+    Map<String, Object> buildNpcTable(ICustomNpc<?> npc, double ox, double oy, double oz) {
         Map<String, Object> t = new LinkedHashMap<>();
         t.put("name", npc.getName());
         t.put("title", npc.getTitle());
@@ -303,32 +312,42 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
         t.put("x", npc.getX());
         t.put("y", npc.getY());
         t.put("z", npc.getZ());
-        t.put("distance", distanceTo(npc));
+        t.put("distance", distanceTo(npc, ox, oy, oz));
         t.put("health", (double) npc.getHealth());
         t.put("maxHealth", (double) npc.getMaxHealth());
         t.put("isAlive", npc.isAlive());
         t.put("isAttacking", npc.isAttacking());
         IEntityLivingBase<?> target = npc.getAttackTarget();
         t.put("target", target != null ? target.getTypeName() : null);
-        t.put("movingType", nameFromTable(MOVING_TYPE_NAMES, npc.getMovingType()));
+        t.put("movingType", NpcTypeNames.nameOf(NpcTypeNames.MOVING_TYPE, npc.getMovingType()));
         IFaction faction = npc.getFaction();
         t.put("factionName", faction != null ? faction.getName() : "");
         t.put("factionId", faction != null ? (double) faction.getId() : -1.0);
         IJob job = npc.getJob();
-        t.put("jobType", job != null ? nameFromTable(JOB_TYPE_NAMES, job.getType()) : "none");
+        t.put("jobType", job != null ? NpcTypeNames.nameOf(NpcTypeNames.JOB_TYPE, job.getType()) : "none");
         IRole role = npc.getRole();
-        t.put("roleType", role != null ? nameFromTable(ROLE_TYPE_NAMES, role.getType()) : "none");
+        t.put("roleType", role != null ? NpcTypeNames.nameOf(NpcTypeNames.ROLE_TYPE, role.getType()) : "none");
         return t;
     }
 
+    /**
+     * Builds a player data table using the peripheral's current position as the
+     * distance origin. Prefer {@link #buildPlayerTable(IPlayer, double, double, double)}
+     * inside scan loops.
+     */
     Map<String, Object> buildPlayerTable(IPlayer<?> player) {
+        return buildPlayerTable(player, getPositionX(), getPositionY(), getPositionZ());
+    }
+
+    /** Builds a player data table using an already-cached scan origin. */
+    Map<String, Object> buildPlayerTable(IPlayer<?> player, double ox, double oy, double oz) {
         Map<String, Object> t = new LinkedHashMap<>();
         t.put("name", player.getName());
         t.put("uuid", player.getUniqueID());
         t.put("x", player.getX());
         t.put("y", player.getY());
         t.put("z", player.getZ());
-        t.put("distance", distanceTo(player));
+        t.put("distance", distanceTo(player, ox, oy, oz));
         t.put("health", (double) player.getHealth());
         t.put("maxHealth", (double) player.getMaxHealth());
         t.put("gameMode", (double) player.getMode());
@@ -355,16 +374,16 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
         }
     }
 
-    private double distanceTo(IEntity<?> e) {
-        double dx = e.getX() - getPositionX();
-        double dy = e.getY() - getPositionY();
-        double dz = e.getZ() - getPositionZ();
+    private static double distanceTo(IEntity<?> e, double ox, double oy, double oz) {
+        double dx = e.getX() - ox;
+        double dy = e.getY() - oy;
+        double dz = e.getZ() - oz;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     /**
-     * Parses an optional radius argument at {@code args[index]}, capped to
-     * {@link ComputerCraft#npc_detector_max_range}. Defaults to the cap if absent.
+     * Parses an optional radius argument at {@code args[index]}, clamped to
+     * [0, {@link ComputerCraft#npc_detector_max_range}]. Defaults to the cap if absent.
      */
     static double parseRadius(Object[] args, int index) throws LuaException {
         double max = ComputerCraft.npc_detector_max_range;
@@ -373,7 +392,7 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
             throw new LuaException("Expected number for radius");
         }
         double r = ((Number) args[index]).doubleValue();
-        return Math.min(r, max);
+        return Math.max(0, Math.min(r, max));
     }
 
     private static void requireCnpc() throws LuaException {

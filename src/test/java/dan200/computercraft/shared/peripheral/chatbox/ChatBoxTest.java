@@ -253,7 +253,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcInteract("Steve", "Bob");
 
-        verify(computer).queueEvent("npc_interact", new Object[] { "Steve", "Bob" });
+        verify(computer).queueEvent("cnpc_interact", new Object[] { "Steve", "Bob" });
 
         ChatBoxManager.unregister(tile);
     }
@@ -265,7 +265,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcDialog("Steve", "ShopKeeper", 42, 3);
 
-        verify(computer).queueEvent("npc_dialog", new Object[] { "Steve", "ShopKeeper", 42, 3 });
+        verify(computer).queueEvent("cnpc_dialog", new Object[] { "Steve", "ShopKeeper", 42, 3 });
 
         ChatBoxManager.unregister(tile);
     }
@@ -277,7 +277,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcDialogClosed("Steve", "ShopKeeper", 42, 3);
 
-        verify(computer).queueEvent("npc_dialog_closed", new Object[] { "Steve", "ShopKeeper", 42, 3 });
+        verify(computer).queueEvent("cnpc_dialog_closed", new Object[] { "Steve", "ShopKeeper", 42, 3 });
 
         ChatBoxManager.unregister(tile);
     }
@@ -289,7 +289,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcDied("Bob", "Steve", "player");
 
-        verify(computer).queueEvent("npc_died", new Object[] { "Bob", "Steve", "player" });
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Bob", "Steve", "player" });
 
         ChatBoxManager.unregister(tile);
     }
@@ -314,8 +314,8 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcInteract("Player", "Guard");
 
-        verify(compA).queueEvent("npc_interact", new Object[] { "Player", "Guard" });
-        verify(compB).queueEvent("npc_interact", new Object[] { "Player", "Guard" });
+        verify(compA).queueEvent("cnpc_interact", new Object[] { "Player", "Guard" });
+        verify(compB).queueEvent("cnpc_interact", new Object[] { "Player", "Guard" });
 
         ChatBoxManager.unregister(tileA);
         ChatBoxManager.unregister(tileB);
@@ -328,7 +328,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcSpawned("Guard");
 
-        verify(computer).queueEvent("npc_spawned", new Object[] { "Guard" });
+        verify(computer).queueEvent("cnpc_spawned", new Object[] { "Guard" });
 
         ChatBoxManager.unregister(tile);
     }
@@ -340,7 +340,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcDamaged("Guard", "Steve", 4.5f, "player");
 
-        verify(computer).queueEvent("npc_damaged", new Object[] { "Guard", "Steve", 4.5f, "player" });
+        verify(computer).queueEvent("cnpc_damaged", new Object[] { "Guard", "Steve", 4.5f, "player" });
 
         ChatBoxManager.unregister(tile);
     }
@@ -352,7 +352,7 @@ class ChatBoxTest {
 
         ChatBoxManager.dispatchNpcKilledEntity("Guard", "Zombie", "zombie");
 
-        verify(computer).queueEvent("npc_killed_entity", new Object[] { "Guard", "Zombie", "zombie" });
+        verify(computer).queueEvent("cnpc_killed_entity", new Object[] { "Guard", "Zombie", "zombie" });
 
         ChatBoxManager.unregister(tile);
     }

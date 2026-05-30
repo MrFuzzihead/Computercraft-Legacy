@@ -32,13 +32,31 @@ public final class NpcInterfaceManager {
     }
 
     public static void unregister(String npcUUID, INpcInterfaceHolder holder) {
-        Set<INpcInterfaceHolder> set = BY_UUID.get(npcUUID);
-        if (set != null) {
+        // compute() holds the CHM bin-lock for the duration of the lambda, making
+        // the remove-then-check-empty atomic with respect to concurrent register() calls.
+        // Returning null from the lambda removes the key from the map.
+        BY_UUID.compute(npcUUID, (k, set) -> {
+            if (set == null) return null;
             set.remove(holder);
-            if (set.isEmpty()) {
-                BY_UUID.remove(npcUUID);
-            }
-        }
+            return set.isEmpty() ? null : set;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Query
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns {@code true} if at least one {@link INpcInterfaceHolder} is currently
+     * registered for {@code npcUUID}.
+     *
+     * <p>
+     * Used by {@link NpcInterfaceBridge} to skip tick-counter bookkeeping for NPCs
+     * that have no linked interface, keeping {@code m_tickCounters} bounded.
+     * </p>
+     */
+    public static boolean hasListeners(String npcUUID) {
+        return BY_UUID.containsKey(npcUUID);
     }
 
     // -------------------------------------------------------------------------

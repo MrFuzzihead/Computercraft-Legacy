@@ -10,6 +10,7 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.compat.customnpcs.peripheral.NpcTypeNames;
 import noppes.npcs.api.AbstractNpcAPI;
 import noppes.npcs.api.entity.ICustomNpc;
 import noppes.npcs.api.entity.IEntity;
@@ -20,7 +21,7 @@ import noppes.npcs.api.entity.IEntityLivingBase;
  * by UUID and exposes state-read, control, and event-forwarding Lua methods.
  *
  * <h3>Link management (no CNPC required except where noted)</h3>
- * 
+ *
  * <pre>
  *   link(uuid)               – replace all links with a single NPC by UUID
  *   linkByName(name[,r])     – replace all links with the first NPC named {@code name} within radius r          [requires CNPC]
@@ -43,21 +44,7 @@ import noppes.npcs.api.entity.IEntityLivingBase;
  */
 public class NpcInterfacePeripheral implements IPeripheral {
 
-    private static final String[] MOVING_TYPE_NAMES = { "standing", "wandering", "path" };
-
-    /**
-     * scripted.constants.JobType ordinals — must match {@code NpcDetectorPeripheral.JOB_TYPE_NAMES}.
-     * 0=none, 1=bard, 2=healer, 3=guard, 4=follower, 5=itemgiver, 6=spawner, 7=conversation, 8=puppet
-     */
-    private static final String[] JOB_TYPE_NAMES = { "none", "bard", "healer", "guard", "follower", "itemgiver",
-        "spawner", "conversation", "puppet" };
-
-    /**
-     * scripted.constants.RoleType ordinals — must match {@code NpcDetectorPeripheral.ROLE_TYPE_NAMES}.
-     * 0=none, 1=trader, 2=follower, 3=bank, 4=transporter, 5=postman, 6=companion
-     */
-    private static final String[] ROLE_TYPE_NAMES = { "none", "trader", "follower", "bank", "transporter", "postman",
-        "companion" };
+    // Type-name tables are defined in NpcTypeNames — shared with NpcDetectorPeripheral.
 
     static final String[] METHOD_NAMES = {
         // ---- Link management ----
@@ -262,7 +249,8 @@ public class NpcInterfacePeripheral implements IPeripheral {
                     case 16:
                         return mainThreadSingle(context, args, 0, npc -> {
                             int mt = npc.getMovingType();
-                            String typeName = (mt >= 0 && mt < MOVING_TYPE_NAMES.length) ? MOVING_TYPE_NAMES[mt]
+                            String typeName = (mt >= 0 && mt < NpcTypeNames.MOVING_TYPE.length)
+                                ? NpcTypeNames.MOVING_TYPE[mt]
                                 : String.valueOf(mt);
                             return new Object[] { typeName };
                         });
@@ -284,12 +272,14 @@ public class NpcInterfacePeripheral implements IPeripheral {
                     case 20:
                         return mainThreadSingle(context, args, 0, npc -> {
                             var j = npc.getJob();
-                            return new Object[] { j != null ? nameFromTable(JOB_TYPE_NAMES, j.getType()) : "none" };
+                            return new Object[] {
+                                j != null ? NpcTypeNames.nameOf(NpcTypeNames.JOB_TYPE, j.getType()) : "none" };
                         });
                     case 21:
                         return mainThreadSingle(context, args, 0, npc -> {
                             var r = npc.getRole();
-                            return new Object[] { r != null ? nameFromTable(ROLE_TYPE_NAMES, r.getType()) : "none" };
+                            return new Object[] {
+                                r != null ? NpcTypeNames.nameOf(NpcTypeNames.ROLE_TYPE, r.getType()) : "none" };
                         });
 
                     // Control — broadcast to all linked NPCs unless uuid arg given
@@ -624,32 +614,25 @@ public class NpcInterfacePeripheral implements IPeripheral {
 
     // ---- Argument utilities -------------------------------------------------
 
-    private static String nameFromTable(String[] table, int type) {
-        return type >= 0 && type < table.length ? table[type] : "unknown";
-    }
-
     private static int parseMovingType(String name) throws LuaException {
-        for (int i = 0; i < MOVING_TYPE_NAMES.length; i++) {
-            if (MOVING_TYPE_NAMES[i].equalsIgnoreCase(name)) return i;
-        }
+        int idx = NpcTypeNames.indexOf(NpcTypeNames.MOVING_TYPE, name);
+        if (idx >= 0) return idx;
         throw new LuaException(
-            "Invalid moving type '" + name + "'. Expected one of: " + String.join(", ", MOVING_TYPE_NAMES));
+            "Invalid moving type '" + name + "'. Expected one of: " + String.join(", ", NpcTypeNames.MOVING_TYPE));
     }
 
     private static int parseJobType(String name) throws LuaException {
-        for (int i = 0; i < JOB_TYPE_NAMES.length; i++) {
-            if (JOB_TYPE_NAMES[i].equalsIgnoreCase(name)) return i;
-        }
+        int idx = NpcTypeNames.indexOf(NpcTypeNames.JOB_TYPE, name);
+        if (idx >= 0) return idx;
         throw new LuaException(
-            "Invalid job type '" + name + "'. Expected one of: " + String.join(", ", JOB_TYPE_NAMES));
+            "Invalid job type '" + name + "'. Expected one of: " + String.join(", ", NpcTypeNames.JOB_TYPE));
     }
 
     private static int parseRoleType(String name) throws LuaException {
-        for (int i = 0; i < ROLE_TYPE_NAMES.length; i++) {
-            if (ROLE_TYPE_NAMES[i].equalsIgnoreCase(name)) return i;
-        }
+        int idx = NpcTypeNames.indexOf(NpcTypeNames.ROLE_TYPE, name);
+        if (idx >= 0) return idx;
         throw new LuaException(
-            "Invalid role type '" + name + "'. Expected one of: " + String.join(", ", ROLE_TYPE_NAMES));
+            "Invalid role type '" + name + "'. Expected one of: " + String.join(", ", NpcTypeNames.ROLE_TYPE));
     }
 
     private static void requireCnpc() throws LuaException {
@@ -668,7 +651,11 @@ public class NpcInterfacePeripheral implements IPeripheral {
     }
 
     private static double optionalRadius(Object[] args, int i) {
-        return (i < args.length && args[i] instanceof Number) ? ((Number) args[i]).doubleValue() : 16.0;
+        if (i < args.length && args[i] instanceof Number) {
+            double max = dan200.computercraft.ComputerCraft.npc_detector_max_range;
+            return Math.max(0, Math.min(((Number) args[i]).doubleValue(), max));
+        }
+        return 16.0;
     }
 
     static String requireString(Object[] args, int i, String name) throws LuaException {

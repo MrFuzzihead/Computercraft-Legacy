@@ -2,8 +2,16 @@ package dan200.computercraft.compat.customnpcs.peripheral.npcinterface;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import dan200.computercraft.api.peripheral.IComputerAccess;
+import noppes.npcs.api.entity.ICustomNpc;
 
 /**
  * Unit tests for the tick-throttle logic inside {@link NpcInterfaceBridge}.
@@ -35,11 +43,89 @@ class NpcInterfaceBridgeTest {
     private static final String UUID_A = "aaaaaaaa-0000-0000-0000-aaaaaaaaaaaa";
     private static final String UUID_B = "bbbbbbbb-0000-0000-0000-bbbbbbbbbbbb";
 
+    /**
+     * No-op stub registered in {@link NpcInterfaceManager} so that
+     * {@link NpcInterfaceManager#hasListeners} returns {@code true} for the test UUIDs,
+     * allowing {@link NpcInterfaceBridge#handleTick} to proceed past the listener guard.
+     */
+    private static final INpcInterfaceHolder STUB = new INpcInterfaceHolder() {
+
+        @Override
+        public String getLinkedUUID() {
+            return null;
+        }
+
+        @Override
+        public String getLinkedName() {
+            return null;
+        }
+
+        @Override
+        public Map<String, String> getLinkedNpcs() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public void setLink(String uuid, String name) {}
+
+        @Override
+        public void addLink(String uuid, String name) {}
+
+        @Override
+        public void removeLink(String uuid) {}
+
+        @Override
+        public void clearLinks() {}
+
+        @Override
+        public double getPositionX() {
+            return 0;
+        }
+
+        @Override
+        public double getPositionY() {
+            return 0;
+        }
+
+        @Override
+        public double getPositionZ() {
+            return 0;
+        }
+
+        @Override
+        public void attachComputer(IComputerAccess computer) {}
+
+        @Override
+        public void detachComputer(IComputerAccess computer) {}
+
+        @Override
+        public ICustomNpc<?> resolveNpc() {
+            return null;
+        }
+
+        @Override
+        public List<ICustomNpc<?>> resolveNpcs() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void queueNpcEvent(String event, Object... params) {}
+    };
+
     private NpcInterfaceBridge bridge;
 
     @BeforeEach
     void setUp() {
         bridge = new NpcInterfaceBridge();
+        // Register the stub so hasListeners() returns true for both test UUIDs.
+        NpcInterfaceManager.register(UUID_A, STUB);
+        NpcInterfaceManager.register(UUID_B, STUB);
+    }
+
+    @AfterEach
+    void tearDown() {
+        NpcInterfaceManager.unregister(UUID_A, STUB);
+        NpcInterfaceManager.unregister(UUID_B, STUB);
     }
 
     // =========================================================================
@@ -207,16 +293,19 @@ class NpcInterfaceBridgeTest {
     }
 
     // =========================================================================
-    // Stale-entry leak — despawning NPCs (no death event)
+    // Stale-entry cleanup — despawning NPCs (no death event)
     // =========================================================================
 
     @Test
     void staleDespawn_counterPersistsWhenTicksStop() {
-        // Simulate an NPC that ticks 5 times then despawns (no death event fired)
+        // Simulate an NPC that ticks 5 times then despawns (no death event fired).
+        // UpdateEvent stops arriving, so handleTick is never called again.
+        // The stale entry remains until either handleDied fires or the listener
+        // is removed and handleTick is called once more (proactive cleanup).
         for (int i = 0; i < 5; i++) bridge.handleTick(UUID_A);
 
-        // The entry is still present — leak is bounded (events simply stop arriving)
-        assertEquals(5, bridge.getTickCounter(UUID_A), "stale counter must persist after despawn (bounded leak)");
+        // Entry persists — bounded because events have stopped.
+        assertEquals(5, bridge.getTickCounter(UUID_A), "stale counter must persist after despawn (bounded)");
     }
 
     @Test
@@ -228,5 +317,23 @@ class NpcInterfaceBridgeTest {
         assertTrue(bridge.handleTick(UUID_B), "B must fire despite A having a stale entry");
         // A's stale counter is still 10
         assertEquals(10, bridge.getTickCounter(UUID_A));
+    }
+
+    @Test
+    void handleTick_afterListenerRemoved_proactivelyRemovesStaleCounter() {
+        // Tick A while the listener is registered.
+        for (int i = 0; i < 5; i++) bridge.handleTick(UUID_A);
+        assertEquals(5, bridge.getTickCounter(UUID_A));
+
+        // Unregister the listener (e.g. NpcInterface block broken or unlinked).
+        NpcInterfaceManager.unregister(UUID_A, STUB);
+
+        // If the NPC is still in the world and UpdateEvent fires once more,
+        // handleTick should detect no listeners and proactively clean up the entry.
+        assertFalse(bridge.handleTick(UUID_A), "must not dispatch when no listeners");
+        assertEquals(-1, bridge.getTickCounter(UUID_A), "stale counter must be removed proactively");
+
+        // Re-register so @AfterEach unregister is a safe no-op.
+        NpcInterfaceManager.register(UUID_A, STUB);
     }
 }

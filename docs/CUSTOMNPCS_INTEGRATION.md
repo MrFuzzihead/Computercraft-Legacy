@@ -47,58 +47,68 @@ All scan methods accept an optional `radius` argument (number, capped to `getMax
 ---
 
 ### NPC Interface (`npc_interface`)
-Links to a specific NPC by **name** and exposes full read/write access to its properties.
+Links to one or more CustomNPCs entities by **UUID** and exposes full read/write access to their properties. The peripheral can hold links to multiple NPCs simultaneously.
 
 **Craft:** Iron border + normal Computer
 **Lua API (`peripheral.wrap`):**
 
-*Link management (always available, no CustomNPCs required):*
+*Link management (always available, no CustomNPCs required unless noted):*
 | Method | Returns | Description |
 |---|---|---|
-| `link(npcName [, radius])` | boolean | Link to the nearest NPC with that exact name within `radius` (default 16). Returns `true` on success |
-| `linkNearest([radius])` | boolean | Link to the nearest NPC of any name within `radius` (default 16). Returns `true` on success |
-| `unlink()` | — | Remove link |
-| `isLinked()` | boolean | `true` if currently linked |
-| `getLinkedName()` | string\|nil | Display name of the linked NPC, or `nil` |
+| `link(uuid)` | `true` | Link to the NPC with this exact UUID string. Resolves display name from loaded entities (best-effort). Always succeeds. |
+| `linkByName(name [, radius])` | `boolean, string\|nil` | Link to the nearest NPC with that display name within `radius` (default 16). Returns `true, uuid` on success, `false` on failure. Requires CustomNPCs. |
+| `linkAll(name [, radius])` | number | Link to **all** NPCs named `name` within `radius`. Replaces the current link set. Returns the count of newly linked NPCs. Requires CustomNPCs. |
+| `linkNearest([radius])` | `boolean, string\|nil` | Link to the nearest NPC of any name within `radius` (default 16). Returns `true, uuid` on success, `false` on failure. Requires CustomNPCs. |
+| `unlink([uuid])` | — | Remove a specific UUID link, or clear all links if no argument given. |
+| `isLinked([uuid])` | boolean | `true` if any NPC is linked. If a UUID string is given, checks that specific UUID. |
+| `getLinkedNpcs()` | table | `{[uuid] = name}` map of all currently linked NPCs. |
+| `getLinkedUUID()` | string\|nil | The first persisted linked UUID string, or `nil` if unlinked. Works without CustomNPCs. |
+| `scanNpcs([radius])` | table | `[{name, uuid, distance}]` sorted nearest-first. Does **not** change the link state. Requires CustomNPCs. |
 
 *NPC state read (require CustomNPCs + live linked NPC):*
+
+All state-read methods accept an optional trailing `uuid` string. If omitted the peripheral must be linked to **exactly one** NPC; if linked to multiple, a UUID argument is required to disambiguate.
+
 | Method | Returns | Description |
 |---|---|---|
-| `getName()` | string | Display name |
-| `getTitle()` | string | Title/subtitle |
-| `getUUID()` | string | Unique ID string |
-| `isAlive()` | boolean | `true` if the NPC is alive |
-| `getHealth()` | number | Current HP |
-| `getMaxHealth()` | number | Max HP |
-| `getPosition()` | table | `{x, y, z}` |
-| `getMovingType()` | number | 0 = standing, 1 = wandering, 2 = path |
-| `isAttacking()` | boolean | `true` if attacking |
-| `getTarget()` | string\|nil | Type name of attack target, or `nil` |
-| `getFaction()` | string | Faction name, or `""` if none |
-| `getJob()` | number | Job type ID, or `-1` if none |
-| `getRole()` | number | Role type ID, or `-1` if none |
+| `getName([uuid])` | string | Display name |
+| `getTitle([uuid])` | string | Title/subtitle |
+| `getUUID([uuid])` | string | Unique ID string |
+| `isAlive([uuid])` | boolean | `true` if the NPC is alive |
+| `getHealth([uuid])` | number | Current HP |
+| `getMaxHealth([uuid])` | number | Max HP |
+| `getPosition([uuid])` | table | `{x, y, z}` coordinate table |
+| `getMovingType([uuid])` | string | `"standing"`, `"wandering"`, or `"path"` |
+| `isAttacking([uuid])` | boolean | `true` if attacking |
+| `getTarget([uuid])` | string\|nil | Type name of attack target, or `nil` |
+| `getFaction([uuid])` | table | `{name: string, id: number}` — `name` is `""` and `id` is `-1` if no faction |
+| `getJob([uuid])` | string | Job type name: `"none"`, `"bard"`, `"healer"`, `"guard"`, `"follower"`, `"itemgiver"`, `"spawner"`, `"conversation"`, `"puppet"` |
+| `getRole([uuid])` | string | Role type name: `"none"`, `"trader"`, `"follower"`, `"bank"`, `"transporter"`, `"postman"`, `"companion"` |
 
 *NPC control (require CustomNPCs + live linked NPC):*
+
+Control methods without a UUID broadcast to **all** linked NPCs; with a UUID, only that NPC is targeted.
+
 | Method | Description |
 |---|---|
-| `say(message)` | Make the NPC say a message |
-| `setHome(x, y, z)` | Set NPC home position |
-| `setMovingType(type)` | `"standing"`, `"wandering"`, or `"path"` |
-| `navigateTo(x, y, z [, speed])` | Navigate to coordinates; `speed` defaults to `0.7` |
-| `executeCommand(command)` | Run a command as the NPC |
-| `kill()` | Kill the NPC |
-| `reset()` | Reset the NPC |
+| `say(message [, uuid])` | Make the NPC say a message |
+| `setHome(x, y, z [, uuid])` | Set NPC home position |
+| `setMovingType(type [, uuid])` | `"standing"`, `"wandering"`, or `"path"` |
+| `navigateTo(x, y, z [, speed [, uuid]])` | Navigate to coordinates; `speed` defaults to `0.7` |
+| `executeCommand(command [, uuid])` | Run a command as the NPC |
+| `kill([uuid])` | Kill the NPC |
+| `reset([uuid])` | Reset the NPC |
 
 *NPC state write (require CustomNPCs + live linked NPC):*
 | Method | Description |
 |---|---|
-| `setName(name)` | Set display name |
-| `setTitle(title)` | Set title/subtitle |
-| `setHealth(health)` | Set current HP |
-| `setMaxHealth(maxHealth)` | Set max HP |
-| `setFaction(factionId)` | Set faction by numeric ID |
-| `setJob(jobType)` | Set job type by numeric ID |
-| `setRole(roleType)` | Set role type by numeric ID |
+| `setName(name [, uuid])` | Set display name |
+| `setTitle(title [, uuid])` | Set title/subtitle |
+| `setHealth(health [, uuid])` | Set current HP |
+| `setMaxHealth(maxHealth [, uuid])` | Set max HP |
+| `setFaction(factionId [, uuid])` | Set faction by numeric ID |
+| `setJob(jobType [, uuid])` | Set job by name (`"bard"`, etc.) **or** numeric ordinal |
+| `setRole(roleType [, uuid])` | Set role by name (`"trader"`, etc.) **or** numeric ordinal |
 
 **Events** (queued to all computers attached to a peripheral linked to that NPC's UUID):
 | Event | Parameters | Description |
@@ -111,6 +121,10 @@ Links to a specific NPC by **name** and exposes full read/write access to its pr
 | `npc_target` | `targetName` | NPC acquired an attack target |
 | `npc_target_lost` | — | NPC lost its attack target |
 | `npc_tick` | — | Fired every NPC AI tick |
+
+> **Note:** These `npc_*` events are fired only for the **linked** NPC.
+> The Chat Box fires a separate set of `cnpc_*` events (see below) for **all** NPCs globally.
+> A computer attached to both peripherals will receive both namespaces without duplicates.
 
 ---
 
@@ -151,6 +165,24 @@ Slots are **0-based** and range from **0–17**.
 
 ---
 
+## Chat Box — Global NPC Events (`cnpc_*`)
+
+When a **Chat Box** block or portable Chat Box is attached to a computer and CustomNPCs is loaded,
+the following global events are fired for **any** NPC in the world (not linked to a specific UUID).
+They use the `cnpc_` prefix to distinguish them from the linked-NPC `npc_*` events fired by the NPC Interface.
+
+| Event | Parameters | Description |
+|---|---|---|
+| `cnpc_interact` | `playerName, npcName` | A player right-clicked any NPC |
+| `cnpc_dialog` | `playerName, npcName, dialogId, optionId` | A player chose a dialog option with any NPC |
+| `cnpc_dialog_closed` | `playerName, npcName, dialogId, optionId` | A player closed a dialog with any NPC |
+| `cnpc_died` | `npcName, killerName, damageType` | Any NPC was killed |
+| `cnpc_spawned` | `npcName` | Any NPC spawned |
+| `cnpc_damaged` | `npcName, attackerName, damage, damageType` | Any NPC took damage |
+| `cnpc_killed_entity` | `npcName, entityName, entityType` | Any NPC killed an entity |
+
+---
+
 ## Turtle Upgrades
 
 ### NPC Detector Turtle (`upgrade ID 11`)
@@ -186,12 +218,11 @@ Links to an NPC; UUID stored in the item's NBT tag. Exposes the full NPC Interfa
 
 ```
 dan200.computercraft.compat.customnpcs
-├── peripheral/
-│   ├── npcdetector/          Block, Tile, Peripheral
-│   ├── npcinterface/         Block, Tile, Peripheral, Manager, INpcInterfaceHolder
-│   └── traderrole/           Block, Tile, Peripheral
+└── peripheral/
+    ├── npcdetector/          BlockNpcDetector, TileNpcDetector, NpcDetectorPeripheral
+    ├── npcinterface/         BlockNpcInterface, TileNpcInterface, NpcInterfacePeripheral, NpcInterfaceManager, INpcInterfaceHolder
+    └── traderrole/           BlockNpcTrader, TileNpcTrader, NpcTraderPeripheral
 dan200.computercraft.shared
-├── peripheral/npcdetector/   BlockNpcDetector, TileNpcDetector
 ├── turtle/upgrades/          TurtleNpcDetector, TurtleNpcInterface
 └── pocket/peripherals/       PocketNpcDetectorPeripheral, PocketNpcInterfacePeripheral
 ```

@@ -84,21 +84,24 @@ public class TurtleNpcDetector implements ITurtleUpgrade {
         }
 
         @Override
-        protected double getPositionX() {
+        protected double[] getOriginXYZ() {
             ChunkCoordinates pos = m_turtle.getPosition();
-            return pos.posX + 0.5;
+            return new double[] { pos.posX + 0.5, pos.posY + 0.5, pos.posZ + 0.5 };
+        }
+
+        @Override
+        protected double getPositionX() {
+            return m_turtle.getPosition().posX + 0.5;
         }
 
         @Override
         protected double getPositionY() {
-            ChunkCoordinates pos = m_turtle.getPosition();
-            return pos.posY + 0.5;
+            return m_turtle.getPosition().posY + 0.5;
         }
 
         @Override
         protected double getPositionZ() {
-            ChunkCoordinates pos = m_turtle.getPosition();
-            return pos.posZ + 0.5;
+            return m_turtle.getPosition().posZ + 0.5;
         }
 
         @Override

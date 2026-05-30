@@ -107,37 +107,37 @@ public class TileChatBox extends TileGeneric implements IPeripheralTile, IChatBo
 
     @Override
     public void onNpcInteractEvent(String playerName, String npcName) {
-        queueEvent("npc_interact", playerName, npcName);
+        queueEvent("cnpc_interact", playerName, npcName);
     }
 
     @Override
     public void onNpcDialogEvent(String playerName, String npcName, int dialogId, int optionId) {
-        queueEvent("npc_dialog", playerName, npcName, dialogId, optionId);
+        queueEvent("cnpc_dialog", playerName, npcName, dialogId, optionId);
     }
 
     @Override
     public void onNpcDialogClosedEvent(String playerName, String npcName, int dialogId, int optionId) {
-        queueEvent("npc_dialog_closed", playerName, npcName, dialogId, optionId);
+        queueEvent("cnpc_dialog_closed", playerName, npcName, dialogId, optionId);
     }
 
     @Override
     public void onNpcDiedEvent(String npcName, String killerName, String damageType) {
-        queueEvent("npc_died", npcName, killerName, damageType);
+        queueEvent("cnpc_died", npcName, killerName, damageType);
     }
 
     @Override
     public void onNpcSpawnedEvent(String npcName) {
-        queueEvent("npc_spawned", npcName);
+        queueEvent("cnpc_spawned", npcName);
     }
 
     @Override
     public void onNpcDamagedEvent(String npcName, String attackerName, float damage, String damageType) {
-        queueEvent("npc_damaged", npcName, attackerName, damage, damageType);
+        queueEvent("cnpc_damaged", npcName, attackerName, damage, damageType);
     }
 
     @Override
     public void onNpcKilledEntityEvent(String npcName, String entityName, String entityType) {
-        queueEvent("npc_killed_entity", npcName, entityName, entityType);
+        queueEvent("cnpc_killed_entity", npcName, entityName, entityType);
     }
 
     // -------------------------------------------------------------------------

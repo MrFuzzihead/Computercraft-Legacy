@@ -19,6 +19,27 @@ import noppes.npcs.scripted.event.NpcEvent;
  * <p>
  * Registered alongside {@link CustomNpcChatBoxBridge} in {@code ComputerCraft#registerCustomNpcCompat}.
  * </p>
+ *
+ * <h3>Dual-bridge event overlap</h3>
+ * <p>
+ * Both this bridge and {@link CustomNpcChatBoxBridge} subscribe to the same
+ * {@code NpcEvent.*} classes. When both a {@link TileNpcInterface} linked to a given NPC
+ * <em>and</em> a {@link dan200.computercraft.shared.peripheral.chatbox.TileChatBox} are
+ * present, a single NPC action (e.g. an interact) will fire two separate events on two
+ * separate computers:
+ * </p>
+ * <ul>
+ * <li>{@code npc_interact} on computers attached to the {@code npc_interface} peripheral
+ * (via this bridge → {@link NpcInterfaceManager}).</li>
+ * <li>{@code cnpc_interact} on computers attached to the {@code chat_box} peripheral
+ * (via {@code CustomNpcChatBoxBridge} → {@link dan200.computercraft.shared.peripheral.chatbox.ChatBoxManager}).</li>
+ * </ul>
+ * <p>
+ * This is intentional: the two channels serve distinct audiences (linked-NPC scripts vs.
+ * global chat-box listeners) and use different event-name prefixes ({@code npc_*} vs.
+ * {@code cnpc_*}) so there is no naming ambiguity. A script attached to both peripheral
+ * types will simply receive events from both.
+ * </p>
  */
 public class NpcInterfaceBridge {
 
@@ -27,9 +48,11 @@ public class NpcInterfaceBridge {
      *
      * <p>
      * Values are stored modulo 20 (range [0, 19]) to prevent integer overflow.
-     * Entries are removed in {@link #onDied} to reclaim memory when an NPC dies.
-     * NPCs that despawn without dying leave a stale entry, but since
-     * {@link NpcEvent.UpdateEvent} stops firing for them the leak is bounded.
+     * Entries are only created for NPCs that have at least one linked
+     * {@link INpcInterfaceHolder} (checked via {@link NpcInterfaceManager#hasListeners}),
+     * so the map size is naturally bounded by the number of actively linked NPCs.
+     * Entries are removed in {@link #onDied} when an NPC dies, and cleaned up
+     * proactively in {@link #handleTick} when an NPC's last interface link is dropped.
      * </p>
      */
     private final ConcurrentHashMap<String, Integer> m_tickCounters = new ConcurrentHashMap<>();
@@ -119,14 +142,19 @@ public class NpcInterfaceBridge {
 
     /**
      * Core tick-throttle logic.
-     * Increments the per-NPC counter and dispatches {@code npc_tick} via
-     * {@link NpcInterfaceManager} exactly once every 20 calls (when the counter
-     * wraps to 0 modulo 20).
+     * If no {@link INpcInterfaceHolder} is linked to {@code uuid}, removes any stale
+     * counter entry and returns immediately. Otherwise increments the per-NPC counter
+     * and dispatches {@code npc_tick} via {@link NpcInterfaceManager} exactly once
+     * every 20 calls (when the counter wraps to 0 modulo 20).
      *
      * @param uuid NPC unique-ID string
      * @return {@code true} if the tick event was dispatched this call
      */
     boolean handleTick(String uuid) {
+        if (!NpcInterfaceManager.hasListeners(uuid)) {
+            m_tickCounters.remove(uuid); // proactively clean up any stale entry
+            return false;
+        }
         int count = m_tickCounters.merge(uuid, 1, (a, b) -> (a + b) % 20);
         if (count == 0) {
             NpcInterfaceManager.dispatchTick(uuid);

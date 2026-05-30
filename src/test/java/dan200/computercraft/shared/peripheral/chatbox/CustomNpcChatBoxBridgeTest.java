@@ -60,7 +60,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcInteract(event);
 
-        verify(computer).queueEvent("npc_interact", new Object[] { "Steve", "Guard" });
+        verify(computer).queueEvent("cnpc_interact", new Object[] { "Steve", "Guard" });
     }
 
     // -------------------------------------------------------------------------
@@ -82,7 +82,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDialog(event);
 
-        verify(computer).queueEvent("npc_dialog", new Object[] { "Steve", "ShopKeeper", 42, 3 });
+        verify(computer).queueEvent("cnpc_dialog", new Object[] { "Steve", "ShopKeeper", 42, 3 });
     }
 
     // -------------------------------------------------------------------------
@@ -104,7 +104,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDialogClosed(event);
 
-        verify(computer).queueEvent("npc_dialog_closed", new Object[] { "Steve", "ShopKeeper", 42, 3 });
+        verify(computer).queueEvent("cnpc_dialog_closed", new Object[] { "Steve", "ShopKeeper", 42, 3 });
     }
 
     // -------------------------------------------------------------------------
@@ -125,7 +125,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDied(event);
 
-        verify(computer).queueEvent("npc_died", new Object[] { "Guard", "Steve", "player" });
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Guard", "Steve", "player" });
     }
 
     @Test
@@ -143,7 +143,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDied(event);
 
-        verify(computer).queueEvent("npc_died", new Object[] { "Villager", "Bandit", "customnpc" });
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Villager", "Bandit", "customnpc" });
     }
 
     @Test
@@ -163,7 +163,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDied(event);
 
-        verify(computer).queueEvent("npc_died", new Object[] { "Guard", "Rex", "wolf" });
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Guard", "Rex", "wolf" });
     }
 
     @Test
@@ -183,7 +183,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDied(event);
 
-        verify(computer).queueEvent("npc_died", new Object[] { "Guard", "Zombie", "zombie" });
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Guard", "Zombie", "zombie" });
     }
 
     @Test
@@ -198,7 +198,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDied(event);
 
-        verify(computer).queueEvent("npc_died", new Object[] { "Guard", "", "fall" });
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Guard", "", "fall" });
     }
 
     // -------------------------------------------------------------------------
@@ -215,7 +215,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcSpawned(event);
 
-        verify(computer).queueEvent("npc_spawned", new Object[] { "Guard" });
+        verify(computer).queueEvent("cnpc_spawned", new Object[] { "Guard" });
     }
 
     // -------------------------------------------------------------------------
@@ -237,7 +237,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDamaged(event);
 
-        verify(computer).queueEvent("npc_damaged", new Object[] { "Guard", "Steve", 4.5f, "player" });
+        verify(computer).queueEvent("cnpc_damaged", new Object[] { "Guard", "Steve", 4.5f, "player" });
     }
 
     @Test
@@ -256,7 +256,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDamaged(event);
 
-        verify(computer).queueEvent("npc_damaged", new Object[] { "Villager", "Bandit", 3.0f, "customnpc" });
+        verify(computer).queueEvent("cnpc_damaged", new Object[] { "Villager", "Bandit", 3.0f, "customnpc" });
     }
 
     @Test
@@ -277,7 +277,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDamaged(event);
 
-        verify(computer).queueEvent("npc_damaged", new Object[] { "Guard", "Zombie", 2.0f, "zombie" });
+        verify(computer).queueEvent("cnpc_damaged", new Object[] { "Guard", "Zombie", 2.0f, "zombie" });
     }
 
     @Test
@@ -293,7 +293,7 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcDamaged(event);
 
-        verify(computer).queueEvent("npc_damaged", new Object[] { "Guard", "", 2.0f, "fall" });
+        verify(computer).queueEvent("cnpc_damaged", new Object[] { "Guard", "", 2.0f, "fall" });
     }
 
     // -------------------------------------------------------------------------
@@ -316,6 +316,6 @@ class CustomNpcChatBoxBridgeTest {
 
         bridge.onNpcKilledEntity(event);
 
-        verify(computer).queueEvent("npc_killed_entity", new Object[] { "Guard", "Zombie", "zombie" });
+        verify(computer).queueEvent("cnpc_killed_entity", new Object[] { "Guard", "Zombie", "zombie" });
     }
 }
