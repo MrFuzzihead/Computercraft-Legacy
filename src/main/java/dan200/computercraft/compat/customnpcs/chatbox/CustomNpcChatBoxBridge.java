@@ -70,7 +70,7 @@ public class CustomNpcChatBoxBridge {
      * returned unchanged.
      * </p>
      */
-    static String resolveKillerType(IEntity<?> source, String rawType) {
+    public static String resolveKillerType(IEntity<?> source, String rawType) {
         if (!"mob".equals(rawType)) return rawType;
         if (source == null) return rawType;
         String derived = entityTypeString(source);

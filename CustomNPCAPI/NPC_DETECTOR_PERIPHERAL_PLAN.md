@@ -471,22 +471,22 @@ C = Computer (basic), E = Ender Pearl, S = Stone
 
 ## Files Created / Changed
 
-| File                                                | Type                                      |
-|-----------------------------------------------------|-------------------------------------------|
-| `peripheral/npcdetector/BlockNpcDetector.java`      | New                                       |
-| `peripheral/npcdetector/TileNpcDetector.java`       | New                                       |
-| `peripheral/npcdetector/NpcDetectorPeripheral.java` | New (abstract; `forTile()` factory)       |
-| `peripheral/PeripheralType.java`                    | Add `NpcDetector`                         |
-| `turtle/upgrades/TurtleNpcDetector.java`            | New (upgrade ID 11; gated on customnpcs)  |
-| `pocket/peripherals/PocketNpcDetectorPeripheral.java` | New (upgrade=5; gated on customnpcs)    |
-| `pocket/recipes/PocketComputerNpcDetectorUpgradeRecipe.java` | New                            |
-| `pocket/items/ItemPocketComputer.java`              | Add upgrade=5, getHasNpcDetector, onUpdate, getSubItems (gated) |
-| `pocket/items/PocketComputerItemFactory.java`       | Add createWithNpcDetector                 |
-| `ComputerCraft.java`                                | Register block, tile entity, config field; add Upgrades.npcDetector |
-| `proxy/ComputerCraftProxyCommon.java`               | Block/recipe/pocket recipe (all gated on customnpcs mod ID) |
-| `proxy/CCTurtleProxyCommon.java`                    | Register TurtleNpcDetector (gated on customnpcs) |
-| `assets/computercraft/textures/npcDetector*.png`    | New (2 placeholder textures)              |
-| `test/.../NpcDetectorPeripheralTest.java`           | New                                       |
+| File                                                         | Type                                                                |
+|--------------------------------------------------------------|---------------------------------------------------------------------|
+| `peripheral/npcdetector/BlockNpcDetector.java`               | New                                                                 |
+| `peripheral/npcdetector/TileNpcDetector.java`                | New                                                                 |
+| `peripheral/npcdetector/NpcDetectorPeripheral.java`          | New (abstract; `forTile()` factory)                                 |
+| `peripheral/PeripheralType.java`                             | Add `NpcDetector`                                                   |
+| `turtle/upgrades/TurtleNpcDetector.java`                     | New (upgrade ID 11; gated on customnpcs)                            |
+| `pocket/peripherals/PocketNpcDetectorPeripheral.java`        | New (upgrade=5; gated on customnpcs)                                |
+| `pocket/recipes/PocketComputerNpcDetectorUpgradeRecipe.java` | New                                                                 |
+| `pocket/items/ItemPocketComputer.java`                       | Add upgrade=5, getHasNpcDetector, onUpdate, getSubItems (gated)     |
+| `pocket/items/PocketComputerItemFactory.java`                | Add createWithNpcDetector                                           |
+| `ComputerCraft.java`                                         | Register block, tile entity, config field; add Upgrades.npcDetector |
+| `proxy/ComputerCraftProxyCommon.java`                        | Block/recipe/pocket recipe (all gated on customnpcs mod ID)         |
+| `proxy/CCTurtleProxyCommon.java`                             | Register TurtleNpcDetector (gated on customnpcs)                    |
+| `assets/computercraft/textures/npcDetector*.png`             | New (2 placeholder textures)                                        |
+| `test/.../NpcDetectorPeripheralTest.java`                    | New                                                                 |
 
 ## Files NOT Changed
 

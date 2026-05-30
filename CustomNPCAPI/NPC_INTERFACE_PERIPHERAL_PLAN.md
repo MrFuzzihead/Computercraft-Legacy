@@ -34,33 +34,40 @@ Methods 0–4 work **without** CustomNPCs installed (they manage the stored UUID
 Methods 5–24 require CNPC installed AND the peripheral to be linked; they run on the main
 thread via `ILuaContext#executeMainThreadTask`.
 
-| #  | Method           | Args                                 | Returns       | Notes                                           |
-|----|------------------|--------------------------------------|---------------|-------------------------------------------------|
-| 0  | `link`           | `npcName: string [, radius: number]` | `boolean`     | Scan nearby for NPC by name, store UUID         |
-| 1  | `linkNearest`    | `[radius: number]`                   | `boolean`     | Link to closest NPC within radius               |
-| 2  | `unlink`         | —                                    | —             | Clear stored UUID                               |
-| 3  | `isLinked`       | —                                    | `boolean`     | True if UUID is stored                          |
-| 4  | `getLinkedName`  | —                                    | `string\|nil` | Cached name of linked NPC                       |
-| 5  | `getName`        | —                                    | `string`      | `ICustomNpc#getName()`                          |
-| 6  | `getTitle`       | —                                    | `string`      | `ICustomNpc#getTitle()`                         |
-| 7  | `getUUID`        | —                                    | `string`      | `IEntity#getUniqueID()`                         |
-| 8  | `isAlive`        | —                                    | `boolean`     | `!IEntity#isDead()`                             |
-| 9  | `getHealth`      | —                                    | `number`      | `IEntityLivingBase#getHealth()`                 |
-| 10 | `getMaxHealth`   | —                                    | `number`      | `IEntityLivingBase#getMaxHealth()`              |
-| 11 | `getPosition`    | —                                    | `{x, y, z}`   | `IEntity#getX/Y/Z()`                            |
-| 12 | `getMovingType`  | —                                    | `number`      | 0=standing, 1=wandering, 2=path                 |
-| 13 | `isAttacking`    | —                                    | `boolean`     | `IEntityLivingBase#isAttacking()`               |
-| 14 | `getTarget`      | —                                    | `string\|nil` | `IEntityLivingBase#getAttackTarget()#getName()` |
-| 15 | `getFaction`     | —                                    | `string`      | `ICustomNpc#getFaction()#getName()`             |
-| 16 | `getJob`         | —                                    | `number`      | `ICustomNpc#getJob()#getType()`                 |
-| 17 | `getRole`        | —                                    | `number`      | `ICustomNpc#getRole()#getType()`                |
-| 18 | `say`            | `message: string`                    | —             | `ICustomNpc#say(String)`                        |
-| 19 | `setHome`        | `x, y, z: number`                    | —             | `ICustomNpc#setHome(int,int,int)`               |
-| 20 | `setMovingType`  | `type: number`                       | —             | `ICustomNpc#setMovingType(int)`                 |
-| 21 | `navigateTo`     | `x, y, z [, speed]: number`          | —             | `IEntityLiving#navigateTo(x,y,z,speed)`         |
-| 22 | `executeCommand` | `command: string`                    | —             | `ICustomNpc#executeCommand(String)`             |
-| 23 | `kill`           | —                                    | —             | `ICustomNpc#kill()`                             |
-| 24 | `reset`          | —                                    | —             | `ICustomNpc#reset()`                            |
+| #  | Method           | Args                                 | Returns       | Notes                                                                           |
+|----|------------------|--------------------------------------|---------------|---------------------------------------------------------------------------------|
+| 0  | `link`           | `npcName: string [, radius: number]` | `boolean`     | Scan nearby for NPC by name, store UUID                                         |
+| 1  | `linkNearest`    | `[radius: number]`                   | `boolean`     | Link to closest NPC within radius                                               |
+| 2  | `unlink`         | —                                    | —             | Clear stored UUID                                                               |
+| 3  | `isLinked`       | —                                    | `boolean`     | True if UUID is stored                                                          |
+| 4  | `getLinkedName`  | —                                    | `string\|nil` | Cached name of linked NPC                                                       |
+| 5  | `getName`        | —                                    | `string`      | `ICustomNpc#getName()`                                                          |
+| 6  | `getTitle`       | —                                    | `string`      | `ICustomNpc#getTitle()`                                                         |
+| 7  | `getUUID`        | —                                    | `string`      | `IEntity#getUniqueID()`                                                         |
+| 8  | `isAlive`        | —                                    | `boolean`     | `!IEntity#isDead()`                                                             |
+| 9  | `getHealth`      | —                                    | `number`      | `IEntityLivingBase#getHealth()`                                                 |
+| 10 | `getMaxHealth`   | —                                    | `number`      | `IEntityLivingBase#getMaxHealth()`                                              |
+| 11 | `getPosition`    | —                                    | `{x, y, z}`   | `IEntity#getX/Y/Z()`                                                            |
+| 12 | `getMovingType`  | —                                    | `number`      | 0=standing, 1=wandering, 2=path                                                 |
+| 13 | `isAttacking`    | —                                    | `boolean`     | `IEntityLivingBase#isAttacking()`                                               |
+| 14 | `getTarget`      | —                                    | `string\|nil` | `IEntityLivingBase#getAttackTarget()#getName()`                                 |
+| 15 | `getFaction`     | —                                    | `string`      | `ICustomNpc#getFaction()#getName()`                                             |
+| 16 | `getJob`         | —                                    | `number`      | `ICustomNpc#getJob()#getType()`                                                 |
+| 17 | `getRole`        | —                                    | `number`      | `ICustomNpc#getRole()#getType()`                                                |
+| 18 | `say`            | `message: string`                    | —             | `ICustomNpc#say(String)`                                                        |
+| 19 | `setHome`        | `x, y, z: number`                    | —             | `ICustomNpc#setHome(int,int,int)`                                               |
+| 20 | `setMovingType`  | `type: string`                       | —             | `ICustomNpc#setMovingType(int)` — accepts `"standing"`, `"wandering"`, `"path"` |
+| 21 | `navigateTo`     | `x, y, z [, speed]: number`          | —             | `IEntityLiving#navigateTo(x,y,z,speed)`                                         |
+| 22 | `executeCommand` | `command: string`                    | —             | `ICustomNpc#executeCommand(String)`                                             |
+| 23 | `kill`           | —                                    | —             | `ICustomNpc#kill()`                                                             |
+| 24 | `reset`          | —                                    | —             | `ICustomNpc#reset()`                                                            |
+| 25 | `setName`        | `name: string`                       | —             | `ICustomNpc#setName(String)`                                                    |
+| 26 | `setTitle`       | `title: string`                      | —             | `ICustomNpc#setTitle(String)`                                                   |
+| 27 | `setHealth`      | `health: number`                     | —             | `IEntityLivingBase#setHealth(float)`                                            |
+| 28 | `setMaxHealth`   | `maxHealth: number`                  | —             | `ICustomNpc#setMaxHealth(double)`                                               |
+| 29 | `setFaction`     | `factionId: number`                  | —             | `ICustomNpc#setFaction(int)` — use faction numeric ID                           |
+| 30 | `setJob`         | `jobType: number`                    | —             | `ICustomNpc#setJob(int)`                                                        |
+| 31 | `setRole`        | `roleType: number`                   | —             | `ICustomNpc#setRole(int)`                                                       |
 
 ## CC Events Queued to Attached Computers
 
@@ -694,18 +701,26 @@ A = Advanced Computer, S = Stone, R = Redstone
 
 ## Files Created / Changed
 
-| File                                                                           | Type                                |
-|--------------------------------------------------------------------------------|-------------------------------------|
-| `compat/customnpcs/peripheral/npcinterface/BlockNpcInterface.java`             | New                                 |
-| `compat/customnpcs/peripheral/npcinterface/TileNpcInterface.java`              | New                                 |
-| `compat/customnpcs/peripheral/npcinterface/NpcInterfacePeripheral.java`        | New                                 |
-| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceManager.java`           | New                                 |
-| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceBridge.java`            | New                                 |
-| `shared/peripheral/PeripheralType.java`                                        | Add `NpcInterface`                  |
-| `ComputerCraft.java`                                                           | Register block, tile entity, bridge |
-| `assets/computercraft/textures/npcInterface*.png`                              | New (3 placeholder textures)        |
-| `test/.../NpcInterfaceManagerTest.java`                                        | New                                 |
-| `test/.../NpcInterfacePeripheralTest.java`                                     | New                                 |
+| File                                                                                        | Type                                               |
+|---------------------------------------------------------------------------------------------|----------------------------------------------------|
+| `compat/customnpcs/peripheral/npcinterface/INpcInterfaceHolder.java`                        | New (holder abstraction interface)                 |
+| `compat/customnpcs/peripheral/npcinterface/BlockNpcInterface.java`                          | New                                                |
+| `compat/customnpcs/peripheral/npcinterface/TileNpcInterface.java`                           | New (implements INpcInterfaceHolder)               |
+| `compat/customnpcs/peripheral/npcinterface/NpcInterfacePeripheral.java`                     | New (takes INpcInterfaceHolder, not TileNpcInterface) |
+| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceManager.java`                        | New (keyed on INpcInterfaceHolder)                 |
+| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceBridge.java`                         | New                                                |
+| `shared/turtle/upgrades/TurtleNpcInterface.java`                                            | New (upgrade ID 12; inner Holder class)            |
+| `shared/pocket/peripherals/PocketNpcInterfacePeripheral.java`                               | New (upgrade=6; UUID in item NBT)                  |
+| `shared/pocket/recipes/PocketComputerNpcInterfaceUpgradeRecipe.java`                        | New                                                |
+| `shared/peripheral/PeripheralType.java`                                                     | Add `NpcInterface`                                 |
+| `ComputerCraft.java`                                                                        | Add `Upgrades.npcInterface`                        |
+| `shared/pocket/items/ItemPocketComputer.java`                                               | Add `createWithNpcInterface`, `getHasNpcInterface`, onUpdate/createServerComputer hooks |
+| `shared/pocket/items/PocketComputerItemFactory.java`                                        | Add `createWithNpcInterface`                       |
+| `shared/proxy/CCTurtleProxyCommon.java`                                                     | Register TurtleNpcInterface upgrade ID 12          |
+| `shared/proxy/ComputerCraftProxyCommon.java`                                                | Register pocket NPC Interface recipes + creative   |
+| `assets/computercraft/textures/npcInterface*.png`                                           | New (3 placeholder textures)                       |
+| `test/.../NpcInterfaceManagerTest.java`                                                     | New                                                |
+| `test/.../NpcInterfacePeripheralTest.java`                                                  | New                                                |
 
 ## Files NOT Changed
 
@@ -737,10 +752,13 @@ A = Advanced Computer, S = Stone, R = Redstone
 4. **Crafting recipe**: The suggested recipe uses Advanced Computer as ingredient (not a valid
    item in the recipe system). Finalize recipe with the correct ingredient list.
 
-5. **Turtle / Pocket upgrade variant**: Because the NPC Interface is **stateful** (it stores
-   a linked NPC UUID and maintains event subscriptions), a turtle or pocket upgrade would
-   need to carry that state in item NBT rather than in a tile entity. This is a significantly
-   different design from the stateless `TurtleNpcDetector` / `PocketNpcDetectorPeripheral`
-   pattern and is deferred to a follow-up plan. In the meantime, turtles and pocket computers
-   can access a placed `npc_interface` block as an external peripheral via a wired modem.
+5. **Turtle / Pocket upgrade variant**: ~~Deferred.~~ **Implemented.** Both variants are live:
+   - `TurtleNpcInterface` (upgrade ID 12) stores the linked UUID in `turtle.getUpgradeNBTData(side)`,
+     uses `turtle.getPosition()` as the scan origin, and re-registers with `NpcInterfaceManager`
+     in the `Holder` constructor on each `createPeripheral()` call.
+   - `PocketNpcInterfacePeripheral` (upgrade=6) stores the linked UUID in the pocket-computer item's
+     tag compound, and has `setStack(stack)` + `setLocation(world, x, y, z)` called every tick by
+     `ItemPocketComputer.onUpdate`. Both are fully gated on `isModLoaded("customnpcs")`.
+   - The common `INpcInterfaceHolder` interface was extracted so `NpcInterfacePeripheral` and
+     `NpcInterfaceManager` work with all three carriers without modification.
 

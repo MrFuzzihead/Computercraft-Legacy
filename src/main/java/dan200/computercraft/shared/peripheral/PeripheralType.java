@@ -13,5 +13,7 @@ public enum PeripheralType {
     RedstoneRelay,
     Speaker,
     ChatBox,
-    NpcDetector;
+    NpcDetector,
+    NpcInterface,
+    TraderRole;
 }

@@ -12,18 +12,18 @@ import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 
 /**
- * Crafting recipe: NPC Detector (above) + Pocket Computer → NPC-Detector Pocket Computer.
- * Mirrors {@link PocketComputerChatBoxUpgradeRecipe} but uses the NPC Detector block
- * and produces a pocket computer with {@code upgrade=5}.
+ * Crafting recipe: NPC Interface block (above) + Pocket Computer → NPC-Interface Pocket Computer.
+ * Mirrors {@link PocketComputerNpcDetectorUpgradeRecipe} but uses the NPC Interface block
+ * and produces a pocket computer with {@code upgrade=6}.
  */
-public class PocketComputerNpcDetectorUpgradeRecipe implements IRecipe {
+public class PocketComputerNpcInterfaceUpgradeRecipe implements IRecipe {
 
     public int getRecipeSize() {
         return 2;
     }
 
     public ItemStack getRecipeOutput() {
-        return PocketComputerItemFactory.createWithNpcDetector(-1, null, ComputerFamily.Normal);
+        return PocketComputerItemFactory.createWithNpcInterface(-1, null, ComputerFamily.Normal);
     }
 
     public boolean matches(InventoryCrafting inventory, World world) {
@@ -57,7 +57,8 @@ public class PocketComputerNpcDetectorUpgradeRecipe implements IRecipe {
                 ItemStack item = inventory.getStackInRowAndColumn(xx, y);
                 if (xx != computerX || y != computerY) {
                     if (xx == computerX && y == computerY - 1) {
-                        if (item == null || item.getItem() != Item.getItemFromBlock(ComputerCraft.Blocks.npcDetector)) {
+                        if (item == null
+                            || item.getItem() != Item.getItemFromBlock(ComputerCraft.Blocks.npcInterface)) {
                             return null;
                         }
                         upgrade = item;
@@ -83,6 +84,6 @@ public class PocketComputerNpcDetectorUpgradeRecipe implements IRecipe {
         ComputerFamily family = itemComputer.getFamily(computer);
         int computerID = itemComputer.getComputerID(computer);
         String label = itemComputer.getLabel(computer);
-        return PocketComputerItemFactory.createWithNpcDetector(computerID, label, family);
+        return PocketComputerItemFactory.createWithNpcInterface(computerID, label, family);
     }
 }
