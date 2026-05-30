@@ -701,26 +701,26 @@ A = Advanced Computer, S = Stone, R = Redstone
 
 ## Files Created / Changed
 
-| File                                                                                        | Type                                               |
-|---------------------------------------------------------------------------------------------|----------------------------------------------------|
-| `compat/customnpcs/peripheral/npcinterface/INpcInterfaceHolder.java`                        | New (holder abstraction interface)                 |
-| `compat/customnpcs/peripheral/npcinterface/BlockNpcInterface.java`                          | New                                                |
-| `compat/customnpcs/peripheral/npcinterface/TileNpcInterface.java`                           | New (implements INpcInterfaceHolder)               |
-| `compat/customnpcs/peripheral/npcinterface/NpcInterfacePeripheral.java`                     | New (takes INpcInterfaceHolder, not TileNpcInterface) |
-| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceManager.java`                        | New (keyed on INpcInterfaceHolder)                 |
-| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceBridge.java`                         | New                                                |
-| `shared/turtle/upgrades/TurtleNpcInterface.java`                                            | New (upgrade ID 12; inner Holder class)            |
-| `shared/pocket/peripherals/PocketNpcInterfacePeripheral.java`                               | New (upgrade=6; UUID in item NBT)                  |
-| `shared/pocket/recipes/PocketComputerNpcInterfaceUpgradeRecipe.java`                        | New                                                |
-| `shared/peripheral/PeripheralType.java`                                                     | Add `NpcInterface`                                 |
-| `ComputerCraft.java`                                                                        | Add `Upgrades.npcInterface`                        |
-| `shared/pocket/items/ItemPocketComputer.java`                                               | Add `createWithNpcInterface`, `getHasNpcInterface`, onUpdate/createServerComputer hooks |
-| `shared/pocket/items/PocketComputerItemFactory.java`                                        | Add `createWithNpcInterface`                       |
-| `shared/proxy/CCTurtleProxyCommon.java`                                                     | Register TurtleNpcInterface upgrade ID 12          |
-| `shared/proxy/ComputerCraftProxyCommon.java`                                                | Register pocket NPC Interface recipes + creative   |
-| `assets/computercraft/textures/npcInterface*.png`                                           | New (3 placeholder textures)                       |
-| `test/.../NpcInterfaceManagerTest.java`                                                     | New                                                |
-| `test/.../NpcInterfacePeripheralTest.java`                                                  | New                                                |
+| File                                                                    | Type                                                                                    |
+|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| `compat/customnpcs/peripheral/npcinterface/INpcInterfaceHolder.java`    | New (holder abstraction interface)                                                      |
+| `compat/customnpcs/peripheral/npcinterface/BlockNpcInterface.java`      | New                                                                                     |
+| `compat/customnpcs/peripheral/npcinterface/TileNpcInterface.java`       | New (implements INpcInterfaceHolder)                                                    |
+| `compat/customnpcs/peripheral/npcinterface/NpcInterfacePeripheral.java` | New (takes INpcInterfaceHolder, not TileNpcInterface)                                   |
+| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceManager.java`    | New (keyed on INpcInterfaceHolder)                                                      |
+| `compat/customnpcs/peripheral/npcinterface/NpcInterfaceBridge.java`     | New                                                                                     |
+| `shared/turtle/upgrades/TurtleNpcInterface.java`                        | New (upgrade ID 12; inner Holder class)                                                 |
+| `shared/pocket/peripherals/PocketNpcInterfacePeripheral.java`           | New (upgrade=6; UUID in item NBT)                                                       |
+| `shared/pocket/recipes/PocketComputerNpcInterfaceUpgradeRecipe.java`    | New                                                                                     |
+| `shared/peripheral/PeripheralType.java`                                 | Add `NpcInterface`                                                                      |
+| `ComputerCraft.java`                                                    | Add `Upgrades.npcInterface`                                                             |
+| `shared/pocket/items/ItemPocketComputer.java`                           | Add `createWithNpcInterface`, `getHasNpcInterface`, onUpdate/createServerComputer hooks |
+| `shared/pocket/items/PocketComputerItemFactory.java`                    | Add `createWithNpcInterface`                                                            |
+| `shared/proxy/CCTurtleProxyCommon.java`                                 | Register TurtleNpcInterface upgrade ID 12                                               |
+| `shared/proxy/ComputerCraftProxyCommon.java`                            | Register pocket NPC Interface recipes + creative                                        |
+| `assets/computercraft/textures/npcInterface*.png`                       | New (3 placeholder textures)                                                            |
+| `test/.../NpcInterfaceManagerTest.java`                                 | New                                                                                     |
+| `test/.../NpcInterfacePeripheralTest.java`                              | New                                                                                     |
 
 ## Files NOT Changed
 
