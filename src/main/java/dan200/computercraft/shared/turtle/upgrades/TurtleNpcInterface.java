@@ -1,6 +1,9 @@
 package dan200.computercraft.shared.turtle.upgrades;
 
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import net.minecraft.item.ItemStack;
@@ -39,6 +42,13 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
 
     private final int m_id;
 
+    /**
+     * Tracks the most-recently created {@link Holder} per turtle × side so that
+     * {@link #createPeripheral} can explicitly unregister any stale holder before
+     * constructing the replacement. Access must be synchronized on this field.
+     */
+    private final Map<ITurtleAccess, EnumMap<TurtleSide, Holder>> m_activeHolders = new HashMap<>();
+
     public TurtleNpcInterface(int id) {
         this.m_id = id;
     }
@@ -70,7 +80,33 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
 
     @Override
     public IPeripheral createPeripheral(ITurtleAccess turtle, TurtleSide side) {
-        return new NpcInterfacePeripheral(new Holder(turtle, side));
+        // Unregister any stale Holder that was never cleaned up by a detach cycle
+        // (e.g. peripheral dropped on chunk reload without a proper attach/detach pair).
+        synchronized (m_activeHolders) {
+            EnumMap<TurtleSide, Holder> byTurtle = m_activeHolders.get(turtle);
+            if (byTurtle != null) {
+                Holder stale = byTurtle.remove(side);
+                if (stale != null) stale.unregisterFromManager();
+                if (byTurtle.isEmpty()) m_activeHolders.remove(turtle);
+            }
+        }
+        Holder holder = new Holder(turtle, side, this);
+        synchronized (m_activeHolders) {
+            m_activeHolders.computeIfAbsent(turtle, k -> new EnumMap<>(TurtleSide.class))
+                .put(side, holder);
+        }
+        return new NpcInterfacePeripheral(holder);
+    }
+
+    /** Called by {@link Holder#detachComputer} when its computer set becomes empty. */
+    void removeActiveHolder(ITurtleAccess turtle, TurtleSide side) {
+        synchronized (m_activeHolders) {
+            EnumMap<TurtleSide, Holder> byTurtle = m_activeHolders.get(turtle);
+            if (byTurtle != null) {
+                byTurtle.remove(side);
+                if (byTurtle.isEmpty()) m_activeHolders.remove(turtle);
+            }
+        }
     }
 
     @Override
@@ -92,13 +128,15 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
 
         private final ITurtleAccess m_turtle;
         private final TurtleSide m_side;
+        private final TurtleNpcInterface m_upgrade;
 
         /** Computers with this peripheral attached. */
         private final Set<IComputerAccess> m_computers = new HashSet<>();
 
-        Holder(ITurtleAccess turtle, TurtleSide side) {
+        Holder(ITurtleAccess turtle, TurtleSide side, TurtleNpcInterface upgrade) {
             this.m_turtle = turtle;
             this.m_side = side;
+            this.m_upgrade = upgrade;
             // Register with manager if already linked (e.g. turtle loaded from disk)
             String uuid = getLinkedUUID();
             if (uuid != null) {
@@ -176,13 +214,18 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
         @Override
         public synchronized void detachComputer(IComputerAccess computer) {
             m_computers.remove(computer);
-            // If no computers remain, unregister so we stop receiving events.
+            // If no computers remain, unregister so we stop receiving events,
+            // and remove this holder from the upgrade's active-holder map.
             if (m_computers.isEmpty()) {
-                String uuid = getLinkedUUID();
-                if (uuid != null) {
-                    NpcInterfaceManager.unregister(uuid, this);
-                }
+                unregisterFromManager();
+                m_upgrade.removeActiveHolder(m_turtle, m_side);
             }
+        }
+
+        /** Unregisters this holder from {@link NpcInterfaceManager} if linked. */
+        void unregisterFromManager() {
+            String uuid = getLinkedUUID();
+            if (uuid != null) NpcInterfaceManager.unregister(uuid, this);
         }
 
         // -----------------------------------------------------------------

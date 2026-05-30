@@ -299,9 +299,9 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                     npcInterface.setStack(stack);
                     if (entity instanceof EntityLivingBase) {
                         EntityLivingBase living = (EntityLivingBase) entity;
-                        npcInterface.setLocation(world, living.posX, living.posY + living.getEyeHeight(), living.posZ);
+                        npcInterface.setLocation(living.posX, living.posY + living.getEyeHeight(), living.posZ);
                     } else {
-                        npcInterface.setLocation(world, entity.posX, entity.posY, entity.posZ);
+                        npcInterface.setLocation(entity.posX, entity.posY, entity.posZ);
                     }
                 }
             }

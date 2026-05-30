@@ -606,7 +606,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 "ccnpcinterface");
             GameRegistry.registerTileEntity(
                 dan200.computercraft.compat.customnpcs.peripheral.traderrole.TileTraderRole.class,
-                "computercraft:npc_trader");
+                "ccnpctrader");
         }
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());

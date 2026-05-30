@@ -5,7 +5,6 @@ import java.util.Set;
 
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.world.World;
 
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
@@ -40,7 +39,6 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
 
     // Updated every tick by ItemPocketComputer.onUpdate
     private volatile ItemStack m_stack;
-    private volatile World m_world;
     private volatile double m_x;
     private volatile double m_y;
     private volatile double m_z;
@@ -87,8 +85,7 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
     }
 
     /** Updates the position used by {@code link} and {@code linkNearest}. */
-    public void setLocation(World world, double x, double y, double z) {
-        m_world = world;
+    public void setLocation(double x, double y, double z) {
         m_x = x;
         m_y = y;
         m_z = z;
