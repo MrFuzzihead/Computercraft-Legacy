@@ -1,4 +1,4 @@
-package dan200.computercraft.shared.peripheral.npcdetector;
+package dan200.computercraft.compat.customnpcs.peripheral.npcdetector;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;

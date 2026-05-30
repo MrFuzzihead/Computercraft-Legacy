@@ -85,7 +85,7 @@ public class NpcInterfaceBridge {
         String killerName = CustomNpcChatBoxBridge.entityName(e.getSource());
         String killerType = e.getSource() != null ? CustomNpcChatBoxBridge.resolveKillerType(e.getSource(), e.getType())
             : "";
-        m_tickCounters.remove(uuid);
+        handleDied(uuid);
         NpcInterfaceManager.dispatchDied(uuid, killerName, killerType);
     }
 
@@ -108,11 +108,53 @@ public class NpcInterfaceBridge {
 
     @SubscribeEvent
     public void onTick(NpcEvent.UpdateEvent e) {
-        String uuid = e.getNpc()
-            .getUniqueID();
+        handleTick(
+            e.getNpc()
+                .getUniqueID());
+    }
+
+    // -------------------------------------------------------------------------
+    // Package-private helpers — exposed for unit testing without CustomNPCs
+    // -------------------------------------------------------------------------
+
+    /**
+     * Core tick-throttle logic.
+     * Increments the per-NPC counter and dispatches {@code npc_tick} via
+     * {@link NpcInterfaceManager} exactly once every 20 calls (when the counter
+     * wraps to 0 modulo 20).
+     *
+     * @param uuid NPC unique-ID string
+     * @return {@code true} if the tick event was dispatched this call
+     */
+    boolean handleTick(String uuid) {
         int count = m_tickCounters.merge(uuid, 1, (a, b) -> (a + b) % 20);
         if (count == 0) {
             NpcInterfaceManager.dispatchTick(uuid);
+            return true;
         }
+        return false;
+    }
+
+    /**
+     * Removes the tick-counter entry for {@code uuid}.
+     * Called by {@link #onDied} to reclaim memory when an NPC dies.
+     *
+     * @param uuid NPC unique-ID string
+     */
+    void handleDied(String uuid) {
+        m_tickCounters.remove(uuid);
+    }
+
+    /**
+     * Returns the current raw tick-counter value for {@code uuid}, or {@code -1}
+     * if no entry exists (NPC has never ticked, or was removed via
+     * {@link #handleDied}).
+     *
+     * @param uuid NPC unique-ID string
+     * @return counter in [0, 19], or {@code -1} if absent
+     */
+    int getTickCounter(String uuid) {
+        Integer v = m_tickCounters.get(uuid);
+        return v != null ? v : -1;
     }
 }

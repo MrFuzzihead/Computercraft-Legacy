@@ -3,6 +3,7 @@ package dan200.computercraft.compat.customnpcs.peripheral.npcinterface;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,8 +15,27 @@ import dan200.computercraft.api.lua.LuaException;
  *
  * <p>
  * No running Minecraft world or CustomNPCs installation is required.
- * CNPC-dependent methods (5–24) are verified to throw the expected
+ * CNPC-dependent methods (8–35) are verified to throw the expected
  * {@link LuaException} when CustomNPCs is absent.
+ * </p>
+ *
+ * <p>
+ * Method index reference (matches {@link NpcInterfacePeripheral#METHOD_NAMES}):
+ * 
+ * <pre>
+ *   Link management (no CNPC gate unless noted):
+ *     0  link(uuid)
+ *     1  linkByName(name[,r])     [CNPC]
+ *     2  linkAll(name[,r])        [CNPC]
+ *     3  linkNearest([r])         [CNPC]
+ *     4  unlink([uuid])
+ *     5  isLinked([uuid])
+ *     6  getLinkedNpcs()
+ *     7  getLinkedUUID()
+ *     8  scanNpcs([r])            [CNPC]
+ *   State-read (all CNPC):        9–21
+ *   Control / state-write (CNPC): 22–35
+ * </pre>
  * </p>
  */
 class NpcInterfacePeripheralTest {
@@ -39,8 +59,8 @@ class NpcInterfacePeripheralTest {
     }
 
     @Test
-    void getMethodNames_32Methods() {
-        assertEquals(32, peripheral.getMethodNames().length);
+    void getMethodNames_36Methods() {
+        assertEquals(36, peripheral.getMethodNames().length);
         assertEquals(Arrays.asList(NpcInterfacePeripheral.METHOD_NAMES), Arrays.asList(peripheral.getMethodNames()));
     }
 
@@ -61,193 +81,290 @@ class NpcInterfacePeripheralTest {
     }
 
     // =========================================================================
-    // Link management (methods 0–4) — work without CustomNPCs
+    // Link management — methods that work without CustomNPCs
     // =========================================================================
 
     @Test
     void isLinked_initiallyFalse() throws Exception {
-        Object[] result = peripheral.callMethod(null, null, 3, new Object[0]);
+        // method 5 = isLinked
+        Object[] result = peripheral.callMethod(null, null, 5, new Object[0]);
         assertEquals(false, result[0]);
     }
 
     @Test
-    void getLinkedName_initiallyNull() throws Exception {
-        Object[] result = peripheral.callMethod(null, null, 4, new Object[0]);
-        assertNull(result[0]);
+    void isLinked_afterSetLink_returnsTrue() throws Exception {
+        tile.setLink("test-uuid", "Guard");
+        Object[] result = peripheral.callMethod(null, null, 5, new Object[0]);
+        assertEquals(true, result[0]);
+    }
+
+    @Test
+    void isLinked_withUuidArg_checksSpecificUuid() throws Exception {
+        tile.setLink("test-uuid", "Guard");
+        Object[] yes = peripheral.callMethod(null, null, 5, new Object[] { "test-uuid" });
+        assertEquals(true, yes[0]);
+        Object[] no = peripheral.callMethod(null, null, 5, new Object[] { "other-uuid" });
+        assertEquals(false, no[0]);
     }
 
     @Test
     void unlink_clearsPreviousLink() throws Exception {
-        // Directly set link via tile
+        // method 4 = unlink
         tile.setLink("test-uuid", "Guard");
-        Object[] linkedResult = peripheral.callMethod(null, null, 3, new Object[0]);
-        assertTrue((Boolean) linkedResult[0]);
+        assertTrue((Boolean) peripheral.callMethod(null, null, 5, new Object[0])[0]);
 
-        // Unlink via method 2
-        peripheral.callMethod(null, null, 2, new Object[0]);
-        Object[] afterUnlink = peripheral.callMethod(null, null, 3, new Object[0]);
-        assertFalse((Boolean) afterUnlink[0]);
+        peripheral.callMethod(null, null, 4, new Object[0]);
+        assertFalse((Boolean) peripheral.callMethod(null, null, 5, new Object[0])[0]);
     }
 
     @Test
-    void getLinkedName_returnsStoredName() throws Exception {
+    void getLinkedNpcs_initiallyEmpty() throws Exception {
+        // method 6 = getLinkedNpcs
+        Object[] result = peripheral.callMethod(null, null, 6, new Object[0]);
+        assertNotNull(result[0]);
+        assertTrue(((Map<?, ?>) result[0]).isEmpty());
+    }
+
+    @Test
+    void getLinkedNpcs_afterSetLink_containsEntry() throws Exception {
         tile.setLink("test-uuid", "Guard");
-        Object[] result = peripheral.callMethod(null, null, 4, new Object[0]);
-        assertEquals("Guard", result[0]);
+        Object[] result = peripheral.callMethod(null, null, 6, new Object[0]);
+        @SuppressWarnings("unchecked")
+        Map<String, String> table = (Map<String, String>) result[0];
+        assertEquals(1, table.size());
+        assertEquals("Guard", table.get("test-uuid"));
     }
 
     // =========================================================================
-    // Methods 5–24 throw when CustomNPCs is not installed
+    // getLinkedUUID — method 7
     // =========================================================================
 
-    private void assertCnpcRequired(int method, Object... args) {
-        LuaException ex = assertThrows(LuaException.class, () -> peripheral.callMethod(null, null, method, args));
-        assertEquals("CustomNPCs is not installed", ex.getMessage());
+    @Test
+    void getLinkedUUID_initiallyNull() throws Exception {
+        // method 7 = getLinkedUUID
+        Object[] result = peripheral.callMethod(null, null, 7, new Object[0]);
+        assertNull(result[0], "getLinkedUUID() must return nil when not linked");
     }
 
     @Test
-    void getName_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(5);
+    void getLinkedUUID_returnsStoredUUID() throws Exception {
+        tile.setLink("aaaaaaaa-0000-0000-0000-aaaaaaaaaaaa", "Guard");
+        Object[] result = peripheral.callMethod(null, null, 7, new Object[0]);
+        assertEquals("aaaaaaaa-0000-0000-0000-aaaaaaaaaaaa", result[0]);
     }
 
     @Test
-    void getTitle_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(6);
+    void getLinkedUUID_afterUnlink_returnsNull() throws Exception {
+        tile.setLink("aaaaaaaa-0000-0000-0000-aaaaaaaaaaaa", "Guard");
+        peripheral.callMethod(null, null, 4, new Object[0]); // unlink
+        Object[] result = peripheral.callMethod(null, null, 7, new Object[0]);
+        assertNull(result[0]);
     }
 
     @Test
-    void getUUID_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(7);
+    void getLinkedUUID_doesNotRequireCnpc() {
+        // Must not throw even when CustomNPCs is absent
+        assertDoesNotThrow(() -> peripheral.callMethod(null, null, 7, new Object[0]));
+    }
+
+    // =========================================================================
+    // CNPC-gated link methods — 1, 2, 3, 8
+    // =========================================================================
+
+    @Test
+    void linkByName_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(1, "Guard");
     }
 
     @Test
-    void isAlive_throwsWhenCnpcAbsent() {
+    void linkAll_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(2, "Guard");
+    }
+
+    @Test
+    void linkNearest_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(3);
+    }
+
+    @Test
+    void scanNpcs_throwsWhenCnpcAbsent() {
         assertCnpcRequired(8);
     }
 
+    // =========================================================================
+    // State-read methods (9–21) — all require CNPC
+    // =========================================================================
+
     @Test
-    void getHealth_throwsWhenCnpcAbsent() {
+    void getName_throwsWhenCnpcAbsent() {
         assertCnpcRequired(9);
     }
 
     @Test
-    void getMaxHealth_throwsWhenCnpcAbsent() {
+    void getTitle_throwsWhenCnpcAbsent() {
         assertCnpcRequired(10);
     }
 
     @Test
-    void getPosition_throwsWhenCnpcAbsent() {
+    void getUUID_throwsWhenCnpcAbsent() {
         assertCnpcRequired(11);
     }
 
     @Test
-    void getMovingType_throwsWhenCnpcAbsent() {
+    void isAlive_throwsWhenCnpcAbsent() {
         assertCnpcRequired(12);
     }
 
     @Test
-    void isAttacking_throwsWhenCnpcAbsent() {
+    void getHealth_throwsWhenCnpcAbsent() {
         assertCnpcRequired(13);
     }
 
     @Test
-    void getTarget_throwsWhenCnpcAbsent() {
+    void getMaxHealth_throwsWhenCnpcAbsent() {
         assertCnpcRequired(14);
     }
 
     @Test
-    void getFaction_throwsWhenCnpcAbsent() {
+    void getPosition_throwsWhenCnpcAbsent() {
         assertCnpcRequired(15);
     }
 
     @Test
-    void getJob_throwsWhenCnpcAbsent() {
+    void getMovingType_throwsWhenCnpcAbsent() {
         assertCnpcRequired(16);
     }
 
     @Test
-    void getRole_throwsWhenCnpcAbsent() {
+    void isAttacking_throwsWhenCnpcAbsent() {
         assertCnpcRequired(17);
     }
 
     @Test
+    void getTarget_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(18);
+    }
+
+    @Test
+    void getFaction_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(19);
+    }
+
+    @Test
+    void getJob_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(20);
+    }
+
+    @Test
+    void getRole_throwsWhenCnpcAbsent() {
+        assertCnpcRequired(21);
+    }
+
+    // =========================================================================
+    // Control methods (22–28) — all require CNPC
+    // =========================================================================
+
+    @Test
     void say_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(18, "Hello!");
+        assertCnpcRequired(22, "Hello!");
     }
 
     @Test
     void setHome_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(19, 0, 64, 0);
+        assertCnpcRequired(23, 0, 64, 0);
     }
 
     @Test
     void setMovingType_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(20, "wandering");
+        assertCnpcRequired(24, "wandering");
     }
 
     @Test
     void navigateTo_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(21, 100.0, 64.0, 100.0);
+        assertCnpcRequired(25, 100.0, 64.0, 100.0);
     }
 
     @Test
     void executeCommand_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(22, "/say Hi");
+        assertCnpcRequired(26, "/say Hi");
     }
 
     @Test
     void kill_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(23);
+        assertCnpcRequired(27);
     }
 
     @Test
     void reset_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(24);
+        assertCnpcRequired(28);
     }
+
+    // =========================================================================
+    // State-write methods (29–35) — all require CNPC
+    // =========================================================================
 
     @Test
     void setName_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(25, "NewName");
+        assertCnpcRequired(29, "NewName");
     }
 
     @Test
     void setTitle_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(26, "Guard");
+        assertCnpcRequired(30, "Guard");
     }
 
     @Test
     void setHealth_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(27, 20.0);
+        assertCnpcRequired(31, 20.0);
     }
 
     @Test
     void setMaxHealth_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(28, 40.0);
+        assertCnpcRequired(32, 40.0);
     }
 
     @Test
     void setFaction_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(29, 1);
+        assertCnpcRequired(33, 1);
     }
 
     @Test
     void setJob_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(30, 2);
+        assertCnpcRequired(34, 2);
     }
 
     @Test
     void setRole_throwsWhenCnpcAbsent() {
-        assertCnpcRequired(31, 3);
+        assertCnpcRequired(35, 3);
     }
 
     // =========================================================================
-    // Argument validation (checked before CNPC gate for string/number requirements)
+    // Argument validation (checked before or alongside CNPC gate)
     // =========================================================================
 
     @Test
-    void say_missingArg_throwsExpectedString() {
-        // CNPC check fires first in the outer default branch — both produce LuaException
-        assertThrows(LuaException.class, () -> peripheral.callMethod(null, null, 18, new Object[0]));
+    void say_missingArg_throwsLuaException() {
+        // method 22 = say — CNPC check fires first, but LuaException is always the result
+        assertThrows(LuaException.class, () -> peripheral.callMethod(null, null, 22, new Object[0]));
+    }
+
+    @Test
+    void setMovingType_invalidString_throwsWithOptions() {
+        // method 24 = setMovingType — type string is validated BEFORE the CNPC gate
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> peripheral.callMethod(null, null, 24, new Object[] { "flying" }));
+        String msg = ex.getMessage();
+        assertTrue(msg.contains("flying"), "message should mention the invalid value");
+        assertTrue(msg.contains("standing"), "message should list valid options");
+        assertTrue(msg.contains("wandering"), "message should list valid options");
+        assertTrue(msg.contains("path"), "message should list valid options");
+    }
+
+    @Test
+    void setMovingType_numericArg_throwsLuaException() {
+        // Passing a number where a string is expected must throw
+        assertThrows(LuaException.class, () -> peripheral.callMethod(null, null, 24, new Object[] { 1 }));
     }
 
     // =========================================================================
@@ -295,24 +412,11 @@ class NpcInterfacePeripheralTest {
     }
 
     // =========================================================================
-    // setMovingType string parsing
+    // Helper
     // =========================================================================
 
-    @Test
-    void setMovingType_invalidString_throwsWithOptions() {
-        LuaException ex = assertThrows(
-            LuaException.class,
-            () -> peripheral.callMethod(null, null, 20, new Object[] { "flying" }));
-        String msg = ex.getMessage();
-        assertTrue(msg.contains("flying"), "message should mention the invalid value");
-        assertTrue(msg.contains("standing"), "message should list valid options");
-        assertTrue(msg.contains("wandering"), "message should list valid options");
-        assertTrue(msg.contains("path"), "message should list valid options");
-    }
-
-    @Test
-    void setMovingType_numericArg_throwsLuaException() {
-        // Passing a number where a string is expected must throw
-        assertThrows(LuaException.class, () -> peripheral.callMethod(null, null, 20, new Object[] { 1 }));
+    private void assertCnpcRequired(int method, Object... args) {
+        LuaException ex = assertThrows(LuaException.class, () -> peripheral.callMethod(null, null, method, args));
+        assertEquals("CustomNPCs is not installed", ex.getMessage());
     }
 }

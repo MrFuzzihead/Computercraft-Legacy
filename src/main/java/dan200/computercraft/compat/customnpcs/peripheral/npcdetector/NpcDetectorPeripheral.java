@@ -1,4 +1,4 @@
-package dan200.computercraft.shared.peripheral.npcdetector;
+package dan200.computercraft.compat.customnpcs.peripheral.npcdetector;
 
 import java.util.ArrayList;
 import java.util.Comparator;

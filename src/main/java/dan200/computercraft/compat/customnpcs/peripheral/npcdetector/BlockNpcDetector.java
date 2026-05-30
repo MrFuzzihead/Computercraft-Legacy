@@ -1,4 +1,4 @@
-package dan200.computercraft.shared.peripheral.npcdetector;
+package dan200.computercraft.compat.customnpcs.peripheral.npcdetector;
 
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.texture.IIconRegister;

@@ -3,7 +3,7 @@ package dan200.computercraft.shared.pocket.peripherals;
 import net.minecraft.world.World;
 
 import dan200.computercraft.api.peripheral.IPeripheral;
-import dan200.computercraft.shared.peripheral.npcdetector.NpcDetectorPeripheral;
+import dan200.computercraft.compat.customnpcs.peripheral.npcdetector.NpcDetectorPeripheral;
 
 /**
  * NPC Detector peripheral for pocket computers.

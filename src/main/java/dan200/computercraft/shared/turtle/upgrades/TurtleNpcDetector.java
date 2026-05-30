@@ -13,8 +13,8 @@ import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.api.turtle.TurtleSide;
 import dan200.computercraft.api.turtle.TurtleUpgradeType;
 import dan200.computercraft.api.turtle.TurtleVerb;
-import dan200.computercraft.shared.peripheral.npcdetector.BlockNpcDetector;
-import dan200.computercraft.shared.peripheral.npcdetector.NpcDetectorPeripheral;
+import dan200.computercraft.compat.customnpcs.peripheral.npcdetector.BlockNpcDetector;
+import dan200.computercraft.compat.customnpcs.peripheral.npcdetector.NpcDetectorPeripheral;
 
 /**
  * Turtle upgrade that embeds an NPC Detector into the turtle's tool slot.

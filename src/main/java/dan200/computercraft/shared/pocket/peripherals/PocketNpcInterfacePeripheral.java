@@ -1,10 +1,16 @@
 package dan200.computercraft.shared.pocket.peripherals;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
@@ -21,8 +27,9 @@ import noppes.npcs.api.entity.IEntity;
  * NPC Interface peripheral for pocket computers.
  *
  * <p>
- * Implements {@link INpcInterfaceHolder} directly: the linked NPC UUID is
- * persisted in the pocket computer {@link ItemStack}'s tag compound, and
+ * Implements {@link INpcInterfaceHolder} directly: the linked NPC UUIDs are
+ * persisted in the pocket computer {@link ItemStack}'s tag compound under key
+ * {@code linkedNpcs} (NBTTagList). Old saves with {@code npcUUID} are migrated.
  * {@link dan200.computercraft.shared.pocket.items.ItemPocketComputer#onUpdate}
  * calls {@link #setStack} and {@link #setLocation} every tick to keep the
  * stack reference and position current.
@@ -34,8 +41,10 @@ import noppes.npcs.api.entity.IEntity;
  */
 public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceHolder {
 
-    private static final String KEY_UUID = "npcUUID";
-    private static final String KEY_NAME = "npcName";
+    private static final String KEY_LINKED_NPCS = "linkedNpcs";
+    /** Legacy single-link keys — read-only for migration. */
+    private static final String KEY_UUID_LEGACY = "npcUUID";
+    private static final String KEY_NAME_LEGACY = "npcName";
 
     // Updated every tick by ItemPocketComputer.onUpdate
     private volatile ItemStack m_stack;
@@ -52,15 +61,13 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
     /**
      * @param initialStack the pocket computer stack at the moment the server
      *                     computer is created; used to read any previously
-     *                     stored UUID.
+     *                     stored UUID(s).
      */
     public PocketNpcInterfacePeripheral(ItemStack initialStack) {
         this.m_stack = initialStack;
         this.m_peripheral = new NpcInterfacePeripheral(this);
-
-        // Register with manager if already linked
-        String uuid = getLinkedUUID();
-        if (uuid != null) {
+        // Register with manager for any UUIDs already stored in the stack
+        for (String uuid : getLinkedNpcs().keySet()) {
             NpcInterfaceManager.register(uuid, this);
         }
     }
@@ -70,17 +77,20 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
     // =========================================================================
 
     /**
-     * Updates the item stack reference. Detects UUID changes that might result
-     * from the item being shared or duplicated, and re-syncs manager
-     * registration accordingly.
+     * Updates the item stack reference. Detects UUID set changes that might result
+     * from the item being shared or duplicated, and re-syncs manager registration.
      */
     public synchronized void setStack(ItemStack stack) {
-        String oldUUID = getLinkedUUID();
+        Map<String, String> oldLinked = readFromStack(m_stack);
         m_stack = stack;
-        String newUUID = getLinkedUUID();
-        if (!java.util.Objects.equals(oldUUID, newUUID)) {
-            if (oldUUID != null) NpcInterfaceManager.unregister(oldUUID, this);
-            if (newUUID != null) NpcInterfaceManager.register(newUUID, this);
+        Map<String, String> newLinked = readFromStack(m_stack);
+        // Unregister UUIDs that are no longer present
+        for (String uuid : oldLinked.keySet()) {
+            if (!newLinked.containsKey(uuid)) NpcInterfaceManager.unregister(uuid, this);
+        }
+        // Register newly-present UUIDs
+        for (String uuid : newLinked.keySet()) {
+            if (!oldLinked.containsKey(uuid)) NpcInterfaceManager.register(uuid, this);
         }
     }
 
@@ -92,45 +102,116 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
     }
 
     // =========================================================================
+    // NBT helpers
+    // =========================================================================
+
+    /** Reads the linked-NPC map from a stack's NBT, migrating old single-link format. */
+    private static Map<String, String> readFromStack(ItemStack stack) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (stack == null || !stack.hasTagCompound()) return result;
+        NBTTagCompound tag = stack.getTagCompound();
+        if (tag.hasKey(KEY_LINKED_NPCS)) {
+            NBTTagList list = tag.getTagList(KEY_LINKED_NPCS, 10 /* TAG_COMPOUND */);
+            for (int i = 0; i < list.tagCount(); i++) {
+                NBTTagCompound entry = list.getCompoundTagAt(i);
+                String uuid = entry.getString("uuid");
+                String name = entry.getString("name");
+                if (!uuid.isEmpty()) result.put(uuid, name);
+            }
+        } else if (tag.hasKey(KEY_UUID_LEGACY)) {
+            // Migrate old format
+            String uuid = tag.getString(KEY_UUID_LEGACY);
+            String name = tag.hasKey(KEY_NAME_LEGACY) ? tag.getString(KEY_NAME_LEGACY) : "";
+            if (!uuid.isEmpty()) result.put(uuid, name);
+        }
+        return result;
+    }
+
+    /** Writes the linked-NPC map to the current stack's NBT. */
+    private synchronized void writeToStack(Map<String, String> linked) {
+        if (m_stack == null) return;
+        if (!m_stack.hasTagCompound()) m_stack.setTagCompound(new NBTTagCompound());
+        NBTTagCompound tag = m_stack.getTagCompound();
+        tag.removeTag(KEY_UUID_LEGACY);
+        tag.removeTag(KEY_NAME_LEGACY);
+        NBTTagList list = new NBTTagList();
+        for (Map.Entry<String, String> e : linked.entrySet()) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setString("uuid", e.getKey());
+            entry.setString("name", e.getValue());
+            list.appendTag(entry);
+        }
+        tag.setTag(KEY_LINKED_NPCS, list);
+    }
+
+    // =========================================================================
     // INpcInterfaceHolder — UUID state (stored in stack NBT)
     // =========================================================================
 
     @Override
     public synchronized String getLinkedUUID() {
-        if (m_stack == null || !m_stack.hasTagCompound()) return null;
-        NBTTagCompound tag = m_stack.getTagCompound();
-        return tag.hasKey(KEY_UUID) ? tag.getString(KEY_UUID) : null;
+        Map<String, String> linked = readFromStack(m_stack);
+        return linked.isEmpty() ? null
+            : linked.keySet()
+                .iterator()
+                .next();
     }
 
     @Override
     public synchronized String getLinkedName() {
-        if (m_stack == null || !m_stack.hasTagCompound()) return null;
-        NBTTagCompound tag = m_stack.getTagCompound();
-        return tag.hasKey(KEY_NAME) ? tag.getString(KEY_NAME) : null;
+        Map<String, String> linked = readFromStack(m_stack);
+        return linked.isEmpty() ? null
+            : linked.values()
+                .iterator()
+                .next();
+    }
+
+    @Override
+    public synchronized Map<String, String> getLinkedNpcs() {
+        return readFromStack(m_stack);
     }
 
     @Override
     public synchronized void setLink(String uuid, String name) {
-        String old = getLinkedUUID();
-        if (old != null) {
-            NpcInterfaceManager.unregister(old, this);
+        Map<String, String> old = readFromStack(m_stack);
+        for (String oldUUID : old.keySet()) {
+            NpcInterfaceManager.unregister(oldUUID, this);
         }
-        if (m_stack != null) {
-            if (!m_stack.hasTagCompound()) {
-                m_stack.setTagCompound(new NBTTagCompound());
-            }
-            NBTTagCompound tag = m_stack.getTagCompound();
-            if (uuid != null) {
-                tag.setString(KEY_UUID, uuid);
-                tag.setString(KEY_NAME, name != null ? name : "");
-            } else {
-                tag.removeTag(KEY_UUID);
-                tag.removeTag(KEY_NAME);
-            }
-        }
+        Map<String, String> newMap = new LinkedHashMap<>();
         if (uuid != null) {
+            newMap.put(uuid, name != null ? name : "");
             NpcInterfaceManager.register(uuid, this);
         }
+        writeToStack(newMap);
+    }
+
+    @Override
+    public synchronized void addLink(String uuid, String name) {
+        if (uuid == null) return;
+        Map<String, String> linked = readFromStack(m_stack);
+        if (linked.containsKey(uuid)) return;
+        linked.put(uuid, name != null ? name : "");
+        writeToStack(linked);
+        NpcInterfaceManager.register(uuid, this);
+    }
+
+    @Override
+    public synchronized void removeLink(String uuid) {
+        if (uuid == null) return;
+        Map<String, String> linked = readFromStack(m_stack);
+        if (!linked.containsKey(uuid)) return;
+        linked.remove(uuid);
+        writeToStack(linked);
+        NpcInterfaceManager.unregister(uuid, this);
+    }
+
+    @Override
+    public synchronized void clearLinks() {
+        Map<String, String> linked = readFromStack(m_stack);
+        for (String uuid : linked.keySet()) {
+            NpcInterfaceManager.unregister(uuid, this);
+        }
+        writeToStack(new LinkedHashMap<>());
     }
 
     // =========================================================================
@@ -166,8 +247,7 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
         m_computers.remove(computer);
         // Unregister from manager when the last computer detaches (peripheral removed).
         if (m_computers.isEmpty()) {
-            String uuid = getLinkedUUID();
-            if (uuid != null) {
+            for (String uuid : readFromStack(m_stack).keySet()) {
                 NpcInterfaceManager.unregister(uuid, this);
             }
         }
@@ -194,6 +274,26 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
             // CNPC absent or incompatible
         }
         return null;
+    }
+
+    @Override
+    public List<ICustomNpc<?>> resolveNpcs() {
+        Map<String, String> linked = getLinkedNpcs();
+        if (linked.isEmpty()) return Collections.emptyList();
+        List<ICustomNpc<?>> result = new ArrayList<>();
+        try {
+            if (!AbstractNpcAPI.IsAvailable()) return result;
+            AbstractNpcAPI api = AbstractNpcAPI.Instance();
+            if (api == null) return result;
+            for (IEntity<?> entity : api.getLoadedEntities()) {
+                if (entity instanceof ICustomNpc && linked.containsKey(entity.getUniqueID())) {
+                    result.add((ICustomNpc<?>) entity);
+                }
+            }
+        } catch (Throwable t) {
+            // CNPC absent or incompatible
+        }
+        return result;
     }
 
     // =========================================================================

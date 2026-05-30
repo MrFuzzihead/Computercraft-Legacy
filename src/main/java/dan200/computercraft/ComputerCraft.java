@@ -294,11 +294,11 @@ public class ComputerCraft {
                 noppes.npcs.api.AbstractNpcAPI.Instance()
                     .events()
                     .register(new dan200.computercraft.compat.customnpcs.chatbox.CustomNpcChatBoxBridge());
+                logger.info("[ComputerCraft] CustomNPCs detected — ChatBox NPC event forwarding enabled.");
                 noppes.npcs.api.AbstractNpcAPI.Instance()
                     .events()
                     .register(new dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfaceBridge());
-                logger.info("[ComputerCraft] CustomNPCs detected — ChatBox NPC integration enabled.");
-                logger.info("[ComputerCraft] CustomNPCs detected — NPC Interface peripheral enabled.");
+                logger.info("[ComputerCraft] CustomNPCs detected — NPC Interface peripheral event forwarding enabled.");
             }
         } catch (Throwable t) {
             // CustomNPCs is absent or incompatible — silently skip registration.
@@ -693,7 +693,7 @@ public class ComputerCraft {
         public static BlockChatBox chatBox;
         public static BlockRedstoneRelay redstoneRelay;
         public static BlockAdvancedWirelessModem advancedWirelessModem;
-        public static dan200.computercraft.shared.peripheral.npcdetector.BlockNpcDetector npcDetector;
+        public static dan200.computercraft.compat.customnpcs.peripheral.npcdetector.BlockNpcDetector npcDetector;
         public static dan200.computercraft.compat.customnpcs.peripheral.npcinterface.BlockNpcInterface npcInterface;
         public static dan200.computercraft.compat.customnpcs.peripheral.traderrole.BlockTraderRole traderRole;
     }

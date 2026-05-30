@@ -1,5 +1,8 @@
 package dan200.computercraft.compat.customnpcs.peripheral.npcinterface;
 
+import java.util.List;
+import java.util.Map;
+
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import noppes.npcs.api.entity.ICustomNpc;
 
@@ -19,24 +22,59 @@ public interface INpcInterfaceHolder {
     // UUID / link state
     // -------------------------------------------------------------------------
 
-    /** Returns the stored NPC UUID, or {@code null} if unlinked. */
+    /**
+     * Returns the first linked NPC UUID (insertion order), or {@code null} if
+     * no NPCs are linked.
+     */
     String getLinkedUUID();
 
-    /** Returns the cached NPC display name, or {@code null} if unlinked. */
+    /**
+     * Returns the first linked NPC's cached display name, or {@code null} if
+     * no NPCs are linked.
+     */
     String getLinkedName();
 
     /**
-     * Sets (or clears) the linked NPC UUID and display name.
+     * Returns a snapshot copy of all linked NPCs as an ordered UUID → name map.
+     */
+    Map<String, String> getLinkedNpcs();
+
+    /**
+     * Replaces the entire link set with a single NPC, or clears all links if
+     * both arguments are {@code null}.
      * Implementations must update {@link NpcInterfaceManager} registration and
      * persist the new values.
      *
-     * @param uuid linked NPC UUID, or {@code null} to unlink
-     * @param name cached NPC display name, or {@code null} to clear
+     * @param uuid linked NPC UUID, or {@code null} to clear
+     * @param name cached NPC display name, or {@code null}
      */
     void setLink(String uuid, String name);
 
+    /**
+     * Adds a single NPC to the linked set. No-op if the UUID is already linked.
+     * Implementations must update {@link NpcInterfaceManager} and persist.
+     *
+     * @param uuid NPC UUID to add
+     * @param name cached display name
+     */
+    void addLink(String uuid, String name);
+
+    /**
+     * Removes a single NPC from the linked set. No-op if not linked.
+     * Implementations must update {@link NpcInterfaceManager} and persist.
+     *
+     * @param uuid NPC UUID to remove
+     */
+    void removeLink(String uuid);
+
+    /**
+     * Removes all linked NPCs.
+     * Implementations must update {@link NpcInterfaceManager} and persist.
+     */
+    void clearLinks();
+
     // -------------------------------------------------------------------------
-    // Position (scan origin for link / linkNearest)
+    // Position (scan origin for link / linkNearest / scanNpcs)
     // -------------------------------------------------------------------------
 
     double getPositionX();
@@ -58,13 +96,21 @@ public interface INpcInterfaceHolder {
     // -------------------------------------------------------------------------
 
     /**
-     * Resolves the live NPC entity. <strong>Must be called on the main
+     * Resolves the first linked NPC entity. <strong>Must be called on the main
      * thread.</strong>
      *
      * @return the live {@link ICustomNpc}, or {@code null} if not found or CNPC
      *         is absent.
      */
     ICustomNpc<?> resolveNpc();
+
+    /**
+     * Resolves all currently loaded linked NPC entities.
+     * <strong>Must be called on the main thread.</strong>
+     *
+     * @return a list of live {@link ICustomNpc} instances (may be empty).
+     */
+    List<ICustomNpc<?>> resolveNpcs();
 
     // -------------------------------------------------------------------------
     // Event dispatch (called by NpcInterfaceManager from any thread)

@@ -1,13 +1,18 @@
 package dan200.computercraft.shared.turtle.upgrades;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.util.IIcon;
 
@@ -30,9 +35,9 @@ import noppes.npcs.api.entity.IEntity;
 
 /**
  * Turtle upgrade that embeds an NPC Interface into the turtle's tool slot.
- * All 32 {@code npc_interface} methods are available; the scan origin is the
- * turtle's current block position. The linked NPC UUID is persisted in the
- * turtle's upgrade NBT data.
+ * All {@code npc_interface} methods are available; the scan origin is the
+ * turtle's current block position. Linked NPC UUIDs are persisted in the
+ * turtle's upgrade NBT data under key {@code linkedNpcs}.
  *
  * <p>
  * Only registered when CustomNPCs (mod ID {@code customnpcs}) is loaded.
@@ -123,8 +128,10 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
 
     private static final class Holder implements INpcInterfaceHolder {
 
-        private static final String KEY_UUID = "npcUUID";
-        private static final String KEY_NAME = "npcName";
+        private static final String KEY_LINKED_NPCS = "linkedNpcs";
+        /** Legacy single-link keys — read-only for migration. */
+        private static final String KEY_UUID_LEGACY = "npcUUID";
+        private static final String KEY_NAME_LEGACY = "npcName";
 
         private final ITurtleAccess m_turtle;
         private final TurtleSide m_side;
@@ -137,47 +144,122 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
             this.m_turtle = turtle;
             this.m_side = side;
             this.m_upgrade = upgrade;
-            // Register with manager if already linked (e.g. turtle loaded from disk)
-            String uuid = getLinkedUUID();
-            if (uuid != null) {
+            // Register with manager for any UUIDs already persisted (e.g. turtle loaded from disk)
+            for (String uuid : readLinkedNpcs().keySet()) {
                 NpcInterfaceManager.register(uuid, this);
             }
         }
 
         // -----------------------------------------------------------------
-        // INpcInterfaceHolder — UUID state (stored in upgrade NBT)
+        // NBT helpers — stored in the turtle's per-side upgrade NBT
+        // -----------------------------------------------------------------
+
+        /** Reads the linked-NPC map from the turtle's upgrade NBT, migrating old format. */
+        private Map<String, String> readLinkedNpcs() {
+            NBTTagCompound nbt = m_turtle.getUpgradeNBTData(m_side);
+            Map<String, String> result = new LinkedHashMap<>();
+            if (nbt.hasKey(KEY_LINKED_NPCS)) {
+                NBTTagList list = nbt.getTagList(KEY_LINKED_NPCS, 10 /* TAG_COMPOUND */);
+                for (int i = 0; i < list.tagCount(); i++) {
+                    NBTTagCompound entry = list.getCompoundTagAt(i);
+                    String uuid = entry.getString("uuid");
+                    String name = entry.getString("name");
+                    if (!uuid.isEmpty()) result.put(uuid, name);
+                }
+            } else if (nbt.hasKey(KEY_UUID_LEGACY)) {
+                // Migrate old single-link format
+                String uuid = nbt.getString(KEY_UUID_LEGACY);
+                String name = nbt.hasKey(KEY_NAME_LEGACY) ? nbt.getString(KEY_NAME_LEGACY) : "";
+                if (!uuid.isEmpty()) result.put(uuid, name);
+            }
+            return result;
+        }
+
+        /** Writes the linked-NPC map to the turtle's upgrade NBT and marks it dirty. */
+        private void writeLinkedNpcs(Map<String, String> linked) {
+            NBTTagCompound nbt = m_turtle.getUpgradeNBTData(m_side);
+            // Remove legacy keys on first write
+            nbt.removeTag(KEY_UUID_LEGACY);
+            nbt.removeTag(KEY_NAME_LEGACY);
+            NBTTagList list = new NBTTagList();
+            for (Map.Entry<String, String> e : linked.entrySet()) {
+                NBTTagCompound entry = new NBTTagCompound();
+                entry.setString("uuid", e.getKey());
+                entry.setString("name", e.getValue());
+                list.appendTag(entry);
+            }
+            nbt.setTag(KEY_LINKED_NPCS, list);
+            m_turtle.updateUpgradeNBTData(m_side);
+        }
+
+        // -----------------------------------------------------------------
+        // INpcInterfaceHolder — UUID state
         // -----------------------------------------------------------------
 
         @Override
         public String getLinkedUUID() {
-            NBTTagCompound nbt = m_turtle.getUpgradeNBTData(m_side);
-            return nbt.hasKey(KEY_UUID) ? nbt.getString(KEY_UUID) : null;
+            Map<String, String> linked = readLinkedNpcs();
+            return linked.isEmpty() ? null
+                : linked.keySet()
+                    .iterator()
+                    .next();
         }
 
         @Override
         public String getLinkedName() {
-            NBTTagCompound nbt = m_turtle.getUpgradeNBTData(m_side);
-            return nbt.hasKey(KEY_NAME) ? nbt.getString(KEY_NAME) : null;
+            Map<String, String> linked = readLinkedNpcs();
+            return linked.isEmpty() ? null
+                : linked.values()
+                    .iterator()
+                    .next();
+        }
+
+        @Override
+        public synchronized Map<String, String> getLinkedNpcs() {
+            return readLinkedNpcs();
         }
 
         @Override
         public synchronized void setLink(String uuid, String name) {
-            String old = getLinkedUUID();
-            if (old != null) {
-                NpcInterfaceManager.unregister(old, this);
+            Map<String, String> old = readLinkedNpcs();
+            for (String oldUUID : old.keySet()) {
+                NpcInterfaceManager.unregister(oldUUID, this);
             }
-            NBTTagCompound nbt = m_turtle.getUpgradeNBTData(m_side);
+            Map<String, String> newMap = new LinkedHashMap<>();
             if (uuid != null) {
-                nbt.setString(KEY_UUID, uuid);
-                nbt.setString(KEY_NAME, name != null ? name : "");
-            } else {
-                nbt.removeTag(KEY_UUID);
-                nbt.removeTag(KEY_NAME);
-            }
-            m_turtle.updateUpgradeNBTData(m_side);
-            if (uuid != null) {
+                newMap.put(uuid, name != null ? name : "");
                 NpcInterfaceManager.register(uuid, this);
             }
+            writeLinkedNpcs(newMap);
+        }
+
+        @Override
+        public synchronized void addLink(String uuid, String name) {
+            if (uuid == null) return;
+            Map<String, String> linked = readLinkedNpcs();
+            if (linked.containsKey(uuid)) return;
+            linked.put(uuid, name != null ? name : "");
+            writeLinkedNpcs(linked);
+            NpcInterfaceManager.register(uuid, this);
+        }
+
+        @Override
+        public synchronized void removeLink(String uuid) {
+            if (uuid == null) return;
+            Map<String, String> linked = readLinkedNpcs();
+            if (!linked.containsKey(uuid)) return;
+            linked.remove(uuid);
+            writeLinkedNpcs(linked);
+            NpcInterfaceManager.unregister(uuid, this);
+        }
+
+        @Override
+        public synchronized void clearLinks() {
+            Map<String, String> linked = readLinkedNpcs();
+            for (String uuid : linked.keySet()) {
+                NpcInterfaceManager.unregister(uuid, this);
+            }
+            writeLinkedNpcs(new LinkedHashMap<>());
         }
 
         // -----------------------------------------------------------------
@@ -222,10 +304,11 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
             }
         }
 
-        /** Unregisters this holder from {@link NpcInterfaceManager} if linked. */
+        /** Unregisters this holder from {@link NpcInterfaceManager} for all linked UUIDs. */
         void unregisterFromManager() {
-            String uuid = getLinkedUUID();
-            if (uuid != null) NpcInterfaceManager.unregister(uuid, this);
+            for (String uuid : readLinkedNpcs().keySet()) {
+                NpcInterfaceManager.unregister(uuid, this);
+            }
         }
 
         // -----------------------------------------------------------------
@@ -234,8 +317,35 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
 
         @Override
         public ICustomNpc<?> resolveNpc() {
-            String uuid = getLinkedUUID();
-            if (uuid == null) return null;
+            Map<String, String> linked = readLinkedNpcs();
+            if (linked.isEmpty()) return null;
+            String uuid = linked.keySet()
+                .iterator()
+                .next();
+            return resolveByUUID(uuid);
+        }
+
+        @Override
+        public List<ICustomNpc<?>> resolveNpcs() {
+            Map<String, String> linked = readLinkedNpcs();
+            if (linked.isEmpty()) return Collections.emptyList();
+            List<ICustomNpc<?>> result = new ArrayList<>();
+            try {
+                if (!AbstractNpcAPI.IsAvailable()) return result;
+                AbstractNpcAPI api = AbstractNpcAPI.Instance();
+                if (api == null) return result;
+                for (IEntity<?> entity : api.getLoadedEntities()) {
+                    if (entity instanceof ICustomNpc && linked.containsKey(entity.getUniqueID())) {
+                        result.add((ICustomNpc<?>) entity);
+                    }
+                }
+            } catch (Throwable t) {
+                // CNPC absent or incompatible
+            }
+            return result;
+        }
+
+        private static ICustomNpc<?> resolveByUUID(String uuid) {
             try {
                 if (!AbstractNpcAPI.IsAvailable()) return null;
                 AbstractNpcAPI api = AbstractNpcAPI.Instance();
