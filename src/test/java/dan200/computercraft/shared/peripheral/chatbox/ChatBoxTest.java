@@ -241,4 +241,119 @@ class ChatBoxTest {
         String label = ChatBoxPeripheral.parseLabel(new Object[] { "MyBox" }, 0);
         assertEquals("MyBox", label);
     }
+
+    // -------------------------------------------------------------------------
+    // CustomNPCs NPC event dispatch tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void dispatchNpcInteract_queuesEventOnAttachedComputer() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcInteract("Steve", "Bob");
+
+        verify(computer).queueEvent("cnpc_interact", new Object[] { "Steve", "Bob" });
+
+        ChatBoxManager.unregister(tile);
+    }
+
+    @Test
+    void dispatchNpcDialog_queuesEventWithDialogAndOptionIds() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcDialog("Steve", "ShopKeeper", 42, 3);
+
+        verify(computer).queueEvent("cnpc_dialog", new Object[] { "Steve", "ShopKeeper", 42, 3 });
+
+        ChatBoxManager.unregister(tile);
+    }
+
+    @Test
+    void dispatchNpcDialogClosed_queuesEventWithDialogAndOptionIds() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcDialogClosed("Steve", "ShopKeeper", 42, 3);
+
+        verify(computer).queueEvent("cnpc_dialog_closed", new Object[] { "Steve", "ShopKeeper", 42, 3 });
+
+        ChatBoxManager.unregister(tile);
+    }
+
+    @Test
+    void dispatchNpcDied_queuesEventWithKillerAndDamageType() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcDied("Bob", "Steve", "player");
+
+        verify(computer).queueEvent("cnpc_died", new Object[] { "Bob", "Steve", "player" });
+
+        ChatBoxManager.unregister(tile);
+    }
+
+    @Test
+    void dispatchNpcInteract_doesNotFireOnUnregisteredTile() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+        ChatBoxManager.unregister(tile);
+
+        ChatBoxManager.dispatchNpcInteract("Steve", "Bob");
+
+        verify(computer, never()).queueEvent(any(), any());
+    }
+
+    @Test
+    void dispatchNpcInteract_fansOutToMultipleTiles() {
+        TileChatBox tileA = makeTile();
+        TileChatBox tileB = makeTile();
+        IComputerAccess compA = attachMock(tileA);
+        IComputerAccess compB = attachMock(tileB);
+
+        ChatBoxManager.dispatchNpcInteract("Player", "Guard");
+
+        verify(compA).queueEvent("cnpc_interact", new Object[] { "Player", "Guard" });
+        verify(compB).queueEvent("cnpc_interact", new Object[] { "Player", "Guard" });
+
+        ChatBoxManager.unregister(tileA);
+        ChatBoxManager.unregister(tileB);
+    }
+
+    @Test
+    void dispatchNpcSpawned_queuesEventOnAttachedComputer() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcSpawned("Guard");
+
+        verify(computer).queueEvent("cnpc_spawned", new Object[] { "Guard" });
+
+        ChatBoxManager.unregister(tile);
+    }
+
+    @Test
+    void dispatchNpcDamaged_queuesEventWithAllParams() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcDamaged("Guard", "Steve", 4.5f, "player");
+
+        verify(computer).queueEvent("cnpc_damaged", new Object[] { "Guard", "Steve", 4.5f, "player" });
+
+        ChatBoxManager.unregister(tile);
+    }
+
+    @Test
+    void dispatchNpcKilledEntity_queuesEventWithNpcAndEntityName() {
+        TileChatBox tile = makeTile();
+        IComputerAccess computer = attachMock(tile);
+
+        ChatBoxManager.dispatchNpcKilledEntity("Guard", "Zombie", "zombie");
+
+        verify(computer).queueEvent("cnpc_killed_entity", new Object[] { "Guard", "Zombie", "zombie" });
+
+        ChatBoxManager.unregister(tile);
+    }
 }

@@ -12,5 +12,8 @@ public enum PeripheralType {
     WiredModemWithCable,
     RedstoneRelay,
     Speaker,
-    ChatBox;
+    ChatBox,
+    NpcDetector,
+    NpcInterface,
+    TraderRole;
 }

@@ -102,6 +102,45 @@ public class TileChatBox extends TileGeneric implements IPeripheralTile, IChatBo
     }
 
     // -------------------------------------------------------------------------
+    // IChatBoxReceiver — CustomNPCs NPC events
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void onNpcInteractEvent(String playerName, String npcName) {
+        queueEvent("cnpc_interact", playerName, npcName);
+    }
+
+    @Override
+    public void onNpcDialogEvent(String playerName, String npcName, int dialogId, int optionId) {
+        queueEvent("cnpc_dialog", playerName, npcName, dialogId, optionId);
+    }
+
+    @Override
+    public void onNpcDialogClosedEvent(String playerName, String npcName, int dialogId, int optionId) {
+        queueEvent("cnpc_dialog_closed", playerName, npcName, dialogId, optionId);
+    }
+
+    @Override
+    public void onNpcDiedEvent(String npcName, String killerName, String damageType) {
+        queueEvent("cnpc_died", npcName, killerName, damageType);
+    }
+
+    @Override
+    public void onNpcSpawnedEvent(String npcName) {
+        queueEvent("cnpc_spawned", npcName);
+    }
+
+    @Override
+    public void onNpcDamagedEvent(String npcName, String attackerName, float damage, String damageType) {
+        queueEvent("cnpc_damaged", npcName, attackerName, damage, damageType);
+    }
+
+    @Override
+    public void onNpcKilledEntityEvent(String npcName, String entityName, String entityType) {
+        queueEvent("cnpc_killed_entity", npcName, entityName, entityType);
+    }
+
+    // -------------------------------------------------------------------------
     // TileEntity lifecycle — register/unregister with ChatBoxManager
     // -------------------------------------------------------------------------
 

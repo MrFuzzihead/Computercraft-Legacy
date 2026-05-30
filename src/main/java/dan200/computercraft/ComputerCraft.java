@@ -27,6 +27,7 @@ import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.Mod.Instance;
 import cpw.mods.fml.common.SidedProxy;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartedEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
@@ -137,6 +138,7 @@ public class ComputerCraft {
     public static int speaker_max_notes_per_tick = 8;
     public static int speaker_audio_range = 256;
     public static int chatbox_max_range = -1;
+    public static int npc_detector_max_range = 64;
     public static int computerSpaceLimit = 1000000;
     public static int floppySpaceLimit = 125000;
     public static int treasureDiskLootFrequency = 1;
@@ -196,6 +198,9 @@ public class ComputerCraft {
         prop = config.get("general", "chatbox_max_range", chatbox_max_range);
         prop.comment = "Maximum range (in blocks) for the Chat Box say/tell methods. -1 = infinite.";
         chatbox_max_range = prop.getInt();
+        prop = config.get("peripheral", "npc_detector_max_range", npc_detector_max_range);
+        prop.comment = "Maximum scan radius (in blocks) for the NPC Detector peripheral.";
+        npc_detector_max_range = Math.max(1, Math.min(prop.getInt(), 256));
         prop = config.get("general", "computerSpaceLimit", computerSpaceLimit);
         prop.comment = "The disk space limit for computers and turtles, in bytes";
         computerSpaceLimit = prop.getInt();
@@ -275,6 +280,30 @@ public class ComputerCraft {
     public void init(FMLInitializationEvent event) {
         proxy.init();
         turtleProxy.init();
+    }
+
+    @EventHandler
+    public void postInit(FMLPostInitializationEvent event) {
+        // Deferred until postInit so all mods (including CustomNPCs) have completed their own init.
+        registerCustomNpcCompat();
+    }
+
+    private static void registerCustomNpcCompat() {
+        try {
+            if (noppes.npcs.api.AbstractNpcAPI.IsAvailable()) {
+                noppes.npcs.api.AbstractNpcAPI.Instance()
+                    .events()
+                    .register(new dan200.computercraft.compat.customnpcs.chatbox.CustomNpcChatBoxBridge());
+                logger.info("[ComputerCraft] CustomNPCs detected — ChatBox NPC event forwarding enabled.");
+                noppes.npcs.api.AbstractNpcAPI.Instance()
+                    .events()
+                    .register(new dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfaceBridge());
+                logger.info("[ComputerCraft] CustomNPCs detected — NPC Interface peripheral event forwarding enabled.");
+            }
+        } catch (Throwable t) {
+            // CustomNPCs is absent or incompatible — silently skip registration.
+            logger.debug("[ComputerCraft] CustomNPCs not available: {}", t.getMessage());
+        }
     }
 
     @EventHandler
@@ -664,6 +693,9 @@ public class ComputerCraft {
         public static BlockChatBox chatBox;
         public static BlockRedstoneRelay redstoneRelay;
         public static BlockAdvancedWirelessModem advancedWirelessModem;
+        public static dan200.computercraft.compat.customnpcs.peripheral.npcdetector.BlockNpcDetector npcDetector;
+        public static dan200.computercraft.compat.customnpcs.peripheral.npcinterface.BlockNpcInterface npcInterface;
+        public static dan200.computercraft.compat.customnpcs.peripheral.traderrole.BlockTraderRole traderRole;
     }
 
     public static class Items {
@@ -687,5 +719,7 @@ public class ComputerCraft {
         public static dan200.computercraft.shared.turtle.upgrades.TurtleEnderModem enderModem;
         public static TurtleSpeaker speaker;
         public static TurtleChatBox chatBox;
+        public static dan200.computercraft.shared.turtle.upgrades.TurtleNpcDetector npcDetector;
+        public static dan200.computercraft.shared.turtle.upgrades.TurtleNpcInterface npcInterface;
     }
 }

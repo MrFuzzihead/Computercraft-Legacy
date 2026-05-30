@@ -1,5 +1,7 @@
 package dan200.computercraft.shared.proxy;
 
+import static cpw.mods.fml.common.Loader.isModLoaded;
+
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,6 +42,8 @@ import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.registry.GameRegistry;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.ComputerCraftAPI;
+import dan200.computercraft.compat.customnpcs.peripheral.npcdetector.BlockNpcDetector;
+import dan200.computercraft.compat.customnpcs.peripheral.npcdetector.TileNpcDetector;
 import dan200.computercraft.core.computer.MainThread;
 import dan200.computercraft.shared.common.DefaultBundledRedstoneProvider;
 import dan200.computercraft.shared.common.TileGeneric;
@@ -93,6 +97,8 @@ import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.pocket.items.PocketComputerItemFactory;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerChatBoxUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerEnderUpgradeRecipe;
+import dan200.computercraft.shared.pocket.recipes.PocketComputerNpcDetectorUpgradeRecipe;
+import dan200.computercraft.shared.pocket.recipes.PocketComputerNpcInterfaceUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerSpeakerUpgradeRecipe;
 import dan200.computercraft.shared.pocket.recipes.PocketComputerUpgradeRecipe;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
@@ -449,6 +455,89 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             Blocks.noteblock,
             'S',
             Items.redstone);
+        // NPC Detector block + crafting recipe — only when CustomNPC+ is loaded
+        if (isModLoaded("customnpcs")) {
+            ComputerCraft.Blocks.npcDetector = new BlockNpcDetector();
+            GameRegistry.registerBlock(ComputerCraft.Blocks.npcDetector, ItemBlock.class, "npc_detector");
+            ItemStack npcDetectorStack = new ItemStack(ComputerCraft.Blocks.npcDetector);
+            GameRegistry.addRecipe(
+                npcDetectorStack,
+                "SSS",
+                "ECE",
+                "SSS",
+                'S',
+                Blocks.stone,
+                'E',
+                Items.ender_pearl,
+                'C',
+                ComputerItemFactory.create(-1, null, ComputerFamily.Normal));
+            // Pocket Computer NPC Detector upgrade recipe
+            ItemStack npcDetectorPocketComputer = PocketComputerItemFactory
+                .createWithNpcDetector(-1, null, ComputerFamily.Normal);
+            ItemStack advancedNpcDetectorPocketComputer = PocketComputerItemFactory
+                .createWithNpcDetector(-1, null, ComputerFamily.Advanced);
+            GameRegistry.addRecipe(new PocketComputerNpcDetectorUpgradeRecipe());
+            GameRegistry.addRecipe(
+                new ImpostorRecipe(
+                    1,
+                    2,
+                    new ItemStack[] { npcDetectorStack, pocketComputer },
+                    npcDetectorPocketComputer));
+            GameRegistry.addRecipe(
+                new ImpostorRecipe(
+                    1,
+                    2,
+                    new ItemStack[] { npcDetectorStack, advancedPocketComputer },
+                    advancedNpcDetectorPocketComputer));
+            // NPC Interface block + crafting recipe
+            ComputerCraft.Blocks.npcInterface = new dan200.computercraft.compat.customnpcs.peripheral.npcinterface.BlockNpcInterface();
+            GameRegistry.registerBlock(ComputerCraft.Blocks.npcInterface, ItemBlock.class, "npc_interface");
+            ItemStack npcInterfaceStack = new ItemStack(ComputerCraft.Blocks.npcInterface);
+            // Recipe: stone border, redstone on sides, advanced computer in centre
+            GameRegistry.addRecipe(
+                npcInterfaceStack,
+                "SSS",
+                "RAR",
+                "SSS",
+                'S',
+                Blocks.stone,
+                'R',
+                Items.redstone,
+                'A',
+                ComputerItemFactory.create(-1, null, ComputerFamily.Advanced));
+            // Pocket Computer NPC Interface upgrade recipe
+            ItemStack npcInterfacePocketComputer = PocketComputerItemFactory
+                .createWithNpcInterface(-1, null, ComputerFamily.Normal);
+            ItemStack advancedNpcInterfacePocketComputer = PocketComputerItemFactory
+                .createWithNpcInterface(-1, null, ComputerFamily.Advanced);
+            GameRegistry.addRecipe(new PocketComputerNpcInterfaceUpgradeRecipe());
+            GameRegistry.addRecipe(
+                new ImpostorRecipe(
+                    1,
+                    2,
+                    new ItemStack[] { npcInterfaceStack, pocketComputer },
+                    npcInterfacePocketComputer));
+            GameRegistry.addRecipe(
+                new ImpostorRecipe(
+                    1,
+                    2,
+                    new ItemStack[] { npcInterfaceStack, advancedPocketComputer },
+                    advancedNpcInterfacePocketComputer));
+            // NPC Trader Role block + crafting recipe
+            ComputerCraft.Blocks.traderRole = new dan200.computercraft.compat.customnpcs.peripheral.traderrole.BlockTraderRole();
+            GameRegistry.registerBlock(ComputerCraft.Blocks.traderRole, ItemBlock.class, "npc_trader");
+            ItemStack traderRoleStack = new ItemStack(ComputerCraft.Blocks.traderRole);
+            // Recipe: gold border, normal computer in centre
+            GameRegistry.addRecipe(
+                traderRoleStack,
+                "GGG",
+                "GCG",
+                "GGG",
+                'G',
+                Items.gold_ingot,
+                'C',
+                ComputerItemFactory.create(-1, null, ComputerFamily.Normal));
+        }
         // Speaker Pocket Computer recipes
         ItemStack speakerPocketComputer = PocketComputerItemFactory.createWithSpeaker(-1, null, ComputerFamily.Normal);
         ItemStack advancedSpeakerPocketComputer = PocketComputerItemFactory
@@ -510,6 +599,15 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");
         GameRegistry.registerTileEntity(TileChatBox.class, "ccchatbox");
+        if (isModLoaded("customnpcs")) {
+            GameRegistry.registerTileEntity(TileNpcDetector.class, "ccnpcdetector");
+            GameRegistry.registerTileEntity(
+                dan200.computercraft.compat.customnpcs.peripheral.npcinterface.TileNpcInterface.class,
+                "ccnpcinterface");
+            GameRegistry.registerTileEntity(
+                dan200.computercraft.compat.customnpcs.peripheral.traderrole.TileTraderRole.class,
+                "ccnpctrader");
+        }
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());
         }

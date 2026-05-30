@@ -38,4 +38,20 @@ public class PocketComputerItemFactory {
             default -> null;
         };
     }
+
+    public static ItemStack createWithNpcDetector(int id, String label, ComputerFamily family) {
+        ItemPocketComputer computer = ComputerCraft.Items.pocketComputer;
+        return switch (family) {
+            case Normal, Advanced -> computer.createWithNpcDetector(id, label, family);
+            default -> null;
+        };
+    }
+
+    public static ItemStack createWithNpcInterface(int id, String label, ComputerFamily family) {
+        ItemPocketComputer computer = ComputerCraft.Items.pocketComputer;
+        return switch (family) {
+            case Normal, Advanced -> computer.createWithNpcInterface(id, label, family);
+            default -> null;
+        };
+    }
 }
