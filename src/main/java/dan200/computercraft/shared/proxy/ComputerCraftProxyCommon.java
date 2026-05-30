@@ -526,9 +526,6 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             // NPC Trader Role block + crafting recipe
             ComputerCraft.Blocks.traderRole = new dan200.computercraft.compat.customnpcs.peripheral.traderrole.BlockTraderRole();
             GameRegistry.registerBlock(ComputerCraft.Blocks.traderRole, ItemBlock.class, "npc_trader");
-            GameRegistry.registerTileEntity(
-                dan200.computercraft.compat.customnpcs.peripheral.traderrole.TileTraderRole.class,
-                "computercraft:npc_trader");
             ItemStack traderRoleStack = new ItemStack(ComputerCraft.Blocks.traderRole);
             // Recipe: gold border, normal computer in centre
             GameRegistry.addRecipe(
@@ -607,6 +604,9 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             GameRegistry.registerTileEntity(
                 dan200.computercraft.compat.customnpcs.peripheral.npcinterface.TileNpcInterface.class,
                 "ccnpcinterface");
+            GameRegistry.registerTileEntity(
+                dan200.computercraft.compat.customnpcs.peripheral.traderrole.TileTraderRole.class,
+                "computercraft:npc_trader");
         }
         if (ComputerCraft.enableCommandBlock) {
             ComputerCraftAPI.registerPeripheralProvider(new CommandBlockPeripheralProvider());

@@ -22,7 +22,16 @@ import noppes.npcs.scripted.event.NpcEvent;
  */
 public class NpcInterfaceBridge {
 
-    /** Per-NPC game-tick counter used to throttle {@code npc_tick} events to every 20 ticks. */
+    /**
+     * Per-NPC tick counter used to throttle {@code npc_tick} events to every 20 ticks.
+     *
+     * <p>
+     * Values are stored modulo 20 (range [0, 19]) to prevent integer overflow.
+     * Entries are removed in {@link #onDied} to reclaim memory when an NPC dies.
+     * NPCs that despawn without dying leave a stale entry, but since
+     * {@link NpcEvent.UpdateEvent} stops firing for them the leak is bounded.
+     * </p>
+     */
     private final ConcurrentHashMap<String, Integer> m_tickCounters = new ConcurrentHashMap<>();
 
     @SubscribeEvent
@@ -58,24 +67,26 @@ public class NpcInterfaceBridge {
 
     @SubscribeEvent
     public void onDamaged(NpcEvent.DamagedEvent e) {
-        String src = e.getSource() != null ? CustomNpcChatBoxBridge.resolveKillerType(e.getSource(), e.getType()) : "";
+        String srcName = CustomNpcChatBoxBridge.entityName(e.getSource());
+        String srcType = e.getSource() != null ? CustomNpcChatBoxBridge.resolveKillerType(e.getSource(), e.getType())
+            : "";
         NpcInterfaceManager.dispatchDamaged(
             e.getNpc()
                 .getUniqueID(),
-            src,
+            srcName,
             e.getDamage(),
-            e.getType());
+            srcType);
     }
 
     @SubscribeEvent
     public void onDied(NpcEvent.DiedEvent e) {
-        String killer = e.getSource() != null ? CustomNpcChatBoxBridge.resolveKillerType(e.getSource(), e.getType())
+        String uuid = e.getNpc()
+            .getUniqueID();
+        String killerName = CustomNpcChatBoxBridge.entityName(e.getSource());
+        String killerType = e.getSource() != null ? CustomNpcChatBoxBridge.resolveKillerType(e.getSource(), e.getType())
             : "";
-        NpcInterfaceManager.dispatchDied(
-            e.getNpc()
-                .getUniqueID(),
-            killer,
-            e.getType());
+        m_tickCounters.remove(uuid);
+        NpcInterfaceManager.dispatchDied(uuid, killerName, killerType);
     }
 
     @SubscribeEvent
@@ -99,8 +110,8 @@ public class NpcInterfaceBridge {
     public void onTick(NpcEvent.UpdateEvent e) {
         String uuid = e.getNpc()
             .getUniqueID();
-        int count = m_tickCounters.merge(uuid, 1, Integer::sum);
-        if (count % 20 == 0) {
+        int count = m_tickCounters.merge(uuid, 1, (a, b) -> (a + b) % 20);
+        if (count == 0) {
             NpcInterfaceManager.dispatchTick(uuid);
         }
     }

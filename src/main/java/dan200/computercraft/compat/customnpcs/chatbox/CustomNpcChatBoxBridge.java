@@ -39,7 +39,7 @@ public class CustomNpcChatBoxBridge {
      * <li>{@code null} (environmental damage) → {@code ""}</li>
      * </ul>
      */
-    private static String entityName(IEntity<?> source) {
+    public static String entityName(IEntity<?> source) {
         if (source == null) return "";
         if (source instanceof IPlayer) return ((IPlayer<?>) source).getName();
         if (source instanceof ICustomNpc) return ((ICustomNpc<?>) source).getName();
