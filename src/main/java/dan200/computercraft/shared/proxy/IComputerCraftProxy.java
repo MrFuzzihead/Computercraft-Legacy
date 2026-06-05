@@ -47,5 +47,7 @@ public interface IComputerCraftProxy {
 
     void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume);
 
+    void playSpeakerAudio(int x, int y, int z, byte[] audioData, float volume, int format);
+
     void stopSpeaker(int x, int y, int z);
 }

@@ -123,8 +123,18 @@ end
 --     local dfpwm = require "cc.audio.dfpwm"
 --     local decoder = dfpwm.make_decoder()
 --     local speaker = peripheral.find("speaker")
---     -- Assume `data` is a list of bytes loaded from a DFPWM file.
---     speaker.playAudio(decoder(data))
+--     local file = assert(io.open("data/example.dfpwm", "rb"))
+--
+--     while true do
+--         local chunk = file:read(16 * 1024)
+--         if not chunk then break end
+--
+--         -- The decoder expects a table of byte values, not a raw string.
+--         local buffer = decoder({ string.byte(chunk, 1, #chunk) })
+--         while not speaker.playAudio(buffer) do
+--             os.pullEvent("speaker_audio_empty")
+--         end
+--     end
 local function make_decoder()
     local q         = 0
     local s         = 0

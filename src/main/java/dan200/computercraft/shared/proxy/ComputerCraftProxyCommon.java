@@ -169,6 +169,9 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
     public abstract void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume);
 
     @Override
+    public abstract void playSpeakerAudio(int x, int y, int z, byte[] audioData, float volume, int format);
+
+    @Override
     public abstract void stopSpeaker(int x, int y, int z);
 
     @Override
@@ -217,9 +220,10 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 int sy = packet.m_dataInt[1];
                 int sz = packet.m_dataInt[2];
                 float vol = packet.m_dataInt[3] / 1000.0f;
-                byte[] dfpwm = (packet.m_dataByte != null && packet.m_dataByte.length > 0
+                int format = (packet.m_dataInt != null && packet.m_dataInt.length > 4) ? packet.m_dataInt[4] : 0;
+                byte[] audioData = (packet.m_dataByte != null && packet.m_dataByte.length > 0
                     && packet.m_dataByte[0] != null) ? packet.m_dataByte[0] : new byte[0];
-                ComputerCraft.proxy.playSpeakerAudio(sx, sy, sz, dfpwm, vol);
+                ComputerCraft.proxy.playSpeakerAudio(sx, sy, sz, audioData, vol, format);
                 break;
             }
             case ComputerCraftPacket.SpeakerStop: {
