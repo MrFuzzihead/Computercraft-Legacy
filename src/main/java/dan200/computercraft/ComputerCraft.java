@@ -137,6 +137,7 @@ public class ComputerCraft {
     public static int modem_highAltitudeRangeDuringStorm = 96;
     public static int speaker_max_notes_per_tick = 8;
     public static int speaker_audio_range = 256;
+    public static String speaker_transport_format = "dfpwm";
     public static int chatbox_max_range = -1;
     public static int npc_detector_max_range = 64;
     public static int computerSpaceLimit = 1000000;
@@ -269,6 +270,9 @@ public class ComputerCraft {
         prop = config.get("general", "cc_default_settings", cc_default_settings);
         prop.comment = "A comma-separated list of default settings to apply when the settings API is loaded, e.g. \"shell.autocomplete=false,lua.autocomplete=false\". Populates the _CC_DEFAULT_SETTINGS Lua global.";
         cc_default_settings = prop.getString();
+        prop = config.get("general", "speaker_transport_format", speaker_transport_format);
+        prop.comment = "The format to use for transmitting audio from speakers: 'dfpwm' (compressed, default) or 'pcm' (lossless).";
+        speaker_transport_format = prop.getString();
         config.save();
         networkEventChannel = NetworkRegistry.INSTANCE.newEventDrivenChannel("CC");
         networkEventChannel.register(new PacketHandler());

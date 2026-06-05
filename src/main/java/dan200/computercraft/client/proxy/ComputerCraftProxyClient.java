@@ -169,6 +169,11 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
     }
 
     @Override
+    public void playSpeakerAudio(int x, int y, int z, byte[] audioData, float volume, int format) {
+        SpeakerManager.INSTANCE.playAudio(x, y, z, audioData, volume, format);
+    }
+
+    @Override
     public void stopSpeaker(int x, int y, int z) {
         SpeakerManager.INSTANCE.stop(x, y, z);
     }

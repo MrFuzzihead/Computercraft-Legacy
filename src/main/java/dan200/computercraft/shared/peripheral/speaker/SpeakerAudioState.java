@@ -1,5 +1,7 @@
 package dan200.computercraft.shared.peripheral.speaker;
 
+import dan200.computercraft.ComputerCraft;
+
 /**
  * Server-side DFPWM encoder state for {@code playAudio}.
  *
@@ -63,7 +65,12 @@ public class SpeakerAudioState {
         if (pendingAudio != null) return false;
         this.lastVolume = volume;
         this.pendingVolume = volume;
-        this.pendingAudio = encodeTodfpwm(samples);
+        // Read format from world file (set via Lua API), falling back to default
+        if ("pcm".equals(ComputerCraft.speaker_transport_format)) {
+            this.pendingAudio = encodeToPcm(samples);
+        } else {
+            this.pendingAudio = encodeTodfpwm(samples);
+        }
         return true;
     }
 
@@ -84,8 +91,13 @@ public class SpeakerAudioState {
      */
     public byte[] pullPending(long now) {
         byte[] data = pendingAudio;
-        // Each DFPWM byte encodes 8 samples at 48 000 Hz.
-        long audioDurationNs = (long) pendingAudio.length * 8L * 1_000_000_000L / 48_000L;
+        // Calculate duration: DFPWM is 8 samples/byte, PCM is 1 sample/byte.
+        long audioDurationNs;
+        if ("pcm".equals(ComputerCraft.speaker_transport_format)) {
+            audioDurationNs = (long) pendingAudio.length * 1_000_000_000L / 48_000L;
+        } else {
+            audioDurationNs = (long) pendingAudio.length * 8L * 1_000_000_000L / 48_000L;
+        }
         clientEndTime = Math.max(clientEndTime, now) + audioDurationNs;
         pendingAudio = null;
         return data;
@@ -139,6 +151,18 @@ public class SpeakerAudioState {
         encQ = q;
         encS = s;
         encFq = fq;
+        return output;
+    }
+
+    /**
+     * Serializes samples to raw signed-8 PCM bytes (lossless, much larger than DFPWM).
+     * Each sample becomes one byte in [−128, 127].
+     */
+    private byte[] encodeToPcm(int[] samples) {
+        byte[] output = new byte[samples.length];
+        for (int i = 0; i < samples.length; i++) {
+            output[i] = (byte) Math.max(-128, Math.min(127, samples[i]));
+        }
         return output;
     }
 }

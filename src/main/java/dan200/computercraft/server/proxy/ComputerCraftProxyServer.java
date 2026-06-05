@@ -85,6 +85,11 @@ public class ComputerCraftProxyServer extends ComputerCraftProxyCommon {
     }
 
     @Override
+    public void playSpeakerAudio(int x, int y, int z, byte[] audioData, float volume, int format) {
+        // No-op on server side; audio is played client-side only.
+    }
+
+    @Override
     public void stopSpeaker(int x, int y, int z) {
         // No-op on server side.
     }

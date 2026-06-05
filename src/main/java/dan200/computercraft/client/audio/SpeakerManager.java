@@ -36,7 +36,13 @@ public class SpeakerManager {
 
     public static final SpeakerManager INSTANCE = new SpeakerManager();
 
-    private static final AudioFormat AUDIO_FORMAT = new AudioFormat(48_000, 8, 1, true, false);
+    // Use 16-bit signed PCM for better playback quality in the Java audio stack.
+    private static final AudioFormat AUDIO_FORMAT = new AudioFormat(48_000, 16, 1, true, false);
+    /**
+     * Size of the SourceDataLine internal buffer in bytes (approx seconds * sample_rate).
+     * Use a larger buffer so non-blocking writes don't drop most decoded PCM.
+     */
+    private static final int LINE_BUFFER_BYTES = 48_000 * 2 * 2; // ~2 seconds of 16-bit mono audio
 
     /** Per-speaker DFPWM decoder — keyed by world position. */
     private final Map<ChunkCoordinates, DfpwmDecoder> m_decoders = new HashMap<>();
@@ -59,17 +65,75 @@ public class SpeakerManager {
      * @param volume linear volume scalar in {@code [0, 3]}.
      */
     public void playAudio(int x, int y, int z, byte[] dfpwm, float volume) {
+        playAudio(x, y, z, dfpwm, volume, 0); // 0 = DFPWM format (default)
+    }
+
+    /**
+     * Decodes and plays audio for the speaker at (x, y, z).
+     * Format: 0 = DFPWM (compressed), 1 = raw signed-8 PCM (lossless).
+     *
+     * @param audioData encoded audio bytes (DFPWM or raw PCM depending on format).
+     * @param volume    linear volume scalar in {@code [0, 3]}.
+     * @param format    0 for DFPWM, 1 for raw signed-8 PCM.
+     */
+    public void playAudio(int x, int y, int z, byte[] audioData, float volume, int format) {
         ChunkCoordinates key = new ChunkCoordinates(x, y, z);
 
-        DfpwmDecoder decoder = m_decoders.computeIfAbsent(key, k -> new DfpwmDecoder());
-        byte[] pcm = decoder.decode(dfpwm);
+        byte[] pcm;
+        if (format == 1) {
+            // Raw signed-8 PCM: use directly (already in the correct range).
+            pcm = audioData;
+        } else {
+            // DFPWM (format == 0): decode using stateful decoder.
+            DfpwmDecoder decoder = m_decoders.computeIfAbsent(key, k -> new DfpwmDecoder());
+            pcm = decoder.decode(audioData);
+        }
 
-        // Apply volume (clamp to byte range).
-        if (Math.abs(volume - 1.0f) > 1e-4f) {
-            for (int i = 0; i < pcm.length; i++) {
-                int scaled = Math.round(pcm[i] * volume);
-                pcm[i] = (byte) Math.max(-128, Math.min(127, scaled));
+        // Convert decoded signed-8 PCM -> signed-16 PCM (little-endian bytes)
+        // and apply volume on the wider range for better fidelity.
+        byte[] out = new byte[pcm.length * 2];
+        for (int i = 0; i < pcm.length; i++) {
+            int s8 = pcm[i]; // signed 8-bit
+            int s16 = s8 << 8; // expand to signed 16-bit
+            if (Math.abs(volume - 1.0f) > 1e-4f) {
+                s16 = Math.round(s16 * volume);
+                if (s16 > 32767) s16 = 32767;
+                if (s16 < -32768) s16 = -32768;
             }
+            // little endian
+            out[i * 2] = (byte) (s16 & 0xFF);
+            out[i * 2 + 1] = (byte) ((s16 >> 8) & 0xFF);
+        }
+
+        // Optional debug: compute simple stats about the decoded PCM so we can
+        // compare in-game audio to what the server/Lua received. Only log when
+        // the global debug flag is enabled to avoid spamming release logs.
+        if (ComputerCraft.debug) {
+            int mn = 32767, mx = -32768, nz = 0;
+            long sa = 0;
+            int limit = Math.min(pcm.length, 32);
+            StringBuilder first = new StringBuilder();
+            for (int i = 0; i < pcm.length; i++) {
+                int v = pcm[i] << 8;
+                if (v < mn) mn = v;
+                if (v > mx) mx = v;
+                if (v != 0) nz++;
+                sa += Math.abs(v);
+                if (i < limit) {
+                    if (i > 0) first.append(',');
+                    first.append(v);
+                }
+            }
+            double avgabs = pcm.length > 0 ? ((double) sa) / pcm.length : 0.0;
+            ComputerCraft.logger.info(
+                String.format(
+                    "Speaker: decoded pcm len=%d fmt=%d min=%d max=%d nonzero=%d avgabs=%.2f",
+                    pcm.length,
+                    format,
+                    mn,
+                    mx,
+                    nz,
+                    avgabs));
         }
 
         SourceDataLine line = getOrOpenLine(key);
@@ -78,8 +142,14 @@ public class SpeakerManager {
         // Non-blocking write: if the internal buffer is full, drop the excess.
         int available = line.available();
         if (available > 0) {
-            int toWrite = Math.min(pcm.length, available);
-            line.write(pcm, 0, toWrite);
+            // Ensure we write an even number of bytes (whole samples).
+            int toWrite = Math.min(out.length, available);
+            toWrite = (toWrite / 2) * 2;
+            if (toWrite > 0) line.write(out, 0, toWrite);
+            if (ComputerCraft.debug && toWrite < out.length) {
+                ComputerCraft.logger
+                    .info(String.format("Speaker: dropped bytes=%d out_of=%d", out.length - toWrite, out.length));
+            }
         }
     }
 
@@ -130,7 +200,9 @@ public class SpeakerManager {
         try {
             DataLine.Info info = new DataLine.Info(SourceDataLine.class, AUDIO_FORMAT);
             line = (SourceDataLine) AudioSystem.getLine(info);
-            line.open(AUDIO_FORMAT);
+            // Open the line with a larger internal buffer to reduce dropped writes when
+            // the game thread performs non-blocking writes of decoded PCM.
+            line.open(AUDIO_FORMAT, LINE_BUFFER_BYTES);
             line.start();
             m_lines.put(key, line);
             return line;

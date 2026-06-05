@@ -239,7 +239,9 @@ public abstract class PortableSpeakerPeripheral implements IPeripheral {
 
                 ComputerCraftPacket audioPacket = new ComputerCraftPacket();
                 audioPacket.m_packetType = ComputerCraftPacket.SpeakerAudio;
-                audioPacket.m_dataInt = new int[] { ix, iy, iz, Math.round(volume * 1000) };
+                // Format: 0=DFPWM, 1=PCM
+                int formatCode = "pcm".equals(ComputerCraft.speaker_transport_format) ? 1 : 0;
+                audioPacket.m_dataInt = new int[] { ix, iy, iz, Math.round(volume * 1000), formatCode };
                 audioPacket.m_dataByte = new byte[][] { dfpwm };
                 ComputerCraft.sendToAllAround(audioPacket, world, x, y, z, ComputerCraft.speaker_audio_range);
 
