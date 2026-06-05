@@ -132,7 +132,7 @@ class CcAudioTtsTest {
             buildMachine(cap),
             buildPreamble(),
             "tts.endpoint = 'https://x.example/say'\n" + "_capture(tts.url('hi there'))");
-        assertEquals("https://x.example/say?text=hi%20there&lang=en&format=dfpwm", cap.args[0]);
+        assertEquals("https://x.example/say?text=hi%20there&lang=en&format=pcm_u8", cap.args[0]);
     }
 
     @Test
@@ -148,20 +148,14 @@ class CcAudioTtsTest {
     @Test
     void testUrlAppendsWithAmpersandWhenEndpointHasQuery() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            buildPreamble(),
-            "_capture(tts.url('x', { endpoint = 'http://h/s?client=tw-ob' }))");
-        assertEquals("http://h/s?client=tw-ob&text=x&lang=en&format=dfpwm", cap.args[0]);
+        run(buildMachine(cap), buildPreamble(), "_capture(tts.url('x', { endpoint = 'http://h/s?client=tw-ob' }))");
+        assertEquals("http://h/s?client=tw-ob&text=x&lang=en&format=pcm_u8", cap.args[0]);
     }
 
     @Test
     void testUrlWithoutEndpointErrors() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            buildPreamble(),
-            "local ok, err = pcall(tts.url, 'hi')\n" + "_capture(ok, err)");
+        run(buildMachine(cap), buildPreamble(), "local ok, err = pcall(tts.url, 'hi')\n" + "_capture(ok, err)");
         assertEquals(Boolean.FALSE, cap.args[0]);
         assertTrue(((String) cap.args[1]).contains("endpoint"));
     }

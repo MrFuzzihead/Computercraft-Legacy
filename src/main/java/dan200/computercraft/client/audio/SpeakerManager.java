@@ -38,8 +38,10 @@ public class SpeakerManager {
 
     // Use 16-bit signed PCM for better playback quality in the Java audio stack.
     private static final AudioFormat AUDIO_FORMAT = new AudioFormat(48_000, 16, 1, true, false);
-    /** Size of the SourceDataLine internal buffer in bytes (approx seconds * sample_rate).
-     *  Use a larger buffer so non-blocking writes don't drop most decoded PCM. */
+    /**
+     * Size of the SourceDataLine internal buffer in bytes (approx seconds * sample_rate).
+     * Use a larger buffer so non-blocking writes don't drop most decoded PCM.
+     */
     private static final int LINE_BUFFER_BYTES = 48_000 * 2 * 2; // ~2 seconds of 16-bit mono audio
 
     /** Per-speaker DFPWM decoder — keyed by world position. */
@@ -71,8 +73,8 @@ public class SpeakerManager {
      * Format: 0 = DFPWM (compressed), 1 = raw signed-8 PCM (lossless).
      *
      * @param audioData encoded audio bytes (DFPWM or raw PCM depending on format).
-     * @param volume linear volume scalar in {@code [0, 3]}.
-     * @param format 0 for DFPWM, 1 for raw signed-8 PCM.
+     * @param volume    linear volume scalar in {@code [0, 3]}.
+     * @param format    0 for DFPWM, 1 for raw signed-8 PCM.
      */
     public void playAudio(int x, int y, int z, byte[] audioData, float volume, int format) {
         ChunkCoordinates key = new ChunkCoordinates(x, y, z);
@@ -123,8 +125,15 @@ public class SpeakerManager {
                 }
             }
             double avgabs = pcm.length > 0 ? ((double) sa) / pcm.length : 0.0;
-            ComputerCraft.logger.info(String.format("Speaker: decoded pcm len=%d fmt=%d min=%d max=%d nonzero=%d avgabs=%.2f",
-                pcm.length, format, mn, mx, nz, avgabs));
+            ComputerCraft.logger.info(
+                String.format(
+                    "Speaker: decoded pcm len=%d fmt=%d min=%d max=%d nonzero=%d avgabs=%.2f",
+                    pcm.length,
+                    format,
+                    mn,
+                    mx,
+                    nz,
+                    avgabs));
         }
 
         SourceDataLine line = getOrOpenLine(key);
@@ -138,7 +147,8 @@ public class SpeakerManager {
             toWrite = (toWrite / 2) * 2;
             if (toWrite > 0) line.write(out, 0, toWrite);
             if (ComputerCraft.debug && toWrite < out.length) {
-                ComputerCraft.logger.info(String.format("Speaker: dropped bytes=%d out_of=%d", out.length - toWrite, out.length));
+                ComputerCraft.logger
+                    .info(String.format("Speaker: dropped bytes=%d out_of=%d", out.length - toWrite, out.length));
             }
         }
     }
