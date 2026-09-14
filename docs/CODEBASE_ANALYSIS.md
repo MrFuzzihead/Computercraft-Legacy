@@ -11,7 +11,7 @@
 The codebase is in good shape overall. The **custom additions** (Speaker + DFPWM/PCM audio, ChatBox, NPC Detector/Interface/Trader, Redstone Relay, WebSocket API, seekable `fs` handles, `os.date`, palette support) are consistently well-written: main-thread execution via `executeMainThreadTask`, snapshot-based event dispatch, careful argument validation, and a solid 49-file unit-test suite. Most severe problems are **inherited from upstream CC 1.7.10** and remain unfixed — notable because this fork's stated purpose is bug-fixing. The most impactful items:
 
 1. 🔴 ~~Unvalidated packet lengths in `ComputerCraftPacket.fromBytes` → a modified client can OOM-crash a server with one tiny packet.~~ **FIXED** (see S1 — validation + caps + tests added)
-2. 🔴 **Unbounded HTTP**: no request cap, no download-size cap, default whitelist `*` → any player can exhaust server memory/threads.
+2. 🔴 ~~**Unbounded HTTP**: no request cap, no download-size cap, default whitelist `*` → any player can exhaust server memory/threads.~~ **FIXED** (see S2 — `http_max_requests`/`http_max_websockets`/`http_max_download`/`http_blacklist` + tests)
 3. 🔴 **`NBTUtil.toNBTTag` encodes the map *key* as the *value*** → table-valued event arguments sent client→server are silently corrupted; plus unbounded `new Object[len]` from client NBT.
 4. 🟠 **Redstone Relay mutates the world from the computer thread** (off-main-thread neighbor notifications).
 5. 🟠 **`buffer` API is dead code** (never registered) and contains two genuine bugs.
@@ -39,12 +39,21 @@ Every length field is attacker-controlled and allocated **before** any readabili
 
 **Fixed (2026-06):** every declared length/count is now validated via a `checkLength()` helper before any allocation — it must be non-negative, within an absolute cap, and no larger than `buffer.readableBytes()` — otherwise a `DecoderException` (a `RuntimeException`, so it is caught by `PacketHandler`) is thrown without allocating. Caps: 64 strings / 64 ints / 64 byte arrays (array length ≤ 1 MiB each), strings ≤ 1 MiB, NBT ≤ 4 MiB. These are far above any legitimate payload (speaker audio ≤ 128 KiB, terminal NBT ≤ ~50 KiB). The count reads were also switched from signed `readByte()` to `readUnsignedByte()` so counts can no longer go negative. Covered by `src/test/java/dan200/computercraft/shared/network/ComputerCraftPacketTest.java` (round-trips for empty/full/speaker-audio/terminal-NBT packets plus rejection tests for every malicious-length variant).
 
-### S2 🔴 HTTP API is unbounded (memory + thread DoS)
+### S2 🔴 HTTP API is unbounded (memory + thread DoS) — ✅ **FIXED**
 * `core/apis/HTTPAPI.java:210` — `m_httpRequests` grows without limit; there is no `http_max_requests` equivalent. Every `http.request` spawns a **new thread** (`HTTPRequest` constructor), so a Lua program can spawn thousands of concurrent threads.
 * `core/apis/HTTPRequest.java:198` — the download loop reads the response into memory with **no size cap** (`http_max_download` equivalent missing). A malicious/Lua-initiated download of a huge file (or a server that never closes the stream) OOMs the server; with `timeout = 0` (the default when no timeout arg is given) there is not even a read timeout.
 * `ComputerCraft.java:106` — `http_whitelist = "*"` by default: every computer can talk to the entire internet. There is also **no blacklist** (`http_blacklist` equivalent) — not possible to deny specific hosts while allowing the rest.
 
-**Fix (CC:T parity):** add `http_max_requests` (per-computer active request cap), `http_max_websockets`, `http_max_download` (abort + `http_failure` when exceeded), `http_blacklist`, and a shared `ExecutorService` instead of thread-per-request. Also consider a non-zero default connect/read timeout.
+**Fixed (2026-06):** four new config options (all `general` section, in `ComputerCraft.java`):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `http_max_requests` | 16 | Max in-flight HTTP requests per computer; `0` = unlimited |
+| `http_max_websockets` | 4 | Max open/pending websockets per computer; `0` = unlimited |
+| `http_max_download` | 16 MiB | Max response body; oversized bodies are aborted (early via `Content-Length`, and during streaming) and surface as `http_failure(url, "Download limit exceeded", nil)` |
+| `http_blacklist` | (empty) | Semicolon-separated wildcard domains blocked even if whitelisted; applied to both `http` and websocket URLs |
+
+Caps are enforced under the tracking list's lock in `HTTPAPI.callMethod`, before the worker thread is started; an over-cap `http.get/post` returns `nil, "Too many ongoing HTTP requests"` synchronously (via `bios.lua`), and `http.request` queues an `http_failure` event consistently with the pre-existing URL-rejection path (no double events — the locked re-check cancels before adding to the list). The whitelist/blacklist matching is a shared `matchesDomain(host, list)` helper with identical regex semantics to the pre-existing whitelist check. This closes the thread/memory DoS vectors (item 3 in the priority list); the optional shared `ExecutorService` and non-zero default timeout remain as a follow-up (P2). Covered by `src/test/java/dan200/computercraft/core/apis/HTTPLimitsTest.java` (12 tests: blacklist rules for http + websockets, request cap incl. `0`-means-unlimited, and download-limit abort/success against a local in-process `HttpServer`).
 
 ### S3 🔴 `NBTUtil` event encoding bugs
 `shared/util/NBTUtil.java`:
@@ -197,7 +206,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 |----|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------|----------------------------------|
 | 1  | ~~Validate all packet lengths in `ComputerCraftPacket.fromBytes`~~ **DONE** — `checkLength` guard + caps + `ComputerCraftPacketTest` (13 tests) | 🔴 | Small | `shared/network` |
 | 2  | Cap `NBTUtil.decodeObjects` length; fix `toNBTTag` key/value bug; encode `byte[]`                                                                                               | 🔴       | Small  | `shared/util/NBTUtil`            |
-| 3  | Add `http_max_requests` / `http_max_download` / `http_blacklist`; shared HTTP executor; non-zero default timeouts                                                               | 🔴       | Medium | `core/apis`, `ComputerCraft`     |
+| 3  | ~~Add `http_max_requests` / `http_max_download` / `http_blacklist`; shared HTTP executor; non-zero default timeouts~~ **DONE (limits/blacklist); follow-up: shared executor + default timeout (P2)** | 🔴 | Medium | `core/apis`, `ComputerCraft`     |
 | 4  | Move `TileRedstoneRelay.setOutput` propagation to `updateEntity` (dirty flag)                                                                                                   | 🟠       | Small  | `shared/peripheral/redstone`     |
 | 5  | Synchronize `ComputerThread.queueTask` map access; stop dropping tasks silently                                                                                                 | 🟠       | Small  | `core/computer`                  |
 | 6  | Register-or-delete `BufferAPI` (fix `read` arg bug + `fill("")` div-by-zero); update coverage doc                                                                               | 🟠       | Small  | `core/apis`                      |
@@ -218,7 +227,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 |---------------------------------------------------|-----------------------------------------------------------------|-----------------------------------------------------------------------|
 | S1 packet length allocations                      | Yes                                                             | **Fixed here** (validation + caps + tests)                                  |
 | S3 `toNBTTag` key/value bug                       | Yes (line 44 of original)                                       | Unfixed here                                                          |
-| S2 unbounded HTTP                                 | Yes (but fork added timeouts/verbs/handles without adding caps) | Fork has custom timeout support, making the missing caps more visible |
+| S2 unbounded HTTP                                 | Yes (fork added timeouts/verbs/handles without adding caps)     | **Fixed here** (limits + blacklist + tests; executor follow-up)               |
 | C1 unsynchronized `WeakHashMap`                   | Yes                                                             | Unfixed here                                                          |
 | C2 silent `offer()` drop                          | Yes (with commented-out overflow log)                           | Unfixed here                                                          |
 | C3 `synchronized(this)` in ITask                  | Yes                                                             | Unfixed here                                                          |

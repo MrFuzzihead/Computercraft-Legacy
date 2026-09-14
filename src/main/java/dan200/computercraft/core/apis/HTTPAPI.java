@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
@@ -47,8 +48,8 @@ public class HTTPAPI implements ILuaAPI {
                     if (h.wasSuccessful()) {
                         m_apiEnvironment.queueEvent("http_success", new Object[] { url, h.asResponse() });
                     } else {
-                        m_apiEnvironment
-                            .queueEvent("http_failure", new Object[] { url, "Could not connect", h.asResponse() });
+                        String reason = h.getFailureReason() != null ? h.getFailureReason() : "Could not connect";
+                        m_apiEnvironment.queueEvent("http_failure", new Object[] { url, reason, h.asResponse() });
                     }
                     it.remove();
                 }
@@ -204,9 +205,22 @@ public class HTTPAPI implements ILuaAPI {
                     }
                 }
 
+                int maxRequests = ComputerCraft.http_max_requests;
+                synchronized (this.m_httpRequests) {
+                    if (maxRequests > 0 && this.m_httpRequests.size() >= maxRequests) {
+                        return new Object[] { Boolean.valueOf(false), "Too many ongoing HTTP requests" };
+                    }
+                }
+
                 try {
                     HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary);
                     synchronized (this.m_httpRequests) {
+                        // Re-check under lock: another computer thread (advanced
+                        // computers each run on their own task) may have raced us.
+                        if (maxRequests > 0 && this.m_httpRequests.size() >= maxRequests) {
+                            request.cancel();
+                            return new Object[] { Boolean.valueOf(false), "Too many ongoing HTTP requests" };
+                        }
                         this.m_httpRequests.add(request);
                     }
 
@@ -242,6 +256,16 @@ public class HTTPAPI implements ILuaAPI {
                         Object value = argHeader.get(key);
                         if (key instanceof String && value instanceof String) {
                             headers.put((String) key, (String) value);
+                        }
+                    }
+                }
+
+                int maxWebsockets = ComputerCraft.http_max_websockets;
+                synchronized (this.m_pendingWebsockets) {
+                    synchronized (this.m_activeWebsockets) {
+                        int open = this.m_pendingWebsockets.size() + this.m_activeWebsockets.size();
+                        if (maxWebsockets > 0 && open >= maxWebsockets) {
+                            return new Object[] { Boolean.valueOf(false), "Too many ongoing websockets" };
                         }
                     }
                 }

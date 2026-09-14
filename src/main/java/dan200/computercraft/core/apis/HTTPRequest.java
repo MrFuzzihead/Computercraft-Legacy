@@ -22,6 +22,23 @@ import dan200.computercraft.api.lua.LuaException;
 
 public class HTTPRequest {
 
+    /**
+     * Tests a host against a semicolon-separated list of wildcard domain
+     * patterns (e.g. {@code "*.example.com;localhost"}). An empty list matches
+     * nothing.
+     */
+    private static boolean matchesDomain(String host, String list) {
+        for (String entry : list.split(";")) {
+            if (entry.isEmpty()) continue;
+            Pattern pattern = Pattern.compile("^\\Q" + entry.replaceAll("\\*", "\\\\E.*\\\\Q") + "\\E$");
+            if (pattern.matcher(host)
+                .matches()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static URL checkURL(String urlString) throws LuaException {
         URL url;
         try {
@@ -34,19 +51,8 @@ public class HTTPRequest {
             .toLowerCase();
         if (!protocol.equals("http") && !protocol.equals("https")) throw new LuaException("URL not http");
 
-        boolean allowed = false;
-        String whitelistString = ComputerCraft.http_whitelist;
-        String[] allowedURLs = whitelistString.split(";");
-        for (String allowedURL : allowedURLs) {
-            Pattern allowedURLPattern = Pattern.compile("^\\Q" + allowedURL.replaceAll("\\*", "\\\\E.*\\\\Q") + "\\E$");
-            if (allowedURLPattern.matcher(url.getHost())
-                .matches()) {
-                allowed = true;
-                break;
-            }
-        }
-
-        if (!allowed) throw new LuaException("Domain not permitted");
+        if (!matchesDomain(url.getHost(), ComputerCraft.http_whitelist)) throw new LuaException("Domain not permitted");
+        if (matchesDomain(url.getHost(), ComputerCraft.http_blacklist)) throw new LuaException("Domain blocked");
 
         return url;
     }
@@ -70,19 +76,8 @@ public class HTTPRequest {
             throw new LuaException("URL malformed");
         }
 
-        boolean allowed = false;
-        String whitelistString = ComputerCraft.http_whitelist;
-        String[] allowedURLs = whitelistString.split(";");
-        for (String allowedURL : allowedURLs) {
-            Pattern allowedURLPattern = Pattern.compile("^\\Q" + allowedURL.replaceAll("\\*", "\\\\E.*\\\\Q") + "\\E$");
-            if (allowedURLPattern.matcher(host)
-                .matches()) {
-                allowed = true;
-                break;
-            }
-        }
-
-        if (!allowed) throw new LuaException("Domain not permitted");
+        if (!matchesDomain(host, ComputerCraft.http_whitelist)) throw new LuaException("Domain not permitted");
+        if (matchesDomain(host, ComputerCraft.http_blacklist)) throw new LuaException("Domain blocked");
 
         return uri;
     }
@@ -107,6 +102,12 @@ public class HTTPRequest {
     private int responseCode = -1;
     private String responseMessage = "";
     private Map<String, String> responseHeaders;
+    /**
+     * Human-readable reason for a failure that is not a connection error (e.g.
+     * the response exceeded {@code http_max_download}). {@code null} when the
+     * request failed for the default reason or succeeded.
+     */
+    private String failureReason = null;
     /** Connection + read timeout in milliseconds. 0 means use the JVM default (no explicit timeout). */
     private final int m_timeout;
     /**
@@ -191,13 +192,39 @@ public class HTTPRequest {
                         }
                     }
 
+                    // Abort early if the server declares a body larger than the
+                    // configured download limit.
+                    long maxDownload = ComputerCraft.http_max_download;
+                    if (maxDownload > 0) {
+                        long contentLength = connection.getContentLengthLong();
+                        if (contentLength > maxDownload) {
+                            synchronized (lock) {
+                                complete = true;
+                                success = false;
+                                result = null;
+                                failureReason = "Download limit exceeded";
+                            }
+                            is.close();
+                            connection.disconnect();
+                            return;
+                        }
+                    }
+
                     // Read from the input stream
                     ByteArrayOutputStream buffer = new ByteArrayOutputStream(Math.max(1024, is.available()));
                     int nRead;
                     byte[] data = new byte[1024];
+                    long totalRead = 0;
+                    boolean overLimit = false;
                     while ((nRead = is.read(data, 0, data.length)) != -1) {
                         synchronized (lock) {
                             if (cancelled) break;
+                        }
+
+                        totalRead += nRead;
+                        if (maxDownload > 0 && totalRead > maxDownload) {
+                            overLimit = true;
+                            break;
                         }
 
                         buffer.write(data, 0, nRead);
@@ -205,10 +232,11 @@ public class HTTPRequest {
                     is.close();
 
                     synchronized (lock) {
-                        if (cancelled) {
+                        if (cancelled || overLimit) {
                             complete = true;
                             success = false;
                             result = null;
+                            if (overLimit) failureReason = "Download limit exceeded";
                         } else {
                             complete = true;
                             success = responseSuccess;
@@ -245,6 +273,17 @@ public class HTTPRequest {
 
     public String getURL() {
         return urlString;
+    }
+
+    /**
+     * Returns the reason this request failed for a reason other than a
+     * connection error (currently only {@code "Download limit exceeded"}), or
+     * {@code null} if the request succeeded or failed to connect.
+     */
+    public String getFailureReason() {
+        synchronized (lock) {
+            return failureReason;
+        }
     }
 
     public void cancel() {
