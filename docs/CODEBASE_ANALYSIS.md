@@ -12,7 +12,7 @@ The codebase is in good shape overall. The **custom additions** (Speaker + DFPWM
 
 1. 🔴 ~~Unvalidated packet lengths in `ComputerCraftPacket.fromBytes` → a modified client can OOM-crash a server with one tiny packet.~~ **FIXED** (see S1 — validation + caps + tests added)
 2. 🔴 ~~**Unbounded HTTP**: no request cap, no download-size cap, default whitelist `*` → any player can exhaust server memory/threads.~~ **FIXED** (see S2 — `http_max_requests`/`http_max_websockets`/`http_max_download`/`http_blacklist` + tests)
-3. 🔴 **`NBTUtil.toNBTTag` encodes the map *key* as the *value*** → table-valued event arguments sent client→server are silently corrupted; plus unbounded `new Object[len]` from client NBT.
+3. 🔴 ~~**`NBTUtil.toNBTTag` encodes the map *key* as the *value*** → table-valued event arguments sent client→server are silently corrupted; plus unbounded `new Object[len]` from client NBT.~~ **FIXED** (see S3 — key/value fix, `len` derives from written entries, `byte[]` support, hostile-length clamps + tests)
 4. 🟠 **Redstone Relay mutates the world from the computer thread** (off-main-thread neighbor notifications).
 5. 🟠 **`buffer` API is dead code** (never registered) and contains two genuine bugs.
 6. 🟠 `ComputerThread` concurrency hazards (unsynchronized `WeakHashMap`, silently dropped tasks) and a globally serialized, thread-per-task execution model.
@@ -55,15 +55,15 @@ Every length field is attacker-controlled and allocated **before** any readabili
 
 Caps are enforced under the tracking list's lock in `HTTPAPI.callMethod`, before the worker thread is started; an over-cap `http.get/post` returns `nil, "Too many ongoing HTTP requests"` synchronously (via `bios.lua`), and `http.request` queues an `http_failure` event consistently with the pre-existing URL-rejection path (no double events — the locked re-check cancels before adding to the list). The whitelist/blacklist matching is a shared `matchesDomain(host, list)` helper with identical regex semantics to the pre-existing whitelist check. This closes the thread/memory DoS vectors (item 3 in the priority list); the optional shared `ExecutorService` and non-zero default timeout remain as a follow-up (P2). Covered by `src/test/java/dan200/computercraft/core/apis/HTTPLimitsTest.java` (12 tests: blacklist rules for http + websockets, request cap incl. `0`-means-unlimited, and download-limit abort/success against a local in-process `HttpServer`).
 
-### S3 🔴 `NBTUtil` event encoding bugs
+### S3 🔴 `NBTUtil` event encoding bugs — ✅ **FIXED**
 `shared/util/NBTUtil.java`:
 
-* **Line 47:** `NBTBase value = toNBTTag(entry.getKey());` — the *key* is encoded as the *value*. Any table passed through `ClientComputer.queueEvent` → packet → `ServerComputer.handlePacket` (e.g. `os.queueEvent("x", {{a=1}})` triggered from a client GUI path) arrives with all values replaced by their keys. Verified identical in the original dan200 source — an upstream bug that was never fixed here.
-* **Line 215 (`decodeObjects`):** `Object[] objects = new Object[len];` where `len` is read from client-supplied NBT → a modified client can trigger `new Object[Integer.MAX_VALUE]` → OOM. Same class of bug as S1.
-* **Line 55:** `nbt.setInteger("len", m.size())` counts entries that may have been skipped (unencodable key/value), desynchronizing encode/decode.
-* `byte[]` (Lua binary strings) are not encodable and are silently dropped from client→server event arguments.
+* **Line 47 (was):** `NBTBase value = toNBTTag(entry.getKey());` — the *key* was encoded as the *value*. Any table passed through `ClientComputer.queueEvent` → packet → `ServerComputer.handlePacket` (e.g. `os.queueEvent("x", {{a=1}})` triggered from a client GUI path) arrived with all values replaced by their keys. Verified identical in the original dan200 source — an upstream bug.
+* **Line 215 (was, `decodeObjects`):** `Object[] objects = new Object[len];` where `len` is read from client-supplied NBT → a modified client could trigger `new Object[Integer.MAX_VALUE]` → OOM. Same class of bug as S1.
+* **Line 55 (was):** `nbt.setInteger("len", m.size())` counted entries that may have been skipped (unencodable key/value), desynchronizing encode/decode.
+* `byte[]` (Lua binary strings) were not encodable and were silently dropped from client→server event arguments.
 
-**Fix:** correct `entry.getValue()`, derive `len` from the number of actually-written `k{i}`/`v{i}` pairs, add `byte[]` support, and clamp `decodeObjects` length (≤ 64 events args / ≤ 256 nested entries).
+**Fixed (2026-06):** `toNBTTag` now encodes `entry.getValue()` (the key/value bug); the map `len` is derived from the entries actually written so encode→decode is lossless even when entries are skipped; `byte[]` values are encoded as `NBTTagByteArray` (and decoded back) in both the event path and inside nested maps; `fromNBTTag` gains byte array decoding; and hostile lengths are clamped — `decodeObjects` rejects `len` outside `1..256` (returning null) and nested maps reject `len` outside `0..4096` (returning null) instead of allocating attacker-sized structures. Covered by `src/test/java/dan200/computercraft/shared/util/NBTUtilTest.java` (16 tests: scalars, map key/value correctness, nested maps, skipped unencodable entries, byte[] in args and in maps, hostile top-level and nested lengths, plus `toObject` tile-entity sanity).
 
 ### S4 🟠 Malformed packet → unvalidated array access (server noise)
 `shared/proxy/ComputerCraftProxyCommon.handlePacket` (cases 1–6: `packet.m_dataInt[0]`) and `ServerComputer.handlePacket` (case 4: `packet.m_dataString[0]`) index packet arrays without length/null checks. A modified client sending a type-4 packet with no strings causes NPE/AIOOBE. `PacketHandler` catches `Exception`, so it's log spam rather than a crash — but it should be validated.
@@ -205,7 +205,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 | #  | Item                                                                                                                                                                            | Severity | Effort | Area                             |
 |----|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------|----------------------------------|
 | 1  | ~~Validate all packet lengths in `ComputerCraftPacket.fromBytes`~~ **DONE** — `checkLength` guard + caps + `ComputerCraftPacketTest` (13 tests) | 🔴 | Small | `shared/network` |
-| 2  | Cap `NBTUtil.decodeObjects` length; fix `toNBTTag` key/value bug; encode `byte[]`                                                                                               | 🔴       | Small  | `shared/util/NBTUtil`            |
+| 2  | ~~Cap `NBTUtil.decodeObjects` length; fix `toNBTTag` key/value bug; encode `byte[]`~~ **DONE** — `NBTUtilTest` (16 tests) | 🔴 | Small | `shared/util/NBTUtil` |
 | 3  | ~~Add `http_max_requests` / `http_max_download` / `http_blacklist`; shared HTTP executor; non-zero default timeouts~~ **DONE (limits/blacklist); follow-up: shared executor + default timeout (P2)** | 🔴 | Medium | `core/apis`, `ComputerCraft`     |
 | 4  | Move `TileRedstoneRelay.setOutput` propagation to `updateEntity` (dirty flag)                                                                                                   | 🟠       | Small  | `shared/peripheral/redstone`     |
 | 5  | Synchronize `ComputerThread.queueTask` map access; stop dropping tasks silently                                                                                                 | 🟠       | Small  | `core/computer`                  |
@@ -226,7 +226,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 | Finding                                           | In upstream 1.7.10?                                             | Notes                                                                 |
 |---------------------------------------------------|-----------------------------------------------------------------|-----------------------------------------------------------------------|
 | S1 packet length allocations                      | Yes                                                             | **Fixed here** (validation + caps + tests)                                  |
-| S3 `toNBTTag` key/value bug                       | Yes (line 44 of original)                                       | Unfixed here                                                          |
+| S3 `toNBTTag` key/value bug                       | Yes (line 44 of original)                                       | **Fixed here** (key/value, len, byte[], length clamps + tests)               |
 | S2 unbounded HTTP                                 | Yes (fork added timeouts/verbs/handles without adding caps)     | **Fixed here** (limits + blacklist + tests; executor follow-up)               |
 | C1 unsynchronized `WeakHashMap`                   | Yes                                                             | Unfixed here                                                          |
 | C2 silent `offer()` drop                          | Yes (with commented-out overflow log)                           | Unfixed here                                                          |

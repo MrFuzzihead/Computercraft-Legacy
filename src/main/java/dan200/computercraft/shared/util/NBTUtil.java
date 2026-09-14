@@ -20,6 +20,15 @@ import net.minecraft.nbt.NBTTagString;
 
 public class NBTUtil {
 
+    /**
+     * Hard caps on decoded sizes, defending against malicious packets that
+     * declare huge lengths before any allocation (server OOM vector). These are
+     * far above any legitimate use: event arguments are at most a handful of
+     * small Lua values.
+     */
+    private static final int MAX_DECODED_OBJECTS = 256;
+    private static final int MAX_DECODED_MAP_ENTRIES = 4096;
+
     private static NBTBase toNBTTag(Object object) {
         if (object != null) {
             if (object instanceof Boolean) {
@@ -37,6 +46,10 @@ public class NBTUtil {
                 return new NBTTagString(s);
             }
 
+            if (object instanceof byte[]) {
+                return new NBTTagByteArray((byte[]) object);
+            }
+
             if (object instanceof Map) {
                 Map<Object, Object> m = (Map<Object, Object>) object;
                 NBTTagCompound nbt = new NBTTagCompound();
@@ -44,7 +57,7 @@ public class NBTUtil {
 
                 for (Entry<Object, Object> entry : m.entrySet()) {
                     NBTBase key = toNBTTag(entry.getKey());
-                    NBTBase value = toNBTTag(entry.getKey());
+                    NBTBase value = toNBTTag(entry.getValue());
                     if (key != null && value != null) {
                         nbt.setTag("k" + Integer.toString(i), key);
                         nbt.setTag("v" + Integer.toString(i), value);
@@ -52,7 +65,10 @@ public class NBTUtil {
                     }
                 }
 
-                nbt.setInteger("len", m.size());
+                // Store the number of entries actually written, not the source
+                // map size: unencodable keys/values are skipped above, and a
+                // mismatched "len" would desynchronise decodeObjects.
+                nbt.setInteger("len", i);
                 return nbt;
             }
         }
@@ -90,18 +106,22 @@ public class NBTUtil {
                 case 3:
                 case 4:
                 case 5:
-                case 7:
                 case 9:
                 default:
                     break;
                 case 6:
                     double d = ((NBTTagDouble) tag).func_150286_g();
                     return d;
+                case 7:
+                    return ((NBTTagByteArray) tag).func_150292_c();
                 case 8:
                     return ((NBTTagString) tag).func_150285_a_();
                 case 10:
                     NBTTagCompound c = (NBTTagCompound) tag;
                     int len = c.getInteger("len");
+                    if (len < 0 || len > MAX_DECODED_MAP_ENTRIES) {
+                        return null;
+                    }
                     Map<Object, Object> map = new HashMap<>(len);
 
                     for (int i = 0; i < len; i++) {
@@ -211,7 +231,7 @@ public class NBTUtil {
 
     public static Object[] decodeObjects(NBTTagCompound tagCompound) {
         int len = tagCompound.getInteger("len");
-        if (len > 0) {
+        if (len > 0 && len <= MAX_DECODED_OBJECTS) {
             Object[] objects = new Object[len];
 
             for (int i = 0; i < len; i++) {
