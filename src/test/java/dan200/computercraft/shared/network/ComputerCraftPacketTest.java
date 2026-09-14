@@ -2,8 +2,10 @@ package dan200.computercraft.shared.network;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -266,5 +268,55 @@ class ComputerCraftPacketTest {
         CompressedStreamTools.writeCompressed(nbt, bos);
         NBTTagCompound read = CompressedStreamTools.readCompressed(new ByteArrayInputStream(bos.toByteArray()));
         assertEquals(123, read.getInteger("k"));
+    }
+
+    // =========================================================================
+    // S4: payload-shape predicates used by the packet handlers
+    // =========================================================================
+
+    @Test
+    void hasIntsRejectsMissingOrShortPayload() {
+        ComputerCraftPacket packet = new ComputerCraftPacket();
+        assertFalse(packet.hasInts(1));
+
+        packet.m_dataInt = new int[] { 1 };
+        assertTrue(packet.hasInts(1));
+        assertFalse(packet.hasInts(2));
+    }
+
+    @Test
+    void hasStringsRejectsMissingOrShortPayload() {
+        ComputerCraftPacket packet = new ComputerCraftPacket();
+        assertFalse(packet.hasStrings(1));
+
+        packet.m_dataString = new String[] { "a", null };
+        assertTrue(packet.hasStrings(1));
+        assertFalse(packet.hasStrings(2));
+    }
+
+    @Test
+    void hasStringsRejectsNullElements() {
+        ComputerCraftPacket packet = new ComputerCraftPacket();
+        packet.m_dataString = new String[] { null };
+
+        assertFalse(packet.hasStrings(1));
+    }
+
+    @Test
+    void malformedQueueEventPacketDecodesWithoutStringsAndIsRejected() {
+        // A network-decoded packet with string count 0 decodes to a null
+        // array; the handler guard must reject it instead of indexing into it
+        // (the S4 NPE vector).
+        ComputerCraftPacket packet = new ComputerCraftPacket();
+        packet.m_packetType = ComputerCraftPacket.QueueEvent;
+        packet.m_dataInt = new int[] { 1 };
+        packet.m_dataString = null;
+
+        ComputerCraftPacket decoded = roundTrip(packet);
+
+        assertEquals(ComputerCraftPacket.QueueEvent, decoded.m_packetType);
+        assertNull(decoded.m_dataString);
+        assertFalse(decoded.hasStrings(1));
+        assertTrue(decoded.hasInts(1));
     }
 }

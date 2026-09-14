@@ -285,6 +285,13 @@ public class ServerComputer extends ServerTerminal implements IComputer, IComput
                 this.shutdown();
                 break;
             case 4:
+                // The event name comes from a client-supplied string array (S4);
+                // drop the packet if it carries no usable name instead of
+                // queueing a null event or crashing.
+                if (!packet.hasStrings(1)) {
+                    break;
+                }
+
                 String event = packet.m_dataString[0];
                 Object[] arguments = null;
                 if (packet.m_dataNBT != null) {

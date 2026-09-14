@@ -50,6 +50,38 @@ public class ComputerCraftPacket implements IMessage {
     private static final int MAX_NBT_BYTES = 4 * 1024 * 1024;
 
     /**
+     * Returns true if this packet carries at least {@code count} integer values.
+     *
+     * <p>
+     * All payload arrays of a packet decoded from the network are
+     * attacker-controlled, so handlers must guard every indexed access instead
+     * of assuming the arrays match the packet type (the S4 NPE/AIOOBE vector
+     * from {@code docs/CODEBASE_ANALYSIS.md}).
+     * </p>
+     */
+    public boolean hasInts(int count) {
+        return this.m_dataInt != null && this.m_dataInt.length >= count;
+    }
+
+    /**
+     * Returns true if this packet carries at least {@code count} usable string
+     * values (non-null, in {@code m_dataString[0..count-1]}).
+     */
+    public boolean hasStrings(int count) {
+        if (this.m_dataString == null || this.m_dataString.length < count) {
+            return false;
+        }
+
+        for (int i = 0; i < count; i++) {
+            if (this.m_dataString[i] == null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Validates a length read from the buffer before it is used for an
      * allocation. The length must be non-negative, within the given cap, and no
      * larger than the number of bytes actually remaining in the buffer.
