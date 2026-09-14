@@ -15,7 +15,7 @@ The codebase is in good shape overall. The **custom additions** (Speaker + DFPWM
 3. 🔴 ~~**`NBTUtil.toNBTTag` encodes the map *key* as the *value*** → table-valued event arguments sent client→server are silently corrupted; plus unbounded `new Object[len]` from client NBT.~~ **FIXED** (see S3 — key/value fix, `len` derives from written entries, `byte[]` support, hostile-length clamps + tests)
 4. 🟠 **Redstone Relay mutates the world from the computer thread** (off-main-thread neighbor notifications).
 5. 🟠 ~~**`buffer` API is dead code** (never registered) and contains two genuine bugs.~~ **RESOLVED** (see B1 — deleted as not-a-CCTweaks-feature; `TextBuffer.fill` empty-pattern div-by-zero fixed + tested)
-6. 🟠 `ComputerThread` concurrency hazards (unsynchronized `WeakHashMap`, silently dropped tasks) and a globally serialized, thread-per-task execution model.
+6. 🟠 ~~`ComputerThread` concurrency hazards (unsynchronized `WeakHashMap`, silently dropped tasks)~~ **`WeakHashMap` hazard FIXED** (see C1); silently dropped tasks (C2) and the serialized thread-per-task model (P1) remain.
 
 ---
 
@@ -129,8 +129,10 @@ Caps are enforced under the tracking list's lock in `HTTPAPI.callMethod`, before
 
 ## 3. Concurrency & threading
 
-### C1 🟠 `ComputerThread.queueTask`: unsynchronized `WeakHashMap` access
+### C1 🟠 `ComputerThread.queueTask`: unsynchronized `WeakHashMap` access — ✅ **FIXED**
 `core/computer/ComputerThread.java:136` — `m_computerTasks.get/put` (a `WeakHashMap`) is executed without any lock while being called from **multiple threads** (server thread, HTTP worker threads, WebSocket threads, CNPC event dispatch). `WeakHashMap` is not thread-safe: concurrent access can corrupt internal state or throw. Verified inherited from the original (the upstream code is identical). Wrap the get/put in `synchronized(m_lock)` (or use `ConcurrentHashMap` keyed by computer ID).
+
+**Fixed (2026-09):** the `get/put` pair in `queueTask` is now atomic under `m_lock` (the same lock `start()`/the dispatch thread's stop-check already use; the critical section is a map probe, so contention is negligible). The `WeakHashMap` was kept deliberately — its weak keys are load-bearing (an unloaded computer's queue becomes collectible), which a `ConcurrentHashMap` cannot replicate without leaking queues. No lock-ordering hazards: the `m_lock` section nests no other lock, and `m_computerTasksPending`/`m_monitor` are still taken afterwards, disjoint from every other `m_lock` user. While writing the tests, a closely related latent bug surfaced and was fixed in the same class: `start()`'s fresh-thread branch did not clear `m_stopped`, so a restart after `stop()` (e.g. reloading a world in the same JVM) spawned a dispatch thread that inherited the previous stop request and exited on the first queued task — silently killing all computer execution. Covered by the new `src/test/java/dan200/computercraft/core/computer/ComputerThreadTest.java` (2 tests: 8 producer threads × 16 tasks hammering the shared default-queue key with exactly-once execution verified, and `start()`-after-`stop()` running newly queued tasks).
 
 ### C2 🟠 Silently dropped events when a computer's queue is full
 `ComputerThread.java:142` — `queue.offer(_task)` on the 256-cap queue: when full, the task is **silently discarded** (upstream had a commented-out `// Event queue overflow`). A spammy computer (or fast event source) can drop `terminate`/`redstone`/`peripheral` events invisibly. Consider `put()` (blocking is fine — the producer is usually the main thread... verify) or at least log at debug level.
@@ -212,7 +214,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 | 2  | ~~Cap `NBTUtil.decodeObjects` length; fix `toNBTTag` key/value bug; encode `byte[]`~~ **DONE** — `NBTUtilTest` (16 tests) | 🔴 | Small | `shared/util/NBTUtil` |
 | 3  | ~~Add `http_max_requests` / `http_max_download` / `http_blacklist`; shared HTTP executor; non-zero default timeouts~~ **DONE (limits/blacklist); follow-up: shared executor + default timeout (P2)** | 🔴 | Medium | `core/apis`, `ComputerCraft`     |
 | 4  | Move `TileRedstoneRelay.setOutput` propagation to `updateEntity` (dirty flag)                                                                                                   | 🟠       | Small  | `shared/peripheral/redstone`     |
-| 5  | Synchronize `ComputerThread.queueTask` map access; stop dropping tasks silently                                                                                                 | 🟠       | Small  | `core/computer`                  |
+| 5  | ~~Synchronize `ComputerThread.queueTask` map access~~ **DONE (see C1, incl. `start()` stale-`m_stopped` fix)**; stop dropping tasks silently (C2) still open | 🟠       | Small  | `core/computer`                  |
 | 6  | ~~Register-or-delete `BufferAPI` (fix `read` arg bug + `fill("")` div-by-zero); update coverage doc~~ **DONE (deleted)** — not a CCTweaks feature (absent from vendored source + README); `buffer` row removed from coverage doc; `TextBuffer.fill` empty-pattern guard + `TextBufferTest` (9 tests) | 🟠       | Small  | `core/apis`                      |
 | 7  | ~~Bounds-check `m_dataInt`/`m_dataString` in `handlePacket` paths~~ **DONE** — `hasInts`/`hasStrings` guards + `ServerComputerPacketGuardTest` (5 tests) | 🟠       | Small  | `shared/proxy`, `ServerComputer` |
 | 8  | Worker-pool `ComputerThread` (per-computer lanes)                                                                                                                               | 🟠       | Medium | `core/computer`                  |
@@ -232,7 +234,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 | S1 packet length allocations                      | Yes                                                             | **Fixed here** (validation + caps + tests)                                  |
 | S3 `toNBTTag` key/value bug                       | Yes (line 44 of original)                                       | **Fixed here** (key/value, len, byte[], length clamps + tests)               |
 | S2 unbounded HTTP                                 | Yes (fork added timeouts/verbs/handles without adding caps)     | **Fixed here** (limits + blacklist + tests; executor follow-up)               |
-| C1 unsynchronized `WeakHashMap`                   | Yes                                                             | Unfixed here                                                          |
+| C1 unsynchronized `WeakHashMap`                   | Yes                                                             | **Fixed here** (`m_lock` guard + `start()` stale-`m_stopped` fix + concurrency tests) |
 | C2 silent `offer()` drop                          | Yes (with commented-out overflow log)                           | Unfixed here                                                          |
 | C3 `synchronized(this)` in ITask                  | Yes                                                             | Unfixed here                                                          |
 | B5 bios URL-matching event confusion              | Yes                                                             | Unfixed here                                                          |

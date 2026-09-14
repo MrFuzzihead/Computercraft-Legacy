@@ -25,6 +25,11 @@ public class ComputerThread {
             if (m_running) {
                 m_stopped = false;
             } else {
+                // A brand-new thread must not inherit a previous stop request,
+                // otherwise a restart after stop() (e.g. reloading a world in
+                // the same JVM) would spawn a thread that exits on the first
+                // queued task (finding C4 in docs/CODEBASE_ANALYSIS.md).
+                m_stopped = false;
                 m_thread = new Thread(new Runnable() {
 
                     @Override
@@ -133,9 +138,20 @@ public class ComputerThread {
             queueObject = m_defaultQueue;
         }
 
-        LinkedBlockingQueue<ITask> queue = m_computerTasks.get(queueObject);
-        if (queue == null) {
-            m_computerTasks.put(queueObject, queue = new LinkedBlockingQueue<>(256));
+        LinkedBlockingQueue<ITask> queue;
+        // m_computerTasks is a WeakHashMap, which is not thread-safe, while
+        // queueTask is called from many threads (server thread, HTTP worker
+        // threads, websocket threads, CNPC event dispatch). The get/put pair
+        // must be atomic under m_lock so concurrent producers cannot corrupt
+        // the map's internal state (finding C1 in docs/CODEBASE_ANALYSIS.md).
+        // The weak keys are load-bearing — they let an unloaded computer's
+        // queue be collected — so a ConcurrentHashMap is not a drop-in
+        // replacement here.
+        synchronized (m_lock) {
+            queue = m_computerTasks.get(queueObject);
+            if (queue == null) {
+                m_computerTasks.put(queueObject, queue = new LinkedBlockingQueue<>(256));
+            }
         }
 
         synchronized (m_computerTasksPending) {
