@@ -546,7 +546,7 @@ public class OSAPI implements ILuaAPI {
 
         public int compareTo(OSAPI.Alarm o) {
             double t = this.m_day * 24.0 + this.m_time;
-            double ot = this.m_day * 24.0 + this.m_time;
+            double ot = o.m_day * 24.0 + o.m_time;
             if (t < ot) {
                 return -1;
             } else {

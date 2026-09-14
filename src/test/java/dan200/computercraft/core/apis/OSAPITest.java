@@ -2,6 +2,8 @@ package dan200.computercraft.core.apis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
@@ -568,6 +570,60 @@ class OSAPITest {
         public IMount createResourceMount(String domain, String path) {
             return null;
         }
+    }
+
+    // =========================================================================
+    // OSAPI.Alarm.compareTo (B2)
+    // =========================================================================
+
+    /**
+     * Constructs an {@code OSAPI.Alarm} reflectively: the class is a private
+     * inner class of {@link OSAPI}, so its constructor takes the enclosing
+     * instance as its first parameter.
+     */
+    private Object newAlarm(double time, int day) throws Exception {
+        Class<?> alarmClass = Class.forName(OSAPI.class.getName() + "$Alarm");
+        Constructor<?> ctor = alarmClass.getDeclaredConstructor(OSAPI.class, double.class, int.class);
+        ctor.setAccessible(true);
+        return ctor.newInstance(api, time, day);
+    }
+
+    private int compareAlarms(Object a, Object b) throws Exception {
+        Class<?> alarmClass = a.getClass();
+        Method compareTo = alarmClass.getMethod("compareTo", alarmClass);
+        return (Integer) compareTo.invoke(a, b);
+    }
+
+    @Test
+    void alarmCompareToOrdersByTimeOnSameDay() throws Exception {
+        // Regression test for B2: compareTo used to compute both sides of the
+        // comparison from `this`, so every pair compared equal (returned 0).
+        Object earlier = newAlarm(6.0, 5);
+        Object later = newAlarm(7.5, 5);
+
+        assertTrue(compareAlarms(earlier, later) < 0, "earlier alarm must sort before later alarm");
+        assertTrue(compareAlarms(later, earlier) > 0, "later alarm must sort after earlier alarm");
+    }
+
+    @Test
+    void alarmCompareToOrdersAcrossDayBoundary() throws Exception {
+        // 23:00 on day 5 must sort before 01:00 on day 6 — a plain
+        // time-of-day comparison would get this wrong; the day must be folded
+        // into the ordering key.
+        Object lateNight = newAlarm(23.0, 5);
+        Object nextMorning = newAlarm(1.0, 6);
+
+        assertTrue(compareAlarms(lateNight, nextMorning) < 0);
+        assertTrue(compareAlarms(nextMorning, lateNight) > 0);
+    }
+
+    @Test
+    void alarmCompareToIsZeroForEqualAlarmsAndReflexive() throws Exception {
+        Object a = newAlarm(6.0, 5);
+        Object b = newAlarm(6.0, 5);
+
+        assertEquals(0, compareAlarms(a, b), "alarms with identical day and time must compare equal");
+        assertEquals(0, compareAlarms(a, a), "an alarm must compare equal to itself");
     }
 
     /**
