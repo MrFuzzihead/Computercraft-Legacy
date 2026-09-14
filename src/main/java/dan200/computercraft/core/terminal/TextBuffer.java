@@ -129,6 +129,11 @@ public class TextBuffer {
         start = Math.max(start, 0);
         end = Math.min(end, this.m_text.length);
         int textLength = text.length();
+        if (textLength == 0) {
+            // An empty pattern tiles to nothing; without this guard the modulo
+            // below divides by zero (finding B1 in docs/CODEBASE_ANALYSIS.md).
+            return;
+        }
 
         for (int i = start; i < end; i++) {
             this.m_text[i] = text.charAt((i - pos) % textLength);
@@ -148,6 +153,10 @@ public class TextBuffer {
         start = Math.max(start, 0);
         end = Math.min(end, this.m_text.length);
         int textLength = text.length();
+        if (textLength == 0) {
+            // Same empty-pattern guard as fill(String, int, int).
+            return;
+        }
 
         for (int i = start; i < end; i++) {
             this.m_text[i] = text.charAt((i - pos) % textLength);

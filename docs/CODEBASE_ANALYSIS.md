@@ -14,7 +14,7 @@ The codebase is in good shape overall. The **custom additions** (Speaker + DFPWM
 2. 🔴 ~~**Unbounded HTTP**: no request cap, no download-size cap, default whitelist `*` → any player can exhaust server memory/threads.~~ **FIXED** (see S2 — `http_max_requests`/`http_max_websockets`/`http_max_download`/`http_blacklist` + tests)
 3. 🔴 ~~**`NBTUtil.toNBTTag` encodes the map *key* as the *value*** → table-valued event arguments sent client→server are silently corrupted; plus unbounded `new Object[len]` from client NBT.~~ **FIXED** (see S3 — key/value fix, `len` derives from written entries, `byte[]` support, hostile-length clamps + tests)
 4. 🟠 **Redstone Relay mutates the world from the computer thread** (off-main-thread neighbor notifications).
-5. 🟠 **`buffer` API is dead code** (never registered) and contains two genuine bugs.
+5. 🟠 ~~**`buffer` API is dead code** (never registered) and contains two genuine bugs.~~ **RESOLVED** (see B1 — deleted as not-a-CCTweaks-feature; `TextBuffer.fill` empty-pattern div-by-zero fixed + tested)
 6. 🟠 `ComputerThread` concurrency hazards (unsynchronized `WeakHashMap`, silently dropped tasks) and a globally serialized, thread-per-task execution model.
 
 ---
@@ -79,13 +79,13 @@ Caps are enforced under the tracking list's lock in `HTTPAPI.callMethod`, before
 
 ## 2. Functional bugs
 
-### B1 🟠 `buffer` API is dead code **and** broken
+### B1 🟠 `buffer` API is dead code **and** broken — ✅ **FIXED (deleted)**
 * `core/apis/BufferAPI.java` is never registered — no `new BufferAPI(...)` exists outside the class itself, and `Computer.createAPIs()` doesn't add it. The `buffer` row in `docs/TWEAKEDCC_COVERAGE.md` therefore overstates coverage: the API is not reachable from Lua.
 * If it were registered:
   * **Line 88 (`read`):** `startxx = ((Number) arguments[1]).intValue() - 1;` — the guard validates `arguments[0]` but reads `arguments[1]`. `buf:read(5)` throws AIOOBE (`Java Exception Thrown`); `buf:read(1, 5)` silently uses the *end* index as the start.
   * **Line 148 (`fill`) + `TextBuffer.fill(String,...)`:** `fill("")` on a non-empty buffer reaches `text.charAt((i - pos) % textLength)` with `textLength == 0` → `ArithmeticException: / by zero`.
 
-**Fix:** either register the API (and fix the two bugs + add a test) or delete it and update the coverage doc.
+**Resolved (2026-09): deleted.** Investigation showed the `buffer` API is *not* a CCTweaks feature — it appears nowhere in the vendored `migrate/CCTweaksSourceCode` tree, CCTweaks' README only advertises the `socket` and `data` APIs, and CC:Tweaked has no `buffer` global either. It was an unfinished hand-written idea from the migration that was never wired up, so `BufferAPI.java` was deleted and the bogus `buffer` row removed from `docs/TWEAKEDCC_COVERAGE.md` (no Lua-visible change: the API was unreachable). The `fill("")` div-by-zero lives in `TextBuffer` itself, which *is* live code (used by `Terminal` for colour rows), so both `fill(String,...)` and `fill(TextBuffer,...)` overloads now treat an empty pattern as a no-op instead of dividing by zero. Today's `Terminal` callers can't trigger it (they always fill single-char strings with `end == start + 1`), but it is now impossible to hit from any future caller. Covered by the new `src/test/java/dan200/computercraft/core/terminal/TextBufferTest.java` (9 tests: empty-pattern fills via both overloads and the one-arg overload, tiling/bounds/clamping of `fill`, `write`/`read` basics, and the repeating constructor).
 
 ### B2 🟠 `OSAPI.Alarm.compareTo` compares `this` with `this`
 `core/apis/OSAPI.java:549`: `double ot = this.m_day * 24.0 + this.m_time;` — should be `o.m_day * 24.0 + o.m_time`. Currently, always returns 0. Latent only (alarms live in a `HashMap` and are never sorted), but the class implements `Comparable` for no reason — fix or delete `compareTo`.
@@ -211,7 +211,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 | 3  | ~~Add `http_max_requests` / `http_max_download` / `http_blacklist`; shared HTTP executor; non-zero default timeouts~~ **DONE (limits/blacklist); follow-up: shared executor + default timeout (P2)** | 🔴 | Medium | `core/apis`, `ComputerCraft`     |
 | 4  | Move `TileRedstoneRelay.setOutput` propagation to `updateEntity` (dirty flag)                                                                                                   | 🟠       | Small  | `shared/peripheral/redstone`     |
 | 5  | Synchronize `ComputerThread.queueTask` map access; stop dropping tasks silently                                                                                                 | 🟠       | Small  | `core/computer`                  |
-| 6  | Register-or-delete `BufferAPI` (fix `read` arg bug + `fill("")` div-by-zero); update coverage doc                                                                               | 🟠       | Small  | `core/apis`                      |
+| 6  | ~~Register-or-delete `BufferAPI` (fix `read` arg bug + `fill("")` div-by-zero); update coverage doc~~ **DONE (deleted)** — not a CCTweaks feature (absent from vendored source + README); `buffer` row removed from coverage doc; `TextBuffer.fill` empty-pattern guard + `TextBufferTest` (9 tests) | 🟠       | Small  | `core/apis`                      |
 | 7  | ~~Bounds-check `m_dataInt`/`m_dataString` in `handlePacket` paths~~ **DONE** — `hasInts`/`hasStrings` guards + `ServerComputerPacketGuardTest` (5 tests) | 🟠       | Small  | `shared/proxy`, `ServerComputer` |
 | 8  | Worker-pool `ComputerThread` (per-computer lanes)                                                                                                                               | 🟠       | Medium | `core/computer`                  |
 | 9  | `fs.open` error messages for all modes; `term.blit` colour validation                                                                                                           | 🟡       | Small  | `core/apis`                      |
@@ -235,7 +235,7 @@ CC:T's answer is a fixed worker pool with per-computer queues. Even a modest cha
 | C3 `synchronized(this)` in ITask                  | Yes                                                             | Unfixed here                                                          |
 | B5 bios URL-matching event confusion              | Yes                                                             | Unfixed here                                                          |
 | B7 `JarMount` root NPE                            | Yes                                                             | Unfixed here                                                          |
-| B1 BufferAPI bugs                                 | **Fork/CCTweaks-derived** — never wired up                      | Fix or remove                                                         |
+| B1 BufferAPI bugs                                 | **Fork/CCTweaks-derived** — never wired up                      | **Deleted** (not a CCTweaks feature); `TextBuffer.fill` empty-pattern guard added     |
 | B2 `Alarm.compareTo`                              | Yes (decompiled identical)                                      | Latent                                                                |
 | B3 `setOverlay` wrong field                       | Yes                                                             | Latent                                                                |
 | S4 unvalidated packet array access                | Yes                                                             | Low risk, noisy                                                       |

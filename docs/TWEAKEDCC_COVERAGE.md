@@ -18,7 +18,6 @@
 | `turtle` | `TurtleAPI.java` | All movement, dig, place, drop, suck, detect, compare, attack, fuel, inspect, equip, `getItemDetail` |
 | `commands` | `CommandAPI.java` | `exec` (+ affected count), `execAsync`, `list` (+ prefix filter), `getBlockPosition`, `getBlockInfo` (+ `state`, `nbt`, dimension arg), `getBlockInfos` |
 | `bit` | `BitAPI.java` | `bnot`, `band`, `bor`, `bxor`, `brshift`, `blshift`, `blogic_rshift` |
-| `buffer` | `BufferAPI.java` | `new` |
 | `colors` / `colours` | `rom/apis/colors` + `rom/apis/colours` | Constants + `combine`, `subtract`, `test`, **`packRGB`**, **`unpackRGB`**, **`toBlit`**, **`fromBlit`** |
 | `rednet` | `rom/apis/rednet` | `open`, `close`, `isOpen`, `send`, `receive`, `broadcast`, `host`, `unhost`, `lookup` |
 | `textutils` | `rom/apis/textutils` | `slowWrite`, `slowPrint`, `formatTime`, `pagedPrint`, `tabulate`, `pagedTabulate`, **`serialize/ise`** (+ `opts.compact`, `opts.allow_repetitions`), `unserialize/ise`, **`serializeJSON/iseJSON`** (+ `opts.unicode_strings`, `opts.allow_repetitions`), **`unserializeJSON/iseJSON`** (+ `opts.null`, `opts.parse_empty_array`), `urlEncode`, `complete`, `empty_json_array`, `json_null` |
