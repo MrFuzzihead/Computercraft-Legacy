@@ -108,6 +108,8 @@ public class ComputerCraft {
     public static int http_max_requests = 16;
     public static int http_max_websockets = 4;
     public static int http_max_download = 16 * 1024 * 1024;
+    public static int http_threads = 8;
+    public static int http_timeout = 30000;
     public static boolean disable_lua51_features = false;
     public static boolean enableCommandBlock = false;
     public static boolean turtlesNeedFuel = true;
@@ -189,6 +191,12 @@ public class ComputerCraft {
         prop = config.get("general", "http_max_download", http_max_download);
         prop.comment = "The maximum size (in bytes) of a HTTP response body. Requests whose response exceeds this limit are aborted. Set to 0 for no limit.";
         http_max_download = Math.max(0, prop.getInt());
+        prop = config.get("general", "http_threads", http_threads);
+        prop.comment = "The number of threads shared by all computers for performing HTTP requests. Requests above this number are queued until a thread is free.";
+        http_threads = Math.max(1, prop.getInt());
+        prop = config.get("general", "http_timeout", http_timeout);
+        prop.comment = "The default time (in milliseconds) to wait for a HTTP request before giving up. Set to 0 for no timeout.";
+        http_timeout = Math.max(0, prop.getInt());
         prop = config.get("general", "disable_lua51_features", disable_lua51_features);
         prop.comment = "Set this to true to disable Lua 5.1 functions that will be removed in a future update. Useful for ensuring forward compatibility of your programs now.";
         disable_lua51_features = prop.getBoolean(disable_lua51_features);

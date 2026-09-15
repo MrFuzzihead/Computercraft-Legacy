@@ -186,7 +186,11 @@ public class HTTPAPI implements ILuaAPI {
                 String urlString = args[0].toString();
                 String data = args.length > 1 && args[1] instanceof String ? (String) args[1] : null;
                 String verb = args.length > 3 && args[3] instanceof String ? (String) args[3] : null;
-                int timeout = 0;
+                // Default to the configured timeout (http_timeout); an explicit
+                // Lua argument overrides it (finding P2 — with a bounded
+                // request pool, an untimed hung request would permanently
+                // consume a pool thread).
+                int timeout = ComputerCraft.http_timeout;
                 if (args.length > 4 && args[4] instanceof Number) {
                     timeout = (int) (((Number) args[4]).doubleValue() * 1000);
                 }
