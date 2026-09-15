@@ -209,62 +209,13 @@ public class FSAPI implements ILuaAPI {
                     String path = (String) args[0];
                     String mode = (String) args[1];
 
-                    // r+ and w+ have their own error-return contract (nil, msg)
-                    // and must be handled before the general try-catch below.
-                    if (mode.equals("r+")) {
-                        try {
-                            IMountedFileReadWrite rwFile = this.m_fileSystem.openForReadWrite(path, false);
-                            if (rwFile == null) return new Object[] { null, "No such file" };
-                            return wrapReadWrite(rwFile);
-                        } catch (FileSystemException e) {
-                            return new Object[] { null, e.getMessage() };
-                        }
-                    }
-
-                    if (mode.equals("w+")) {
-                        try {
-                            IMountedFileReadWrite rwFile = this.m_fileSystem.openForReadWrite(path, true);
-                            if (rwFile == null) return new Object[] { null, "Failed to open file" };
-                            return wrapReadWrite(rwFile);
-                        } catch (FileSystemException e) {
-                            return new Object[] { null, e.getMessage() };
-                        }
-                    }
-
                     try {
-                        if (mode.equals("r")) {
-                            IMountedFileNormal reader = this.m_fileSystem.openForReadSeekable(path);
-                            return wrapBufferedReader(reader);
-                        }
-
-                        if (mode.equals("w")) {
-                            IMountedFileNormal writer = this.m_fileSystem.openForWriteSeekable(path, false);
-                            return wrapBufferedWriter(writer);
-                        }
-
-                        if (mode.equals("a")) {
-                            IMountedFileNormal writer = this.m_fileSystem.openForWriteSeekable(path, true);
-                            return wrapBufferedWriter(writer);
-                        }
-
-                        if (mode.equals("rb")) {
-                            IMountedFileBinary reader = this.m_fileSystem.openForBinaryRead(path);
-                            return wrapInputStream(reader);
-                        }
-
-                        if (mode.equals("wb")) {
-                            IMountedFileBinary writer = this.m_fileSystem.openForBinaryWrite(path, false);
-                            return wrapOutputStream(writer);
-                        }
-
-                        if (mode.equals("ab")) {
-                            IMountedFileBinary writer = this.m_fileSystem.openForBinaryWrite(path, true);
-                            return wrapOutputStream(writer);
-                        }
-
-                        throw new LuaException("Unsupported mode");
-                    } catch (FileSystemException var10) {
-                        return null;
+                        return openFile(path, mode);
+                    } catch (FileSystemException e) {
+                        // Every mode shares one error contract: nil, message. A mount that
+                        // reports no message (a null IOException detail) still gets a diagnostic.
+                        String message = e.getMessage();
+                        return errorResult(message != null ? message : "Could not open file");
                     }
                 }
 
@@ -367,6 +318,73 @@ public class FSAPI implements ILuaAPI {
 
                 return null;
         }
+    }
+
+    /**
+     * Open a file and wrap it in the Lua handle for the requested mode.
+     *
+     * <p>
+     * All eight modes share one contract, matching CC:Tweaked: on success {@code fs.open}
+     * returns just the handle, on failure it returns {@code nil} followed by the reason.
+     * A mount that throws (denied access, missing file, path is a directory) and a mount
+     * that hands back a {@code null} stream are reported the same way — the latter used to
+     * produce a bare {@code nil}, or even a handle wrapped around {@code null}.
+     * </p>
+     *
+     * <p>
+     * An unsupported mode is a programming error rather than an I/O failure, so it raises a
+     * Lua error as elsewhere in this API.
+     * </p>
+     *
+     * @param path the path to open
+     * @param mode one of {@code r}, {@code w}, {@code a}, {@code rb}, {@code wb}, {@code ab},
+     *             {@code r+} or {@code w+}
+     * @return the Lua return values of {@code fs.open}: a file handle, or {@code nil, message}
+     * @throws FileSystemException if the file could not be opened
+     * @throws LuaException        if {@code mode} is not supported
+     */
+    private Object[] openFile(String path, String mode) throws FileSystemException, LuaException {
+        switch (mode) {
+            case "r": {
+                IMountedFileNormal reader = this.m_fileSystem.openForReadSeekable(path);
+                return reader != null ? wrapBufferedReader(reader) : errorResult("No such file");
+            }
+            case "w": {
+                IMountedFileNormal writer = this.m_fileSystem.openForWriteSeekable(path, false);
+                return writer != null ? wrapBufferedWriter(writer) : errorResult("Failed to open file");
+            }
+            case "a": {
+                IMountedFileNormal writer = this.m_fileSystem.openForWriteSeekable(path, true);
+                return writer != null ? wrapBufferedWriter(writer) : errorResult("Failed to open file");
+            }
+            case "rb": {
+                IMountedFileBinary reader = this.m_fileSystem.openForBinaryRead(path);
+                return reader != null ? wrapInputStream(reader) : errorResult("No such file");
+            }
+            case "wb": {
+                IMountedFileBinary writer = this.m_fileSystem.openForBinaryWrite(path, false);
+                return writer != null ? wrapOutputStream(writer) : errorResult("Failed to open file");
+            }
+            case "ab": {
+                IMountedFileBinary writer = this.m_fileSystem.openForBinaryWrite(path, true);
+                return writer != null ? wrapOutputStream(writer) : errorResult("Failed to open file");
+            }
+            case "r+": {
+                IMountedFileReadWrite rwFile = this.m_fileSystem.openForReadWrite(path, false);
+                return rwFile != null ? wrapReadWrite(rwFile) : errorResult("No such file");
+            }
+            case "w+": {
+                IMountedFileReadWrite rwFile = this.m_fileSystem.openForReadWrite(path, true);
+                return rwFile != null ? wrapReadWrite(rwFile) : errorResult("Failed to open file");
+            }
+            default:
+                throw new LuaException("Unsupported mode");
+        }
+    }
+
+    /** The {@code nil, message} return value shared by every {@code fs.open} failure path. */
+    private static Object[] errorResult(String message) {
+        return new Object[] { null, message };
     }
 
     private static Object[] wrapBufferedReader(final IMountedFileNormal reader) {

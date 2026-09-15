@@ -74,9 +74,10 @@ function open( _sPath, _sMode )
 		return nil, "Unsupported mode"
 	end
 
-	local file = fs.open( _sPath, sMode )
+	-- fs.open reports nil, reason for every mode, so pass the real diagnostic on.
+	local file, err = fs.open( _sPath, sMode )
 	if not file then
-		return nil, "Failed to open file"
+		return nil, err or "Failed to open file"
 	end
 
 	if sMode == "r"then

@@ -101,8 +101,9 @@ The player/stack/inventory references used by `equipBack` and `unequipBack` are 
 | `ReadWriteHandle.read([count])` | ✅ `wrapReadWrite` case 0 (new); delegates to `IMountedFileReadWrite.read(int)` implemented in `FileSystem.openForReadWrite` anonymous class. |
 | `ReadWriteHandle.readLine([withTrailing])` | ✅ `wrapReadWrite` case 1 updated; delegates to `IMountedFileReadWrite.readLine(boolean)`. |
 | `fs.complete` options table | ✅ `bios.lua` `fs.complete` now accepts arg 3 as either a boolean (legacy) or an options table with `include_files` / `include_dirs` keys (CC:Tweaked 1.101.0). |
+| `fs.open` error contract | ✅ All eight modes (`r`, `w`, `a`, `rb`, `wb`, `ab`, `r+`, `w+`) return `nil, message` on failure — previously only `r+`/`w+` did, and a mount that hands back a `null` handle yielded a bare `nil` or a handle that threw on first use. `io.open` now forwards the reason. (CC:Tweaked behaviour) |
 
-**Tests**: `src/test/java/dan200/computercraft/core/apis/FSAPITest.java` — **34 cases**, all green.
+**Tests**: `src/test/java/dan200/computercraft/core/apis/FSAPITest.java` — **43 cases**, all green.
 
 **In-game test**: `run/saves/Test World/computer/37/test_fs_parity.lua`
 
