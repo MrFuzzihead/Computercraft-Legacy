@@ -610,7 +610,11 @@ public class TurtleBrain implements ITurtleAccess {
     }
 
     public void setOverlay(ResourceLocation overlay, ResourceLocation hatOverlay) {
-        if (!Objects.equal(this.m_overlay, overlay) || !Objects.equal(this.m_hatOverlay, overlay)) {
+        // B3 fix: the second comparison used to test m_hatOverlay against the
+        // body-overlay argument, firing spurious updateBlock() calls whenever
+        // the two overlay textures differ and silently dropping hat-only
+        // changes when both fields already equalled the new body overlay.
+        if (!Objects.equal(this.m_overlay, overlay) || !Objects.equal(this.m_hatOverlay, hatOverlay)) {
             this.m_overlay = overlay;
             this.m_hatOverlay = hatOverlay;
             this.m_owner.updateBlock();
