@@ -120,6 +120,7 @@ public class ComputerCraft {
     public static boolean funNames = true;
     public static String[] turtleDisabledActions = new String[0];
     public static int computerThreadTimeout = 7000;
+    public static int computerThreads = 4;
     public static String biosPath = "/assets/computercraft/lua/bios.lua";
     public static final String BIOS_PATH = "/assets/computercraft/lua/bios.lua";
     public static boolean bigInteger = false;
@@ -257,6 +258,9 @@ public class ComputerCraft {
         prop = config.get("general", "computerThreadTimeout", computerThreadTimeout);
         prop.comment = "The maximum time (in milliseconds) a computer thread is allowed to run before being considered crashed";
         computerThreadTimeout = prop.getInt();
+        prop = config.get("general", "computerThreads", computerThreads);
+        prop.comment = "The number of computer executor threads. Tasks are still serialized per computer, but more threads let more computers run concurrently.";
+        computerThreads = Math.max(1, prop.getInt());
         prop = config.get("general", "biosPath", biosPath);
         prop.comment = "The path to the bios file loaded into computers and turtles";
         biosPath = prop.getString();

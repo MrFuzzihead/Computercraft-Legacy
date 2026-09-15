@@ -10,9 +10,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
-import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.ComputerThread;
-import dan200.computercraft.core.computer.ITask;
 import dan200.computercraft.shared.network.ComputerCraftPacket;
 
 /**
@@ -36,22 +34,9 @@ class ServerComputerPacketGuardTest {
     @AfterAll
     static void stopComputerDispatchThread() {
         // Constructing a ServerComputer constructs a core Computer, which calls
-        // ComputerThread.start(). Its dispatch thread is non-daemon, and
-        // ComputerThread.stop() cannot wake an idle waiter (finding C4 in the
-        // codebase analysis). Queue one last task *after* stopping: when the
-        // thread picks the queue up it observes m_stopped and exits, letting
-        // the test JVM terminate.
+        // ComputerThread.start(). The pool's worker threads are daemons, so
+        // this is belt-and-braces cleanup rather than a JVM-exit requirement.
         ComputerThread.stop();
-        ComputerThread.queueTask(new ITask() {
-
-            @Override
-            public Computer getOwner() {
-                return null;
-            }
-
-            @Override
-            public void execute() {}
-        }, null);
     }
 
     @Test
