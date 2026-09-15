@@ -1,6 +1,7 @@
 package dan200.computercraft.core.computer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -128,5 +129,96 @@ class ComputerThreadTest {
         }, null);
 
         assertTrue(executed.await(10, TimeUnit.SECONDS), "tasks queued after a start() following stop() must execute");
+    }
+
+    @Test
+    void queueTaskReportsDropsWhenTheQueueIsFull() throws Exception {
+        // Regression test for C2: a full queue used to silently discard the
+        // task. queueTask must now report the drop, and every *accepted* task
+        // must still execute exactly once.
+        ComputerThread.start();
+
+        CountDownLatch dispatcherBlocked = new CountDownLatch(1);
+        CountDownLatch releaseDispatcher = new CountDownLatch(1);
+        AtomicInteger executions = new AtomicInteger();
+
+        // Occupy the dispatcher's single lane until we release it, so the
+        // queue fill below is deterministic (the dispatcher provably cannot
+        // take anything from the queue while this task is running).
+        assertTrue(ComputerThread.queueTask(new ITask() {
+
+            @Override
+            public Computer getOwner() {
+                return null;
+            }
+
+            @Override
+            public void execute() {
+                dispatcherBlocked.countDown();
+                try {
+                    releaseDispatcher.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread()
+                        .interrupt();
+                }
+
+                executions.incrementAndGet();
+            }
+        }, null), "the blocking task must be accepted into an empty queue");
+        assertTrue(dispatcherBlocked.await(10, TimeUnit.SECONDS), "the dispatcher must pick up the blocking task");
+
+        // Fill the queue (capacity 256; the running task is not in it) and
+        // then overflow it by exactly one.
+        int accepted = 0;
+        boolean dropped = false;
+        for (int i = 0; i < 300; i++) {
+            boolean ok = ComputerThread.queueTask(new ITask() {
+
+                @Override
+                public Computer getOwner() {
+                    return null;
+                }
+
+                @Override
+                public void execute() {
+                    executions.incrementAndGet();
+                }
+            }, null);
+
+            if (ok) {
+                accepted++;
+            } else {
+                dropped = true;
+                break;
+            }
+        }
+
+        assertTrue(dropped, "queueTask must report a drop once the queue is full");
+        assertEquals(256, accepted, "exactly 256 tasks must be accepted into the full queue");
+        // The queue stays full while the dispatcher is blocked, so further
+        // drops are deterministic, not transient.
+        assertFalse(ComputerThread.queueTask(new ITask() {
+
+            @Override
+            public Computer getOwner() {
+                return null;
+            }
+
+            @Override
+            public void execute() {
+                executions.incrementAndGet();
+            }
+        }, null), "a task offered to a still-full queue must be dropped as well");
+
+        // Release the dispatcher and verify every accepted task (plus the
+        // blocking one) executes exactly once — the drop must not disturb the
+        // rest of the pipeline.
+        releaseDispatcher.countDown();
+        long deadline = System.currentTimeMillis() + 15000;
+        while (executions.get() < accepted + 1 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
+
+        assertEquals(accepted + 1, executions.get(), "the blocking task and all accepted tasks must execute");
     }
 }
