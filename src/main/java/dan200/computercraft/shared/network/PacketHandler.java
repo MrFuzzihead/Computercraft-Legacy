@@ -16,7 +16,7 @@ public class PacketHandler {
             packet.fromBytes(event.packet.payload());
             ComputerCraft.handlePacket(packet, null);
         } catch (Exception var3) {
-            var3.printStackTrace();
+            ComputerCraft.logger.error("ComputerCraft: failed to decode or handle client-bound packet", var3);
         }
     }
 
@@ -27,7 +27,7 @@ public class PacketHandler {
             packet.fromBytes(event.packet.payload());
             ComputerCraft.handlePacket(packet, ((NetHandlerPlayServer) event.handler).playerEntity);
         } catch (Exception var3) {
-            var3.printStackTrace();
+            ComputerCraft.logger.error("ComputerCraft: failed to decode or handle server-bound packet", var3);
         }
     }
 }

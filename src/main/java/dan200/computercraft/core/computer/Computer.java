@@ -231,7 +231,7 @@ public class Computer {
                 return false;
             }
         } catch (FileSystemException var3) {
-            var3.printStackTrace();
+            ComputerCraft.logger.error("ComputerCraft: failed to initialize computer file system", var3);
             return false;
         }
     }
