@@ -139,7 +139,7 @@ class HTTPAPITest {
         + "os = {\n"
         + "    pullEvent = function()\n"
         + "        if #_events > 0 then\n"
-        + "            return unpack(table.remove(_events, 1))\n"
+        + "            return unpack(table.remove(_events, 1), 1, 5)\n"
         + "        end\n"
         + "        error('event queue exhausted')\n"
         + "    end,\n"
@@ -148,6 +148,10 @@ class HTTPAPITest {
         + "http = {\n"
         + "    request = function(...)\n"
         + "        _last_req = {...}\n"
+        + "        for _, event in ipairs(_events) do\n"
+        + "            local slot = event[1] == 'http_success' and 4 or 5\n"
+        + "            event[slot] = _last_req[7]\n"
+        + "        end\n"
         + "        return true\n"
         + "    end,\n"
         + "    checkURL = function() return true end,\n"
@@ -385,4 +389,128 @@ class HTTPAPITest {
         assertEquals(3.0, ((Number) capture.args[3]).doubleValue(), 0.001, "arg[5] = timeout seconds");
         assertEquals(Boolean.TRUE, capture.args[4], "arg[6] = binary");
     }
+
+    /** Broadcast each event to both suspended callers, as parallel.waitForAll does. */
+    private static final String CONCURRENT_PREAMBLE = ("local requests, queued = {}, {}\n" + "http = {\n"
+        + "request = function(...) requests[#requests + 1] = {...}; return true end,\n"
+        + "websocket = function(...) requests[#requests + 1] = {...}; return true end,\n"
+        + "checkURL = function() return true end,\n"
+        + "}\n"
+        + "os = {\n"
+        + "pullEvent = function()\n"
+        + "local event = {coroutine.yield()}\n"
+        + "if event[1] == 'terminate' then error('Terminated', 0) end\n"
+        + "return unpack(event)\n"
+        + "end,\n"
+        + "queueEvent = function(...) queued[#queued + 1] = {...} end,\n"
+        + "}\n"
+        + "local function resume(co, ...)\n"
+        + "if coroutine.status(co) ~= 'dead' then\n"
+        + "local ok, err = coroutine.resume(co, ...)\n"
+        + "assert(ok, err)\n"
+        + "end\n"
+        + "end\n");
+
+    @Test
+    void concurrentGetAndPostToSameUrlReceiveOnlyTheirOwnCompletion() {
+        for (boolean failure : new boolean[] { false, true }) {
+            ResultCapture capture = new ResultCapture();
+            String lua = CONCURRENT_PREAMBLE + httpSection
+                + ("local a, b\n" + "local first = coroutine.create(function() a = {http.get('http://same')} end)\n"
+                    + "local second = coroutine.create(function() b = {http.post({url='http://same', body='b'})} end)\n"
+                    + "resume(first); resume(second)\n"
+                    + "local id1, id2 = requests[1][7], requests[2][7]\n"
+                    + "assert(type(id1) == 'number' and id1 ~= id2)\n"
+                    + "-- Untagged async events, other URLs and unrelated events must not complete either call.\n"
+                    + "for _, co in ipairs({first, second}) do\n"
+                    + "resume(co, 'http_success', 'http://same', 'async')\n"
+                    + "resume(co, 'http_failure', 'http://same', 'async failure')\n"
+                    + "resume(co, 'http_success', 'http://other', 'other', id1)\n"
+                    + "resume(co, 'timer', 123)\n"
+                    + "end\n"
+                    + "assert(a == nil and b == nil)\n")
+                + (failure
+                    ? ("resume(first, 'http_failure', 'http://same', 'failed', 'error body', id2)\n"
+                        + "resume(second, 'http_failure', 'http://same', 'failed', 'error body', id2)\n"
+                        + "assert(a == nil and b[1] == nil and b[2] == 'failed' and b[3] == 'error body')\n")
+                    : ("resume(first, 'http_success', 'http://same', 'second', id2)\n"
+                        + "resume(second, 'http_success', 'http://same', 'second', id2)\n"
+                        + "assert(a == nil and b[1] == 'second')\n"))
+                + ("resume(first, 'http_success', 'http://same', 'first', id1)\n" + "assert(a[1] == 'first')\n"
+                    + "_capture(true)\n");
+            run(buildMachine(capture), lua);
+            assertArrayEquals(new Object[] { true }, capture.args);
+        }
+    }
+
+    @Test
+    void concurrentWebsocketsToSameUrlReceiveOnlyTheirOwnCompletion() {
+        for (String outcome : new String[] { "success", "failure" }) {
+            ResultCapture capture = new ResultCapture();
+            String lua = CONCURRENT_PREAMBLE + httpSection
+                + ("local a, b\n" + "local first = coroutine.create(function() a = {http.websocket('ws://same')} end)\n"
+                    + "local second = coroutine.create(function() b = {http.websocket('ws://same')} end)\n"
+                    + "resume(first); resume(second)\n"
+                    + "local id1, id2 = requests[1][3], requests[2][3]\n"
+                    + "assert(type(id1) == 'number' and id1 ~= id2)\n"
+                    + "resume(first, 'websocket_success', 'ws://same', 'async')\n"
+                    + "resume(second, 'websocket_failure', 'ws://same', 'async error')\n"
+                    + "resume(first, 'websocket_success', 'ws://other', 'other', id1)\n"
+                    + "assert(a == nil and b == nil)\n")
+                + "local outcome = '"
+                + outcome
+                + "'\n"
+                + ("resume(first, 'websocket_' .. outcome, 'ws://same', 'second', id2)\n"
+                    + "resume(second, 'websocket_' .. outcome, 'ws://same', 'second', id2)\n"
+                    + "assert(a == nil)\n"
+                    + "if outcome == 'success' then assert(b[1] == 'second')\n"
+                    + "else assert(b[1] == false and b[2] == 'second') end\n"
+                    + "resume(first, 'websocket_success', 'ws://same', 'first', id1)\n"
+                    + "assert(a[1] == 'first')\n"
+                    + "_capture(true)\n");
+            run(buildMachine(capture), lua);
+            assertArrayEquals(new Object[] { true }, capture.args);
+        }
+    }
+
+    @Test
+    void immediateRejectionsReturnWithoutWaitingOrQueuingSyncFailures() {
+        ResultCapture capture = new ResultCapture();
+        String lua = CONCURRENT_PREAMBLE
+            + ("http.request = function() return false, 'denied' end\n"
+                + "http.websocket = function() return false, 'denied' end\n"
+                + "os.pullEvent = function() error('must not wait') end\n")
+            + httpSection
+            + ("local a, b = http.get('http://same')\n" + "local c, d = http.websocket('ws://same')\n"
+                + "assert(a == nil and b == 'denied' and c == false and d == 'denied')\n"
+                + "assert(#queued == 0)\n"
+                + "http.request('http://same')\n"
+                + "http.websocketAsync('ws://same')\n"
+                + "assert(#queued == 2 and #queued[1] == 3 and #queued[2] == 3)\n"
+                + "assert(queued[1][1] == 'http_failure' and queued[2][1] == 'websocket_failure')\n"
+                + "_capture(true)\n");
+        run(buildMachine(capture), lua);
+        assertArrayEquals(new Object[] { true }, capture.args);
+    }
+
+    @Test
+    void asyncCallsRemainUntaggedAndTerminateStillInterruptsWaiters() {
+        ResultCapture capture = new ResultCapture();
+        String lua = CONCURRENT_PREAMBLE + httpSection
+            + ("http.request('http://same')\n" + "http.websocketAsync('ws://same')\n"
+                + "assert(requests[1][7] == nil and requests[2][3] == nil)\n"
+                + "for _, call in ipairs({\n"
+                + "function() http.get('http://same') end,\n"
+                + "function() http.websocket('ws://same') end,\n"
+                + "}) do\n"
+                + "local co = coroutine.create(call)\n"
+                + "resume(co)\n"
+                + "local ok, err = coroutine.resume(co, 'terminate')\n"
+                + "assert(not ok and err == 'Terminated')\n"
+                + "end\n"
+                + "_capture(true)\n");
+        run(buildMachine(capture), lua);
+        assertArrayEquals(new Object[] { true }, capture.args);
+    }
+
 }

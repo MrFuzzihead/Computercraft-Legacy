@@ -45,11 +45,19 @@ public class HTTPAPI implements ILuaAPI {
                 HTTPRequest h = it.next();
                 if (h.isComplete()) {
                     String url = h.getURL();
+                    Number requestId = h.getRequestId();
+                    HTTPResponse response = h.asResponse();
                     if (h.wasSuccessful()) {
-                        m_apiEnvironment.queueEvent("http_success", new Object[] { url, h.asResponse() });
+                        m_apiEnvironment.queueEvent(
+                            "http_success",
+                            requestId == null ? new Object[] { url, response }
+                                : new Object[] { url, response, requestId });
                     } else {
                         String reason = h.getFailureReason() != null ? h.getFailureReason() : "Could not connect";
-                        m_apiEnvironment.queueEvent("http_failure", new Object[] { url, reason, h.asResponse() });
+                        m_apiEnvironment.queueEvent(
+                            "http_failure",
+                            requestId == null ? new Object[] { url, reason, response }
+                                : new Object[] { url, reason, response, requestId });
                     }
                     it.remove();
                 }
@@ -72,15 +80,20 @@ public class HTTPAPI implements ILuaAPI {
         }
         for (WebSocketRequest ws : completedWebsockets) {
             String url = ws.getURL();
+            Number requestId = ws.getRequestId();
             if (ws.wasConnectSuccessful()) {
+                WebSocketHandle handle = new WebSocketHandle(url, ws, m_apiEnvironment);
                 m_apiEnvironment.queueEvent(
                     "websocket_success",
-                    new Object[] { url, new WebSocketHandle(url, ws, m_apiEnvironment) });
+                    requestId == null ? new Object[] { url, handle } : new Object[] { url, handle, requestId });
                 synchronized (m_activeWebsockets) {
                     m_activeWebsockets.add(ws);
                 }
             } else {
-                m_apiEnvironment.queueEvent("websocket_failure", new Object[] { url, ws.getConnectError() });
+                m_apiEnvironment.queueEvent(
+                    "websocket_failure",
+                    requestId == null ? new Object[] { url, ws.getConnectError() }
+                        : new Object[] { url, ws.getConnectError(), requestId });
             }
         }
 
@@ -195,6 +208,7 @@ public class HTTPAPI implements ILuaAPI {
                     timeout = (int) (((Number) args[4]).doubleValue() * 1000);
                 }
                 boolean binary = args.length > 5 && Boolean.TRUE.equals(args[5]);
+                Number requestId = args.length > 6 && args[6] instanceof Number ? (Number) args[6] : null;
 
                 HashMap<String, String> headers = null;
                 if (args.length >= 3 && args[2] instanceof Map) {
@@ -217,7 +231,7 @@ public class HTTPAPI implements ILuaAPI {
                 }
 
                 try {
-                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary);
+                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary, requestId);
                     synchronized (this.m_httpRequests) {
                         // Re-check under lock: another computer thread (advanced
                         // computers each run on their own task) may have raced us.
@@ -264,6 +278,7 @@ public class HTTPAPI implements ILuaAPI {
                     }
                 }
 
+                Number requestId = args.length > 2 && args[2] instanceof Number ? (Number) args[2] : null;
                 int maxWebsockets = ComputerCraft.http_max_websockets;
                 synchronized (this.m_pendingWebsockets) {
                     synchronized (this.m_activeWebsockets) {
@@ -275,7 +290,11 @@ public class HTTPAPI implements ILuaAPI {
                 }
 
                 try {
-                    WebSocketRequest request = new WebSocketRequest(urlString, headers, this.m_apiEnvironment);
+                    WebSocketRequest request = new WebSocketRequest(
+                        urlString,
+                        headers,
+                        this.m_apiEnvironment,
+                        requestId);
                     synchronized (this.m_pendingWebsockets) {
                         this.m_pendingWebsockets.add(request);
                     }

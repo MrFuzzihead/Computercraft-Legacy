@@ -156,9 +156,17 @@ public class HTTPRequest {
      * differentiation.
      */
     private final boolean m_binary;
+    /** Optional internal correlation ID; null preserves legacy completion event shapes. */
+    private final Number m_requestId;
 
     public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
         final int timeout, final boolean binary) throws LuaException {
+        this(url, postText, headers, verb, timeout, binary, null);
+    }
+
+    public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
+        final int timeout, final boolean binary, final Number requestId) throws LuaException {
+        m_requestId = requestId;
         urlString = url;
         this.url = checkURL(url);
         this.m_timeout = timeout;
@@ -327,6 +335,10 @@ public class HTTPRequest {
                 }
             }
         });
+    }
+
+    public Number getRequestId() {
+        return m_requestId;
     }
 
     public String getURL() {
