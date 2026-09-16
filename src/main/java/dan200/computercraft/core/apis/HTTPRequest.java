@@ -136,6 +136,9 @@ public class HTTPRequest {
     private boolean success = false;
     private byte[] result;
     private Thread m_workerThread;
+    // The HTTP status pair. asResponse() reads it under `lock`, so the worker must write
+    // it under `lock` too — otherwise whoever first observes the completed request has no
+    // guarantee of seeing it at all.
     private int responseCode = -1;
     private String responseMessage = "";
     private Map<String, String> responseHeaders;
@@ -221,8 +224,14 @@ public class HTTPRequest {
                     }
 
                     int code = connection.getResponseCode();
-                    responseCode = code;
-                    responseMessage = connection.getResponseMessage();
+                    String message = connection.getResponseMessage();
+
+                    // Published under `lock` (see the fields above). A response with no
+                    // reason phrase gives a null message, which HTTPResponse normalises.
+                    synchronized (lock) {
+                        responseCode = code;
+                        responseMessage = message;
+                    }
 
                     // If we get an error code then use the error stream instead
                     InputStream is;
