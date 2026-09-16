@@ -2,6 +2,10 @@ package dan200.computercraft.core.apis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +38,10 @@ class TermAPITest {
     private static final int METHOD_SET_BG_COLOR = 11;
     private static final int METHOD_SET_CURSOR_BLINK = 3;
     private static final int METHOD_GET_CURSOR_BLINK = 19;
+    private static final int METHOD_GET_TEXT_COLOUR = 14;
+    private static final int METHOD_GET_TEXT_COLOR = 15;
+    private static final int METHOD_GET_BG_COLOUR = 16;
+    private static final int METHOD_GET_BG_COLOR = 17;
     private static final int METHOD_NATIVE_PALETTE_COLOR = 20;
     private static final int METHOD_NATIVE_PALETTE_COLOUR = 21;
     private static final int METHOD_SET_PALETTE_COLOR = 22;
@@ -385,6 +393,75 @@ class TermAPITest {
             assertEquals(position[1], terminal.getCursorY());
             assertFalse(terminal.getChanged());
         }
+    }
+
+    // =========================================================================
+    // getTextColour/getTextColor/getBackgroundColour/getBackgroundColor — B9
+    // =========================================================================
+
+    @Test
+    void colorGettersReturnDefaultsInitially() throws LuaException {
+        // Both spellings must read through the terminal lock and return the
+        // cursor colour bitmasks. encodeColour returns 1 << index, so the
+        // defaults are white = 2^0 = 1 and black = 2^15 = 32768 (as Integers).
+        for (int method : new int[] { METHOD_GET_TEXT_COLOR, METHOD_GET_TEXT_COLOUR }) {
+            Object[] result = api.callMethod(null, method, new Object[0]);
+            assertEquals(1, ((Number) result[0]).intValue(), "text colour default for method " + method);
+        }
+        for (int method : new int[] { METHOD_GET_BG_COLOR, METHOD_GET_BG_COLOUR }) {
+            Object[] result = api.callMethod(null, method, new Object[0]);
+            assertEquals(32768, ((Number) result[0]).intValue(), "background colour default for method " + method);
+        }
+    }
+
+    @Test
+    void colorGettersReflectWritesUnderTerminalLock() throws LuaException {
+        // Bitmask 16.0 = 2^4 → blit index 4 → getTextColour must report 1 << 4 = 16.
+        api.callMethod(null, METHOD_SET_TEXT_COLOR, new Object[] { 16.0 });
+        // Bitmask 4.0 = 2^2 → blit index 2 → getBackgroundColour must report 1 << 2 = 4.
+        api.callMethod(null, METHOD_SET_BG_COLOR, new Object[] { 4.0 });
+        assertEquals(16, ((Number) api.callMethod(null, METHOD_GET_TEXT_COLOR, new Object[0])[0]).intValue());
+        assertEquals(4, ((Number) api.callMethod(null, METHOD_GET_BG_COLOR, new Object[0])[0]).intValue());
+        // British spellings read the same state.
+        assertEquals(16, ((Number) api.callMethod(null, METHOD_GET_TEXT_COLOUR, new Object[0])[0]).intValue());
+        assertEquals(4, ((Number) api.callMethod(null, METHOD_GET_BG_COLOUR, new Object[0])[0]).intValue());
+    }
+
+    @Test
+    void colorGettersAgreeWithTerminalWhileWritingConcurrently() throws Exception {
+        // 4 reader threads poll the getters while the main thread flips both
+        // colours 2,000 times through the same locked TermAPI methods. Under
+        // the B9 fix every read is taken under the terminal lock, so a reader
+        // must always observe one of the two exact bitmasks being written —
+        // never a torn combination (1|16 = 17 or 32768|4 = 32772).
+        AtomicBoolean stop = new AtomicBoolean(false);
+        List<Throwable> failures = java.util.Collections.synchronizedList(new ArrayList<>());
+        Thread[] readers = new Thread[4];
+        for (int i = 0; i < readers.length; i++) {
+            readers[i] = new Thread(() -> {
+                try {
+                    while (!stop.get()) {
+                        long text = ((Number) api.callMethod(null, METHOD_GET_TEXT_COLOR, new Object[0])[0]).longValue();
+                        long bg = ((Number) api.callMethod(null, METHOD_GET_BG_COLOUR, new Object[0])[0]).longValue();
+                        if (text != 1 && text != 16) throw new AssertionError("torn text colour: " + text);
+                        if (bg != 32768 && bg != 4) throw new AssertionError("torn background colour: " + bg);
+                    }
+                } catch (Throwable t) {
+                    failures.add(t);
+                }
+            });
+            readers[i].setDaemon(true);
+            readers[i].start();
+        }
+
+        for (int n = 0; n < 2000; n++) {
+            api.callMethod(null, METHOD_SET_TEXT_COLOR, new Object[] { n % 2 == 0 ? 1.0 : 16.0 });
+            api.callMethod(null, METHOD_SET_BG_COLOR, new Object[] { n % 2 == 0 ? 32768.0 : 4.0 });
+        }
+        stop.set(true);
+        for (Thread reader : readers) reader.join(10_000);
+        for (Thread reader : readers) assertFalse(reader.isAlive(), "reader must not be stuck");
+        assertTrue(failures.isEmpty(), "concurrent colour getters must not observe torn state");
     }
 
     @Test

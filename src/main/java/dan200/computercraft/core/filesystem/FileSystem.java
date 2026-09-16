@@ -819,7 +819,7 @@ public class FileSystem {
         return file;
     }
 
-    public long getFreeSpace(String path) throws FileSystemException {
+    public synchronized long getFreeSpace(String path) throws FileSystemException {
         path = sanitizePath(path);
         FileSystem.MountWrapper mount = this.getMount(path);
         return mount.getFreeSpace();

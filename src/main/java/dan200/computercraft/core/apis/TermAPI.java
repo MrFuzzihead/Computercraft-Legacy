@@ -188,10 +188,15 @@ public class TermAPI implements ILuaAPI {
                 return new Object[] { this.m_environment.isColour() };
             case 14:
             case 15:
-                return encodeColour(this.m_terminal.getTextColour());
+                // B9: read terminal state under the terminal lock, like every writer.
+                synchronized (this.m_terminal) {
+                    return encodeColour(this.m_terminal.getTextColour());
+                }
             case 16:
             case 17:
-                return encodeColour(this.m_terminal.getBackgroundColour());
+                synchronized (this.m_terminal) {
+                    return encodeColour(this.m_terminal.getBackgroundColour());
+                }
             case 18:
                 if (args.length >= 3 && args[0] instanceof String
                     && args[1] instanceof String
