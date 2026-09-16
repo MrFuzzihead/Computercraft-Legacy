@@ -154,6 +154,10 @@ public class MonitorPeripheral implements IPeripheral {
                     String textColour = (String) args[1];
                     String backgroundColour = (String) args[2];
                     if (textColour.length() == text.length() && backgroundColour.length() == text.length()) {
+                        // Same validation as term.blit (TermAPI) so monitor.blit and
+                        // term.blit reject identical arguments.
+                        TermAPI.checkColour(textColour);
+                        TermAPI.checkColour(backgroundColour);
                         Terminal terminalx = this.m_monitor.getTerminal()
                             .getTerminal();
                         terminalx.blit(text, textColour, backgroundColour);

@@ -238,4 +238,58 @@ class MonitorPeripheralTest {
         LuaException ex = assertThrows(LuaException.class, () -> TermAPI.parseColour(new Object[0], true));
         assertEquals("Expected number", ex.getMessage());
     }
+
+    // =========================================================================
+    // blit — colour character validation (monitor path, mirrors TermAPI/B10)
+    // =========================================================================
+
+    /**
+     * The peripheral is constructed with a {@code null} monitor, so reaching the
+     * terminal would throw an NPE. Passing proves colour validation happens
+     * before any terminal access, and that {@code monitor.blit} rejects the
+     * same strings as {@code term.blit} (same {@link TermAPI#checkColour}).
+     */
+    @Test
+    void blitRejectsInvalidColourCharactersBeforeTouchingTerminal() {
+        MonitorPeripheral peripheral = new MonitorPeripheral(null);
+        // The exact B10 reproduction ("x", "g", "0") plus further invalid chars
+        // ('A', ' ') outside the renderer's "0123456789abcdef" alphabet.
+        for (Object[] args : new Object[][] {
+            { "x", "g", "0" },
+            { "xyz", "0g2", "fed" },
+            { "xyz", "012", "feA" },
+            { "xyz", "0 2", "fed" } }) {
+            LuaException error = assertThrows(
+                LuaException.class,
+                () -> peripheral.callMethod(null, null, IDX_BLIT, args));
+            assertEquals("Invalid colour", error.getMessage());
+        }
+    }
+
+    @Test
+    void blitStillRequiresEqualLengthsAndStringsOnMonitor() {
+        MonitorPeripheral peripheral = new MonitorPeripheral(null);
+        for (Object[] args : new Object[][] { { "xy", "0", "00" }, { "xy", "00", "g" } }) {
+            LuaException error = assertThrows(
+                LuaException.class,
+                () -> peripheral.callMethod(null, null, IDX_BLIT, args));
+            assertEquals("Arguments must be the same length", error.getMessage());
+        }
+
+        LuaException typeError = assertThrows(
+            LuaException.class,
+            () -> peripheral.callMethod(null, null, IDX_BLIT, new Object[] { "x", 0.0, "0" }));
+        assertEquals("Expected string, string, string", typeError.getMessage());
+    }
+
+    @Test
+    void checkColourMirrorsRendererAlphabet() throws LuaException {
+        // The renderer maps any char missing from this alphabet to a clamped
+        // fallback colour; validation rejects those characters up front instead.
+        assertEquals("0123456789abcdef", TermAPI.checkColour("0123456789abcdef"));
+        assertEquals("", TermAPI.checkColour(""));
+        assertThrows(LuaException.class, () -> TermAPI.checkColour("g"));
+        assertThrows(LuaException.class, () -> TermAPI.checkColour("0F"));
+        assertThrows(LuaException.class, () -> TermAPI.checkColour("0 0"));
+    }
 }

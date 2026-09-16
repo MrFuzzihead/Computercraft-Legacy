@@ -322,6 +322,84 @@ class TermAPITest {
     }
 
     // =========================================================================
+    // term.blit — B10
+    // =========================================================================
+
+    @Test
+    void blitRejectsInvalidColoursWithoutChangingTerminal() {
+        terminal.setLine(1, "original", "12345678", "87654321");
+        terminal.setCursorPos(2, 1);
+        String text = terminal.getLine(1).toString();
+        String foreground = terminal.getTextColourLine(1).toString();
+        String background = terminal.getBackgroundColourLine(1).toString();
+        terminal.clearChanged();
+
+        for (String invalid : new String[] { "g", "z", "A", "F", " ", "\n", "\u0000", "\u00e9", "\uff10" }) {
+            for (int argument = 1; argument <= 2; argument++) {
+                Object[] args = { "xyz", "012", "fed" };
+                args[argument] = "0f" + invalid;
+                LuaException error = assertThrows(LuaException.class, () -> api.callMethod(null, 18, args));
+                assertEquals("Invalid colour", error.getMessage());
+                assertEquals(text, terminal.getLine(1).toString());
+                assertEquals(foreground, terminal.getTextColourLine(1).toString());
+                assertEquals(background, terminal.getBackgroundColourLine(1).toString());
+                assertEquals(2, terminal.getCursorX());
+                assertEquals(1, terminal.getCursorY());
+                assertFalse(terminal.getChanged());
+            }
+        }
+    }
+
+    @Test
+    void blitAcceptsAllSixteenColoursAndAdvancesCursor() throws LuaException {
+        String text = "GHIJKLMNOPQRSTUV"; // Text is not restricted to hex characters.
+        String foreground = "0123456789abcdef";
+        String background = "fedcba9876543210";
+        terminal.setCursorPos(2, 1);
+        assertNull(api.callMethod(null, 18, new Object[] { text, foreground, background }));
+        assertEquals(text, terminal.getLine(1).toString().substring(2, 18));
+        assertEquals(foreground, terminal.getTextColourLine(1).toString().substring(2, 18));
+        assertEquals(background, terminal.getBackgroundColourLine(1).toString().substring(2, 18));
+        assertEquals(18, terminal.getCursorX());
+        assertEquals(1, terminal.getCursorY());
+    }
+
+    @Test
+    void blitAcceptsEmptyStrings() throws LuaException {
+        String before = terminal.getLine(0).toString();
+        assertNull(api.callMethod(null, 18, new Object[] { "", "", "" }));
+        assertEquals(before, terminal.getLine(0).toString());
+        assertEquals(0, terminal.getCursorX());
+    }
+
+    @Test
+    void blitValidatesEvenClippedColours() {
+        for (int[] position : new int[][] { { -2, 0 }, { 50, 0 }, { 0, -1 }, { 0, 19 } }) {
+            terminal.setCursorPos(position[0], position[1]);
+            terminal.clearChanged();
+            LuaException error = assertThrows(
+                LuaException.class,
+                () -> api.callMethod(null, 18, new Object[] { "xyz", "0g0", "fff" }));
+            assertEquals("Invalid colour", error.getMessage());
+            assertEquals(position[0], terminal.getCursorX());
+            assertEquals(position[1], terminal.getCursorY());
+            assertFalse(terminal.getChanged());
+        }
+    }
+
+    @Test
+    void blitPreservesLengthAndTypeErrors() {
+        for (Object[] args : new Object[][] { { "xy", "g", "00" }, { "xy", "00", "g" } }) {
+            LuaException error = assertThrows(LuaException.class, () -> api.callMethod(null, 18, args));
+            assertEquals("Arguments must be the same length", error.getMessage());
+        }
+        for (Object[] args : new Object[][] { {}, { "x", "0" }, { "x", 0.0, "0" }, { "x", "0", null } }) {
+            LuaException error = assertThrows(LuaException.class, () -> api.callMethod(null, 18, args));
+            assertEquals("Expected string, string, string", error.getMessage());
+        }
+    }
+
+    // =========================================================================
     // Stubs
     // =========================================================================
 
