@@ -199,8 +199,10 @@ public class Computer {
     }
 
     public boolean isBlinking() {
-        synchronized (this.m_terminal) {
-            return this.isOn() && this.m_blinking;
+        synchronized (this) {
+            synchronized (this.m_terminal) {
+                return this.m_state == Computer.State.Running && this.m_blinking;
+            }
         }
     }
 
@@ -235,8 +237,10 @@ public class Computer {
     }
 
     public int getRedstoneOutput(int side) {
-        synchronized (this.m_output) {
-            return this.isOn() ? this.m_output[side] : 0;
+        synchronized (this) {
+            synchronized (this.m_output) {
+                return this.m_state == Computer.State.Running ? this.m_output[side] : 0;
+            }
         }
     }
 
@@ -265,8 +269,10 @@ public class Computer {
     }
 
     public int getBundledRedstoneOutput(int side) {
-        synchronized (this.m_output) {
-            return this.isOn() ? this.m_bundledOutput[side] : 0;
+        synchronized (this) {
+            synchronized (this.m_output) {
+                return this.m_state == Computer.State.Running ? this.m_bundledOutput[side] : 0;
+            }
         }
     }
 
@@ -394,7 +400,9 @@ public class Computer {
 
             @Override
             public void execute() {
-                synchronized (this) {
+                ILuaMachine machine = null;
+                // Lifecycle state shares the main thread's Computer monitor, not this task's monitor.
+                synchronized (Computer.this) {
                     if (Computer.this.m_state == Computer.State.Starting) {
                         synchronized (Computer.this.m_terminal) {
                             Computer.this.m_terminal.reset();
@@ -418,11 +426,17 @@ public class Computer {
                                 Computer.this.stopComputer(false);
                             } else {
                                 Computer.this.m_state = Computer.State.Running;
-                                synchronized (Computer.this.m_machine) {
-                                    Computer.this.m_machine.handleEvent(null, null);
-                                }
+                                machine = Computer.this.m_machine;
                             }
                         }
+                    }
+                }
+
+                // Never hold the Computer monitor while running Lua: abort() must be able to
+                // acquire it from the watchdog. The per-computer lane prevents concurrent unload.
+                if (machine != null) {
+                    synchronized (machine) {
+                        machine.handleEvent(null, null);
                     }
                 }
             }
@@ -448,7 +462,7 @@ public class Computer {
 
             @Override
             public void execute() {
-                synchronized (this) {
+                synchronized (Computer.this) {
                     if (Computer.this.m_state == Computer.State.Stopping) {
                         synchronized (Computer.this.m_apis) {
                             for (ILuaAPI api : Computer.this.m_apis) {
@@ -508,7 +522,7 @@ public class Computer {
 
             @Override
             public void execute() {
-                synchronized (this) {
+                synchronized (Computer.this) {
                     if (Computer.this.m_state != Computer.State.Running) {
                         return;
                     }
