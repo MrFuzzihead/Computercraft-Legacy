@@ -1,6 +1,10 @@
 package dan200.computercraft.core.apis;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -92,7 +96,9 @@ class DomainPatternCacheTest {
                 workers.submit(() -> {
                     try {
                         assertTrue(start.await(5, TimeUnit.SECONDS));
-                        assertTrue(cache.get("*.busy.test").matches("host.busy.test"));
+                        assertTrue(
+                            cache.get("*.busy.test")
+                                .matches("host.busy.test"));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     } finally {
@@ -115,8 +121,14 @@ class DomainPatternCacheTest {
 
     @Test
     void emptyAndEntrylessListsMatchNothing() {
-        assertFalse(new DomainPatternCache().get(";;").matches("localhost"));
-        assertFalse(new DomainPatternCache().get("").matches("localhost"));
-        assertTrue(new DomainPatternCache().get("localhost").matches("localhost"));
+        assertFalse(
+            new DomainPatternCache().get(";;")
+                .matches("localhost"));
+        assertFalse(
+            new DomainPatternCache().get("")
+                .matches("localhost"));
+        assertTrue(
+            new DomainPatternCache().get("localhost")
+                .matches("localhost"));
     }
 }

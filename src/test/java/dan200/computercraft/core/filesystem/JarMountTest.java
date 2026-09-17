@@ -1,6 +1,10 @@
 package dan200.computercraft.core.filesystem;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -126,7 +130,8 @@ class JarMountTest {
 
     @Test
     void missingJarThrowsFileNotFoundException() {
-        File missing = tempDir.resolve("absent.zip").toFile();
+        File missing = tempDir.resolve("absent.zip")
+            .toFile();
 
         assertThrows(FileNotFoundException.class, () -> new JarMount(missing, "rom"));
     }
@@ -188,9 +193,7 @@ class JarMountTest {
         assertFalse(mount.exists("nope.txt"));
         assertFalse(mount.isDirectory("nope.txt"));
         assertEquals("No such file", assertThrows(IOException.class, () -> mount.getSize("nope.txt")).getMessage());
-        assertEquals(
-            "No such file",
-            assertThrows(IOException.class, () -> mount.openForRead("nope.txt")).getMessage());
+        assertEquals("No such file", assertThrows(IOException.class, () -> mount.openForRead("nope.txt")).getMessage());
         assertEquals(
             "No such file",
             assertThrows(IOException.class, () -> mount.openForRead("")).getMessage(),
@@ -225,7 +228,8 @@ class JarMountTest {
      * {@code /} are directories; everything else is a file containing its own name.
      */
     private File writeJar(String name, String... entries) throws IOException {
-        File jar = tempDir.resolve(name).toFile();
+        File jar = tempDir.resolve(name)
+            .toFile();
         try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(jar))) {
             for (String entry : entries) {
                 out.putNextEntry(new ZipEntry(entry));

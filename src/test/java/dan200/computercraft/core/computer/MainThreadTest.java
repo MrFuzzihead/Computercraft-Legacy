@@ -1,6 +1,9 @@
 package dan200.computercraft.core.computer;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -34,6 +37,7 @@ class MainThreadTest {
 
     private static ITask task(Runnable action) {
         return new ITask() {
+
             @Override
             public Computer getOwner() {
                 return null;
@@ -63,7 +67,10 @@ class MainThreadTest {
         MainThread.executePendingTasks();
         MainThread.executePendingTasks();
         assertEquals(1001, executed.size());
-        for (int i = 0; i < 1001; i++) assertEquals(i, executed.get(i).intValue());
+        for (int i = 0; i < 1001; i++) assertEquals(
+            i,
+            executed.get(i)
+                .intValue());
     }
 
     @Test

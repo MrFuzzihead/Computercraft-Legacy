@@ -1,7 +1,11 @@
 package dan200.computercraft.core.apis;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -19,7 +23,8 @@ class PeripheralMetadataTest {
         IPeripheral peripheral = mock(IPeripheral.class);
         when(peripheral.getMethodNames()).thenReturn(new String[0]);
         IllegalArgumentException error = assertThrows(
-            IllegalArgumentException.class, () -> api.onPeripheralChanged(0, peripheral));
+            IllegalArgumentException.class,
+            () -> api.onPeripheralChanged(0, peripheral));
         assertEquals("Peripheral type must not be null", error.getMessage());
     }
 
@@ -29,7 +34,8 @@ class PeripheralMetadataTest {
         IPeripheral peripheral = mock(IPeripheral.class);
         when(peripheral.getType()).thenReturn("test");
         IllegalArgumentException error = assertThrows(
-            IllegalArgumentException.class, () -> api.onPeripheralChanged(0, peripheral));
+            IllegalArgumentException.class,
+            () -> api.onPeripheralChanged(0, peripheral));
         assertEquals("Peripheral method names must not be null", error.getMessage());
     }
 
@@ -40,8 +46,8 @@ class PeripheralMetadataTest {
         when(peripheral.getType()).thenReturn("test");
         // Construct only the wrapper, avoiding unrelated async attach work in the global task pool.
         Class<?> wrapperClass = Class.forName(PeripheralAPI.class.getName() + "$PeripheralWrapper");
-        Constructor<?> constructor = wrapperClass.getDeclaredConstructor(
-            PeripheralAPI.class, IPeripheral.class, String.class);
+        Constructor<?> constructor = wrapperClass
+            .getDeclaredConstructor(PeripheralAPI.class, IPeripheral.class, String.class);
         constructor.setAccessible(true);
         Field methods = wrapperClass.getDeclaredField("m_methodMap");
         methods.setAccessible(true);

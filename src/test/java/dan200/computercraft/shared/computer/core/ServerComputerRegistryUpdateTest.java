@@ -1,13 +1,21 @@
 package dan200.computercraft.shared.computer.core;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import net.minecraft.world.World;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-
-import net.minecraft.world.World;
 
 import dan200.computercraft.core.computer.ComputerThread;
 
@@ -31,8 +39,10 @@ class ServerComputerRegistryUpdateTest {
     private ServerComputer register(World world, boolean positioned) {
         ServerComputer computer = spy(new ServerComputer(world, 1, null, 100, ComputerFamily.Normal, 51, 19));
         if (positioned) computer.setPosition(0, 64, 0);
-        doNothing().when(computer).broadcastState();
-        doNothing().when(computer).broadcastDelete();
+        doNothing().when(computer)
+            .broadcastState();
+        doNothing().when(computer)
+            .broadcastDelete();
         registry.add(100, computer);
         clearInvocations(computer);
         return computer;
@@ -41,7 +51,8 @@ class ServerComputerRegistryUpdateTest {
     @Test
     void unloadedChunkSkipsUpdatesAndBroadcastsButStillTimesOut() {
         ServerComputer computer = register(world(false), true);
-        computer.getTerminal().write("changed");
+        computer.getTerminal()
+            .write("changed");
         for (int i = 0; i < 101; i++) registry.update();
         assertTrue(registry.contains(100));
         assertTrue(computer.hasTimedOut());
@@ -59,7 +70,8 @@ class ServerComputerRegistryUpdateTest {
     @Test
     void loadedChunkRemainsAliveAndBroadcastsChanges() {
         ServerComputer computer = register(world(true), true);
-        computer.getTerminal().write("changed");
+        computer.getTerminal()
+            .write("changed");
         registry.update();
         verify(computer).broadcastState();
         for (int i = 1; i < 110; i++) registry.update();
@@ -106,7 +118,8 @@ class ServerComputerRegistryUpdateTest {
     void reloadedChunkResumesBeforeTimeoutRemoval() {
         World world = world(false);
         ServerComputer computer = register(world, true);
-        computer.getTerminal().write("pending");
+        computer.getTerminal()
+            .write("pending");
         for (int i = 0; i < 101; i++) registry.update();
         verify(computer, never()).update();
         when(world.blockExists(0, 64, 0)).thenReturn(true);

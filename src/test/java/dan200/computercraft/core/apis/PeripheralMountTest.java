@@ -1,7 +1,18 @@
 package dan200.computercraft.core.apis;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -50,7 +61,8 @@ class PeripheralMountTest {
         when(peripheral.getMethodNames()).thenReturn(new String[0]);
         // Install a wrapper directly, avoiding the global async attach queue.
         Class<?> wrapper = Class.forName(PeripheralAPI.class.getName() + "$PeripheralWrapper");
-        Constructor<?> constructor = wrapper.getDeclaredConstructor(PeripheralAPI.class, IPeripheral.class, String.class);
+        Constructor<?> constructor = wrapper
+            .getDeclaredConstructor(PeripheralAPI.class, IPeripheral.class, String.class);
         constructor.setAccessible(true);
         access = (IComputerAccess) constructor.newInstance(api, peripheral, "left");
         Field attached = wrapper.getDeclaredField("m_attached");
@@ -66,11 +78,14 @@ class PeripheralMountTest {
         when(appender.isStarted()).thenReturn(true);
         doAnswer(invocation -> {
             LogEvent event = invocation.getArgument(0);
-            messages.add(event.getMessage().getFormattedMessage());
+            messages.add(
+                event.getMessage()
+                    .getFormattedMessage());
             exceptions.add(event.getThrown());
             assertEquals(Level.WARN, event.getLevel());
             return null;
-        }).when(appender).append(any(LogEvent.class));
+        }).when(appender)
+            .append(any(LogEvent.class));
         logger.addAppender(appender);
         logger.setLevel(Level.ALL);
     }
@@ -102,14 +117,20 @@ class PeripheralMountTest {
     void failedMountReturnsNullLogsCauseAndDoesNotClaimOwnership(boolean writable) throws Exception {
         FileSystemException failure = failure();
         if (writable) {
-            doThrow(failure).when(fileSystem).mountWritable("drive", "disk", mount);
+            doThrow(failure).when(fileSystem)
+                .mountWritable("drive", "disk", mount);
         } else {
-            doThrow(failure).when(fileSystem).mount("drive", "disk", mount);
+            doThrow(failure).when(fileSystem)
+                .mount("drive", "disk", mount);
         }
         assertNull(mount(writable));
         assertEquals(1, messages.size());
-        assertTrue(messages.get(0).contains("left"));
-        assertTrue(messages.get(0).contains("disk"));
+        assertTrue(
+            messages.get(0)
+                .contains("left"));
+        assertTrue(
+            messages.get(0)
+                .contains("disk"));
         assertSame(failure, exceptions.get(0));
         assertThrows(RuntimeException.class, () -> access.unmount("disk"));
         api.shutdown();
@@ -123,7 +144,9 @@ class PeripheralMountTest {
         when(fileSystem.exists("disk")).thenThrow(failure);
         assertNull(mount(writable));
         assertEquals(1, messages.size());
-        assertTrue(messages.get(0).contains("disk"));
+        assertTrue(
+            messages.get(0)
+                .contains("disk"));
         assertSame(failure, exceptions.get(0));
         verify(fileSystem, never()).mount(anyString(), anyString(), any(IMount.class));
         verify(fileSystem, never()).mountWritable(anyString(), anyString(), any(IWritableMount.class));

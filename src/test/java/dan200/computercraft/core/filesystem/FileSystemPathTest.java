@@ -24,11 +24,11 @@ class FileSystemPathTest {
 
     @Test
     void toLocalRejectsNonContainedPathsWithOrWithoutAssertions() {
-        for (String[] example : new String[][] {
-            { "romario/file", "rom" }, { "other/file", "rom" }, { "ro", "rom" },
+        for (String[] example : new String[][] { { "romario/file", "rom" }, { "other/file", "rom" }, { "ro", "rom" },
             { "", "rom" }, { "rom/../outside", "rom" }, { "../outside", "" }, { "..", "" } }) {
             IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class, () -> FileSystem.toLocal(example[0], example[1]));
+                IllegalArgumentException.class,
+                () -> FileSystem.toLocal(example[0], example[1]));
             assertEquals("Path is outside mount location", error.getMessage());
         }
     }

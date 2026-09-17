@@ -1,8 +1,13 @@
 package dan200.computercraft;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -59,11 +64,14 @@ class LoggingTest {
         doAnswer(invocation -> {
             LogEvent event = invocation.getArgument(0);
             // Copy values while appending: Log4j may reuse its event objects.
-            messages.add(event.getMessage().getFormattedMessage());
+            messages.add(
+                event.getMessage()
+                    .getFormattedMessage());
             exceptions.add(event.getThrown());
             levels.add(event.getLevel());
             return null;
-        }).when(appender).append(any(LogEvent.class));
+        }).when(appender)
+            .append(any(LogEvent.class));
         logger.addAppender(appender);
         logger.setLevel(Level.ALL);
         logger.setAdditive(false);
@@ -112,8 +120,16 @@ class LoggingTest {
         Files.createDirectory(directory.resolve("not-an-id"));
         assertEquals(8, IDAssigner.getNextIDFromDirectory(directory.toFile()));
         assertEquals(9, IDAssigner.getNextIDFromDirectory(directory.toFile()));
-        assertEquals(0, IDAssigner.getNextIDFromFile(temp.resolve("standalone-id").toFile()));
-        assertEquals(1, IDAssigner.getNextIDFromFile(temp.resolve("standalone-id").toFile()));
+        assertEquals(
+            0,
+            IDAssigner.getNextIDFromFile(
+                temp.resolve("standalone-id")
+                    .toFile()));
+        assertEquals(
+            1,
+            IDAssigner.getNextIDFromFile(
+                temp.resolve("standalone-id")
+                    .toFile()));
         assertTrue(messages.isEmpty());
     }
 
@@ -124,8 +140,12 @@ class LoggingTest {
         assertDoesNotThrow(() -> handler.onClientPacket(null));
         assertDoesNotThrow(() -> handler.onServerPacket(null));
         assertEquals(2, messages.size());
-        assertTrue(messages.get(0).contains("client-bound packet"));
-        assertTrue(messages.get(1).contains("server-bound packet"));
+        assertTrue(
+            messages.get(0)
+                .contains("client-bound packet"));
+        assertTrue(
+            messages.get(1)
+                .contains("server-bound packet"));
         for (int i = 0; i < 2; i++) {
             assertEquals(Level.ERROR, levels.get(i));
             assertTrue(exceptions.get(i) instanceof NullPointerException);
@@ -145,7 +165,9 @@ class LoggingTest {
             ccClass.set(null, String.class);
             assertNull(findMethod.invoke(null, "missingComputerCraftMethod", new Class<?>[0]));
             assertEquals(1, messages.size());
-            assertTrue(messages.get(0).contains("missingComputerCraftMethod"));
+            assertTrue(
+                messages.get(0)
+                    .contains("missingComputerCraftMethod"));
             assertEquals(Level.WARN, levels.get(0));
             assertTrue(exceptions.get(0) instanceof NoSuchMethodException);
         } finally {
@@ -159,7 +181,10 @@ class LoggingTest {
         assertTrue(Files.isDirectory(sources), "source guard must not silently scan an absent directory");
         List<Path> offenders = new ArrayList<>();
         try (Stream<Path> paths = Files.walk(sources)) {
-            for (Path path : paths.filter(p -> p.toString().endsWith(".java")).collect(Collectors.toList())) {
+            for (Path path : paths.filter(
+                p -> p.toString()
+                    .endsWith(".java"))
+                .collect(Collectors.toList())) {
                 String source = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
                 if (source.matches("(?s).*\\.printStackTrace\\s*\\(.*")
                     || source.matches("(?s).*System\\.(out|err)\\.print(ln|f)?\\s*\\(.*")) {
@@ -172,8 +197,12 @@ class LoggingTest {
 
     private void assertError(String operation, Path path, Class<? extends Throwable> exceptionType) {
         assertEquals(1, messages.size(), "one contextual log entry, not separate message and stack trace");
-        assertTrue(messages.get(0).contains(operation));
-        assertTrue(messages.get(0).contains(path.toString()));
+        assertTrue(
+            messages.get(0)
+                .contains(operation));
+        assertTrue(
+            messages.get(0)
+                .contains(path.toString()));
         assertEquals(Level.ERROR, levels.get(0));
         assertTrue(exceptionType.isInstance(exceptions.get(0)), "the original exception must be attached");
     }

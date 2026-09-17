@@ -1,6 +1,12 @@
 package dan200.computercraft.core.apis;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -337,9 +343,12 @@ class TermAPITest {
     void blitRejectsInvalidColoursWithoutChangingTerminal() {
         terminal.setLine(1, "original", "12345678", "87654321");
         terminal.setCursorPos(2, 1);
-        String text = terminal.getLine(1).toString();
-        String foreground = terminal.getTextColourLine(1).toString();
-        String background = terminal.getBackgroundColourLine(1).toString();
+        String text = terminal.getLine(1)
+            .toString();
+        String foreground = terminal.getTextColourLine(1)
+            .toString();
+        String background = terminal.getBackgroundColourLine(1)
+            .toString();
         terminal.clearChanged();
 
         for (String invalid : new String[] { "g", "z", "A", "F", " ", "\n", "\u0000", "\u00e9", "\uff10" }) {
@@ -348,9 +357,18 @@ class TermAPITest {
                 args[argument] = "0f" + invalid;
                 LuaException error = assertThrows(LuaException.class, () -> api.callMethod(null, 18, args));
                 assertEquals("Invalid colour", error.getMessage());
-                assertEquals(text, terminal.getLine(1).toString());
-                assertEquals(foreground, terminal.getTextColourLine(1).toString());
-                assertEquals(background, terminal.getBackgroundColourLine(1).toString());
+                assertEquals(
+                    text,
+                    terminal.getLine(1)
+                        .toString());
+                assertEquals(
+                    foreground,
+                    terminal.getTextColourLine(1)
+                        .toString());
+                assertEquals(
+                    background,
+                    terminal.getBackgroundColourLine(1)
+                        .toString());
                 assertEquals(2, terminal.getCursorX());
                 assertEquals(1, terminal.getCursorY());
                 assertFalse(terminal.getChanged());
@@ -365,18 +383,34 @@ class TermAPITest {
         String background = "fedcba9876543210";
         terminal.setCursorPos(2, 1);
         assertNull(api.callMethod(null, 18, new Object[] { text, foreground, background }));
-        assertEquals(text, terminal.getLine(1).toString().substring(2, 18));
-        assertEquals(foreground, terminal.getTextColourLine(1).toString().substring(2, 18));
-        assertEquals(background, terminal.getBackgroundColourLine(1).toString().substring(2, 18));
+        assertEquals(
+            text,
+            terminal.getLine(1)
+                .toString()
+                .substring(2, 18));
+        assertEquals(
+            foreground,
+            terminal.getTextColourLine(1)
+                .toString()
+                .substring(2, 18));
+        assertEquals(
+            background,
+            terminal.getBackgroundColourLine(1)
+                .toString()
+                .substring(2, 18));
         assertEquals(18, terminal.getCursorX());
         assertEquals(1, terminal.getCursorY());
     }
 
     @Test
     void blitAcceptsEmptyStrings() throws LuaException {
-        String before = terminal.getLine(0).toString();
+        String before = terminal.getLine(0)
+            .toString();
         assertNull(api.callMethod(null, 18, new Object[] { "", "", "" }));
-        assertEquals(before, terminal.getLine(0).toString());
+        assertEquals(
+            before,
+            terminal.getLine(0)
+                .toString());
         assertEquals(0, terminal.getCursorX());
     }
 
@@ -441,7 +475,8 @@ class TermAPITest {
             readers[i] = new Thread(() -> {
                 try {
                     while (!stop.get()) {
-                        long text = ((Number) api.callMethod(null, METHOD_GET_TEXT_COLOR, new Object[0])[0]).longValue();
+                        long text = ((Number) api.callMethod(null, METHOD_GET_TEXT_COLOR, new Object[0])[0])
+                            .longValue();
                         long bg = ((Number) api.callMethod(null, METHOD_GET_BG_COLOUR, new Object[0])[0]).longValue();
                         if (text != 1 && text != 16) throw new AssertionError("torn text colour: " + text);
                         if (bg != 32768 && bg != 4) throw new AssertionError("torn background colour: " + bg);

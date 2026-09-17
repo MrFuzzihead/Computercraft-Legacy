@@ -77,10 +77,8 @@ class TextBufferTest {
     @Test
     void writeClippingPreservesSourceOffsetForBothOverloads() {
         for (boolean useBuffer : new boolean[] { false, true }) {
-            for (Object[] example : new Object[][] {
-                { -2, 99, "cdef--" }, { 4, 99, "----ab" }, { 1, 3, "-ab---" },
-                { 1, 99, "-abcde" }, { -8, 99, "------" }, { 9, 99, "------" },
-                { 3, 1, "------" } }) {
+            for (Object[] example : new Object[][] { { -2, 99, "cdef--" }, { 4, 99, "----ab" }, { 1, 3, "-ab---" },
+                { 1, 99, "-abcde" }, { -8, 99, "------" }, { 9, 99, "------" }, { 3, 1, "------" } }) {
                 TextBuffer buffer = new TextBuffer("------");
                 int start = (Integer) example[0];
                 int end = (Integer) example[1];
@@ -89,7 +87,10 @@ class TextBufferTest {
                 } else {
                     buffer.write("abcdef", start, end);
                 }
-                assertEquals(example[2], buffer.toString(), "buffer=" + useBuffer + ", start=" + start + ", end=" + end);
+                assertEquals(
+                    example[2],
+                    buffer.toString(),
+                    "buffer=" + useBuffer + ", start=" + start + ", end=" + end);
             }
         }
     }

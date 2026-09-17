@@ -405,7 +405,8 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                             PeripheralAPI.this.m_fileSystem.mount(driveName, location, mount);
                         } catch (FileSystemException e) {
                             ComputerCraft.logger.warn(
-                                "ComputerCraft: failed to mount peripheral " + this.m_side + " at " + location, e);
+                                "ComputerCraft: failed to mount peripheral " + this.m_side + " at " + location,
+                                e);
                             return null;
                         }
                     }
@@ -437,7 +438,8 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                             PeripheralAPI.this.m_fileSystem.mountWritable(driveName, location, mount);
                         } catch (FileSystemException e) {
                             ComputerCraft.logger.warn(
-                                "ComputerCraft: failed to mount writable peripheral " + this.m_side + " at " + location, e);
+                                "ComputerCraft: failed to mount writable peripheral " + this.m_side + " at " + location,
+                                e);
                             return null;
                         }
                     }

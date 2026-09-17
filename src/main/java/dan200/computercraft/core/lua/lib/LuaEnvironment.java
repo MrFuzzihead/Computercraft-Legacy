@@ -226,7 +226,8 @@ public class LuaEnvironment implements ILuaEnvironment {
                     try {
                         getFs().mountWritable(driveName, location, mount);
                     } catch (FileSystemException e) {
-                        ComputerCraft.logger.warn("Computer {} failed to mount writable storage at '{}'", getID(), location, e);
+                        ComputerCraft.logger
+                            .warn("Computer {} failed to mount writable storage at '{}'", getID(), location, e);
                         return null;
                     }
 

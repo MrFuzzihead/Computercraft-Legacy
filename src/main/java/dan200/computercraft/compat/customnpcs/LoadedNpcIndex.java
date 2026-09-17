@@ -99,6 +99,7 @@ public final class LoadedNpcIndex {
     }
 
     private static final class Entry {
+
         final ICustomNpc<?> npc;
         final int order;
 

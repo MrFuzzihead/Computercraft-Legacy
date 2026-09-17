@@ -1,6 +1,9 @@
 package dan200.computercraft.shared.peripheral.modem;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import java.lang.reflect.Modifier;
@@ -31,7 +34,10 @@ class WirelessNetworkCacheTest {
 
     @Test
     void cacheLookupAndCreationShareClassMonitor() throws Exception {
-        assertTrue(Modifier.isSynchronized(WirelessNetwork.class.getMethod("get", World.class).getModifiers()));
+        assertTrue(
+            Modifier.isSynchronized(
+                WirelessNetwork.class.getMethod("get", World.class)
+                    .getModifiers()));
     }
 
     @Test

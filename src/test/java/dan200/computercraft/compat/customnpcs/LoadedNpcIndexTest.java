@@ -1,7 +1,15 @@
 package dan200.computercraft.compat.customnpcs;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -69,9 +77,12 @@ class LoadedNpcIndexTest {
             return new IEntity<?>[] { npc };
         });
         assertNull(index.find(null));
-        assertTrue(index.findAll(Collections.emptySet()).isEmpty());
+        assertTrue(
+            index.findAll(Collections.emptySet())
+                .isEmpty());
         assertEquals(0, scans.get());
-        index.findAll(Collections.singleton("id")).clear();
+        index.findAll(Collections.singleton("id"))
+            .clear();
         assertSame(npc, index.find("id"));
     }
 
@@ -103,11 +114,19 @@ class LoadedNpcIndexTest {
         LoadedNpcIndex index = new LoadedNpcIndex(() -> new IEntity<?>[] { npc });
         when(npc.getName()).thenReturn("before");
         when(npc.isAlive()).thenReturn(true);
-        assertEquals("before", index.find("id").getName());
+        assertEquals(
+            "before",
+            index.find("id")
+                .getName());
         when(npc.getName()).thenReturn("after");
         when(npc.isAlive()).thenReturn(false);
-        assertEquals("after", index.find("id").getName());
-        assertFalse(index.find("id").isAlive());
+        assertEquals(
+            "after",
+            index.find("id")
+                .getName());
+        assertFalse(
+            index.find("id")
+                .isAlive());
     }
 
     @Test
@@ -120,10 +139,16 @@ class LoadedNpcIndexTest {
         });
         // Forge's bus registration requires LaunchClassLoader; check the subscription
         // metadata and invoke handlers directly in this plain JUnit environment.
-        assertEquals(EventPriority.HIGHEST, LoadedNpcIndex.class.getMethod("onServerTick", ServerTickEvent.class)
-            .getAnnotation(SubscribeEvent.class).priority());
-        assertEquals(EventPriority.LOWEST, LoadedNpcIndex.class.getMethod("onServerTickEnd", ServerTickEvent.class)
-            .getAnnotation(SubscribeEvent.class).priority());
+        assertEquals(
+            EventPriority.HIGHEST,
+            LoadedNpcIndex.class.getMethod("onServerTick", ServerTickEvent.class)
+                .getAnnotation(SubscribeEvent.class)
+                .priority());
+        assertEquals(
+            EventPriority.LOWEST,
+            LoadedNpcIndex.class.getMethod("onServerTickEnd", ServerTickEvent.class)
+                .getAnnotation(SubscribeEvent.class)
+                .priority());
         index.onServerTick(new ServerTickEvent(Phase.START));
         assertEquals(0, scans.get());
         assertSame(npc, index.find("id"));
@@ -185,7 +210,9 @@ class LoadedNpcIndexTest {
             assertSame(npc, resolve.invoke(peripheral, "id"));
             tile.clearLinks();
             assertNull(tile.resolveNpc());
-            assertTrue(tile.resolveNpcs().isEmpty());
+            assertTrue(
+                tile.resolveNpcs()
+                    .isEmpty());
             assertSame(npc, shared.find("id"));
         } finally {
             tile.clearLinks();

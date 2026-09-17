@@ -1,6 +1,9 @@
 package dan200.computercraft.shared.peripheral.monitor;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -254,10 +257,7 @@ class MonitorPeripheralTest {
         MonitorPeripheral peripheral = new MonitorPeripheral(null);
         // The exact B10 reproduction ("x", "g", "0") plus further invalid chars
         // ('A', ' ') outside the renderer's "0123456789abcdef" alphabet.
-        for (Object[] args : new Object[][] {
-            { "x", "g", "0" },
-            { "xyz", "0g2", "fed" },
-            { "xyz", "012", "feA" },
+        for (Object[] args : new Object[][] { { "x", "g", "0" }, { "xyz", "0g2", "fed" }, { "xyz", "012", "feA" },
             { "xyz", "0 2", "fed" } }) {
             LuaException error = assertThrows(
                 LuaException.class,

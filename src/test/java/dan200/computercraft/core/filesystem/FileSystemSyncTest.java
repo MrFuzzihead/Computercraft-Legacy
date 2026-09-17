@@ -1,6 +1,7 @@
 package dan200.computercraft.core.filesystem;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
@@ -16,8 +17,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import dan200.computercraft.api.filesystem.IMount;
 
 /**
  * Unit tests for {@link FileSystem} locking discipline (B8).
@@ -51,7 +50,9 @@ class FileSystemSyncTest {
 
     @BeforeEach
     void setUp() throws FileSystemException {
-        fileSystem = new FileSystem("hdd", new dan200.computercraft.core.filesystem.FileMount(tempDir.toFile(), 1024 * 1024L));
+        fileSystem = new FileSystem(
+            "hdd",
+            new dan200.computercraft.core.filesystem.FileMount(tempDir.toFile(), 1024 * 1024L));
     }
 
     @Test
@@ -73,7 +74,9 @@ class FileSystemSyncTest {
     @Test
     void getFreeSpaceIsSynchronizedLikeItsSiblings() throws Exception {
         assertTrue(
-            Modifier.isSynchronized(FileSystem.class.getMethod("getFreeSpace", String.class).getModifiers()),
+            Modifier.isSynchronized(
+                FileSystem.class.getMethod("getFreeSpace", String.class)
+                    .getModifiers()),
             "getFreeSpace must be synchronized like every other public FileSystem method");
     }
 

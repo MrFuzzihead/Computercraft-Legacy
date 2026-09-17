@@ -1,7 +1,14 @@
 package dan200.computercraft.shared.network;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,11 +18,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import net.minecraft.nbt.NBTTagCompound;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import net.minecraft.nbt.NBTTagCompound;
 
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.core.terminal.Terminal;
@@ -39,10 +46,12 @@ class ClientPacketDispatcherTest {
     private final Thread clientThread = Thread.currentThread();
     private final ClientComputerRegistry savedRegistry = ComputerCraft.clientComputerRegistry;
     private final ClientComputerRegistry registry = new ClientComputerRegistry() {
+
         @Override
         public void add(int instanceID, ClientComputer computer) {
             ClientComputer registered = spy(computer);
-            doNothing().when(registered).requestState();
+            doNothing().when(registered)
+                .requestState();
             super.add(instanceID, registered);
         }
     };
@@ -113,7 +122,8 @@ class ClientPacketDispatcherTest {
                 dispatcher.receive(connection, deletePacket());
                 dispatcher.receive(connection, description(3, "abc"));
                 dispatcher.receive(connection, description(6, "netty"));
-            }).get(5, TimeUnit.SECONDS);
+            })
+                .get(5, TimeUnit.SECONDS);
         } finally {
             worker.shutdownNow();
             assertTrue(worker.awaitTermination(5, TimeUnit.SECONDS));
@@ -123,7 +133,12 @@ class ClientPacketDispatcherTest {
         assertFalse(registry.contains(42), "nothing may apply before the client thread drains");
         drain();
         assertEquals(java.util.Arrays.asList(4, 8, 0, 3, 6), widths);
-        assertEquals("netty ", registry.get(42).getTerminal().getLine(0).toString());
+        assertEquals(
+            "netty ",
+            registry.get(42)
+                .getTerminal()
+                .getLine(0)
+                .toString());
         dispatcher.receive(connection, deletePacket());
         drain();
         assertFalse(registry.contains(42), "the queued delete must remove the computer");
@@ -132,8 +147,10 @@ class ClientPacketDispatcherTest {
     @Test
     void disconnectAndReconnectDiscardQueuedAndLateOldPacketsAndResetFirst() {
         List<String> actions = new ArrayList<>();
-        ClientPacketDispatcher dispatcher = new ClientPacketDispatcher(scheduled::add,
-            () -> actions.add("reset"), packet -> actions.add("packet"));
+        ClientPacketDispatcher dispatcher = new ClientPacketDispatcher(
+            scheduled::add,
+            () -> actions.add("reset"),
+            packet -> actions.add("packet"));
         dispatcher.connected(connection);
         drain();
         actions.clear();
@@ -174,8 +191,10 @@ class ClientPacketDispatcherTest {
     @Test
     void inlineSchedulerStillPreservesOrder() {
         List<String> actions = new ArrayList<>();
-        ClientPacketDispatcher dispatcher = new ClientPacketDispatcher(Runnable::run,
-            () -> actions.add("reset"), packet -> actions.add("packet"));
+        ClientPacketDispatcher dispatcher = new ClientPacketDispatcher(
+            Runnable::run,
+            () -> actions.add("reset"),
+            packet -> actions.add("packet"));
         dispatcher.connected(connection);
         dispatcher.receive(connection, description(1, ""));
         dispatcher.disconnected(connection);

@@ -324,7 +324,8 @@ public class ComputerCraft {
     private static void registerCustomNpcCompat() {
         try {
             if (noppes.npcs.api.AbstractNpcAPI.IsAvailable()) {
-                FMLCommonHandler.instance().bus()
+                FMLCommonHandler.instance()
+                    .bus()
                     .register(dan200.computercraft.compat.customnpcs.LoadedNpcIndex.instance());
                 noppes.npcs.api.AbstractNpcAPI.Instance()
                     .events()
@@ -358,7 +359,8 @@ public class ComputerCraft {
     @EventHandler
     public void onServerStopped(FMLServerStoppedEvent event) {
         try {
-            dan200.computercraft.compat.customnpcs.LoadedNpcIndex.instance().clear();
+            dan200.computercraft.compat.customnpcs.LoadedNpcIndex.instance()
+                .clear();
         } catch (LinkageError ignored) {
             // Optional CustomNPCs classes may be absent.
         }

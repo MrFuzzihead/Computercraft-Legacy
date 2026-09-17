@@ -1,7 +1,19 @@
 package dan200.computercraft.core.lua.lib;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -57,11 +69,14 @@ class LuaEnvironmentMountTest {
         when(appender.isStarted()).thenReturn(true);
         doAnswer(invocation -> {
             LogEvent event = invocation.getArgument(0);
-            messages.add(event.getMessage().getFormattedMessage());
+            messages.add(
+                event.getMessage()
+                    .getFormattedMessage());
             exceptions.add(event.getThrown());
             assertEquals(Level.WARN, event.getLevel());
             return null;
-        }).when(appender).append(any(LogEvent.class));
+        }).when(appender)
+            .append(any(LogEvent.class));
         logger.addAppender(appender);
         logger.setLevel(Level.ALL);
     }
@@ -86,8 +101,12 @@ class LuaEnvironmentMountTest {
 
     private void assertDiagnostic(Throwable failure) {
         assertEquals(1, messages.size());
-        assertTrue(messages.get(0).contains("42"));
-        assertTrue(messages.get(0).contains("disk"));
+        assertTrue(
+            messages.get(0)
+                .contains("42"));
+        assertTrue(
+            messages.get(0)
+                .contains("disk"));
         assertSame(failure, exceptions.get(0));
     }
 
@@ -95,8 +114,12 @@ class LuaEnvironmentMountTest {
     @ValueSource(booleans = { false, true })
     void failedMountDoesNotClaimOwnershipAndCanBeRetried(boolean writable) throws Exception {
         FileSystemException failure = failure();
-        if (writable) doThrow(failure).doNothing().when(fileSystem).mountWritable("drive", "disk", mount);
-        else doThrow(failure).doNothing().when(fileSystem).mount("drive", "disk", mount);
+        if (writable) doThrow(failure).doNothing()
+            .when(fileSystem)
+            .mountWritable("drive", "disk", mount);
+        else doThrow(failure).doNothing()
+            .when(fileSystem)
+            .mount("drive", "disk", mount);
 
         assertNull(mount(writable));
         assertDiagnostic(failure);

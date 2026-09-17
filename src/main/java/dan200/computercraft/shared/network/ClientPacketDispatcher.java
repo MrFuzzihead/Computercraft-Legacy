@@ -16,8 +16,7 @@ public final class ClientPacketDispatcher {
     private Object m_connection;
     private boolean m_scheduled;
 
-    public ClientPacketDispatcher(Consumer<Runnable> schedule, Runnable reset,
-        Consumer<ComputerCraftPacket> handle) {
+    public ClientPacketDispatcher(Consumer<Runnable> schedule, Runnable reset, Consumer<ComputerCraftPacket> handle) {
         m_schedule = schedule;
         m_reset = reset;
         m_handle = handle;
@@ -66,7 +65,8 @@ public final class ClientPacketDispatcher {
                 try {
                     action.run();
                 } catch (Exception e) {
-                    ComputerCraft.logger.error("ComputerCraft: failed to handle client-bound packet or connection reset", e);
+                    ComputerCraft.logger
+                        .error("ComputerCraft: failed to handle client-bound packet or connection reset", e);
                 }
             }
         } finally {

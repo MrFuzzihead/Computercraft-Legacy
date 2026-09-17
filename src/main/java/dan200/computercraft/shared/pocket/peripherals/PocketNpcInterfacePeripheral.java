@@ -15,10 +15,10 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.INpcInterfaceHolder;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfaceManager;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfacePeripheral;
-import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import noppes.npcs.api.entity.ICustomNpc;
 
 /**
@@ -259,14 +259,16 @@ public class PocketNpcInterfacePeripheral implements IPeripheral, INpcInterfaceH
     public ICustomNpc<?> resolveNpc() {
         String uuid = getLinkedUUID();
         if (uuid == null) return null;
-        return LoadedNpcIndex.instance().find(uuid);
+        return LoadedNpcIndex.instance()
+            .find(uuid);
     }
 
     @Override
     public List<ICustomNpc<?>> resolveNpcs() {
         Map<String, String> linked = getLinkedNpcs();
         if (linked.isEmpty()) return Collections.emptyList();
-        return LoadedNpcIndex.instance().findAll(linked.keySet());
+        return LoadedNpcIndex.instance()
+            .findAll(linked.keySet());
     }
 
     // =========================================================================

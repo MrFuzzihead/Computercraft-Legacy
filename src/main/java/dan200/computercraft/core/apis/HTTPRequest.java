@@ -78,8 +78,10 @@ public class HTTPRequest {
             .toLowerCase();
         if (!protocol.equals("http") && !protocol.equals("https")) throw new LuaException("URL not http");
 
-        if (!WHITELIST.get(ComputerCraft.http_whitelist).matches(url.getHost())) throw new LuaException("Domain not permitted");
-        if (BLACKLIST.get(ComputerCraft.http_blacklist).matches(url.getHost())) throw new LuaException("Domain blocked");
+        if (!WHITELIST.get(ComputerCraft.http_whitelist)
+            .matches(url.getHost())) throw new LuaException("Domain not permitted");
+        if (BLACKLIST.get(ComputerCraft.http_blacklist)
+            .matches(url.getHost())) throw new LuaException("Domain blocked");
 
         return url;
     }
@@ -103,8 +105,10 @@ public class HTTPRequest {
             throw new LuaException("URL malformed");
         }
 
-        if (!WHITELIST.get(ComputerCraft.http_whitelist).matches(host)) throw new LuaException("Domain not permitted");
-        if (BLACKLIST.get(ComputerCraft.http_blacklist).matches(host)) throw new LuaException("Domain blocked");
+        if (!WHITELIST.get(ComputerCraft.http_whitelist)
+            .matches(host)) throw new LuaException("Domain not permitted");
+        if (BLACKLIST.get(ComputerCraft.http_blacklist)
+            .matches(host)) throw new LuaException("Domain blocked");
 
         return uri;
     }

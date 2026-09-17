@@ -76,8 +76,8 @@ public class IDAssigner {
             out.newLine();
             out.close();
         } catch (IOException var13) {
-            ComputerCraft.logger.error(
-                "ComputerCraft: failed to write " + lastidFile + "; check filesystem permissions", var13);
+            ComputerCraft.logger
+                .error("ComputerCraft: failed to write " + lastidFile + "; check filesystem permissions", var13);
         }
 
         return id;

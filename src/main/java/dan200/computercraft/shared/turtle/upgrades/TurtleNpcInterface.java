@@ -24,11 +24,11 @@ import dan200.computercraft.api.turtle.TurtleCommandResult;
 import dan200.computercraft.api.turtle.TurtleSide;
 import dan200.computercraft.api.turtle.TurtleUpgradeType;
 import dan200.computercraft.api.turtle.TurtleVerb;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.BlockNpcInterface;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.INpcInterfaceHolder;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfaceManager;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfacePeripheral;
-import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import noppes.npcs.api.entity.ICustomNpc;
 
 /**
@@ -327,11 +327,13 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
         public List<ICustomNpc<?>> resolveNpcs() {
             Map<String, String> linked = readLinkedNpcs();
             if (linked.isEmpty()) return Collections.emptyList();
-            return LoadedNpcIndex.instance().findAll(linked.keySet());
+            return LoadedNpcIndex.instance()
+                .findAll(linked.keySet());
         }
 
         private static ICustomNpc<?> resolveByUUID(String uuid) {
-            return LoadedNpcIndex.instance().find(uuid);
+            return LoadedNpcIndex.instance()
+                .find(uuid);
         }
 
         // -----------------------------------------------------------------

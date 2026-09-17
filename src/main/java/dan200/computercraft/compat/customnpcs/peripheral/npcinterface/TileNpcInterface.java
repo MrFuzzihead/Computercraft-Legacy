@@ -16,10 +16,10 @@ import net.minecraft.util.IIcon;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import dan200.computercraft.shared.common.TileGeneric;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.peripheral.common.IPeripheralTile;
-import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import noppes.npcs.api.entity.ICustomNpc;
 
 /**
@@ -206,11 +206,13 @@ public class TileNpcInterface extends TileGeneric implements IPeripheralTile, IN
             if (m_linkedNpcs.isEmpty()) return Collections.emptyList();
             snapshot = new LinkedHashMap<>(m_linkedNpcs);
         }
-        return LoadedNpcIndex.instance().findAll(snapshot.keySet());
+        return LoadedNpcIndex.instance()
+            .findAll(snapshot.keySet());
     }
 
     private static ICustomNpc<?> resolveByUUID(String uuid) {
-        return LoadedNpcIndex.instance().find(uuid);
+        return LoadedNpcIndex.instance()
+            .find(uuid);
     }
 
     // -------------------------------------------------------------------------

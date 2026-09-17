@@ -10,9 +10,8 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
-import dan200.computercraft.compat.customnpcs.peripheral.NpcTypeNames;
 import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
-
+import dan200.computercraft.compat.customnpcs.peripheral.NpcTypeNames;
 import noppes.npcs.api.AbstractNpcAPI;
 import noppes.npcs.api.entity.ICustomNpc;
 import noppes.npcs.api.entity.IEntity;
@@ -471,7 +470,8 @@ public class NpcInterfacePeripheral implements IPeripheral {
 
     /** Resolves a loaded NPC entity by UUID. Must be called on the main thread. */
     private ICustomNpc<?> resolveByUUID(String uuid) {
-        return LoadedNpcIndex.instance().find(uuid);
+        return LoadedNpcIndex.instance()
+            .find(uuid);
     }
 
     // ---- Link helpers -------------------------------------------------------

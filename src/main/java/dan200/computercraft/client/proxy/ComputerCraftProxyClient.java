@@ -64,7 +64,8 @@ import dan200.computercraft.shared.turtle.entity.TurtleVisionCamera;
 public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
 
     private final ClientPacketDispatcher m_clientPackets = new ClientPacketDispatcher(
-        task -> Minecraft.getMinecraft().func_152344_a(task),
+        task -> Minecraft.getMinecraft()
+            .func_152344_a(task),
         () -> {
             ComputerCraft.clientComputerRegistry.reset();
             SpeakerManager.INSTANCE.stopAll();

@@ -44,7 +44,8 @@ final class DomainPatternCache {
 
         boolean matches(String host) {
             for (Pattern pattern : m_patterns) {
-                if (pattern.matcher(host).matches()) return true;
+                if (pattern.matcher(host)
+                    .matches()) return true;
             }
             return false;
         }
