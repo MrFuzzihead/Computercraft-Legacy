@@ -1,7 +1,5 @@
 package dan200.computercraft.core.apis;
 
-import java.io.BufferedReader;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -10,7 +8,6 @@ import java.util.Map;
 
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.ILuaContext;
-import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
 
 public class HTTPAPI implements ILuaAPI {
@@ -101,61 +98,6 @@ public class HTTPAPI implements ILuaAPI {
         synchronized (m_activeWebsockets) {
             m_activeWebsockets.removeIf(ws -> !ws.isConnectionOpen());
         }
-    }
-
-    private static ILuaObject wrapBufferedReader(final BufferedReader reader, final int responseCode) {
-        return new ILuaObject() {
-
-            @Override
-            public String[] getMethodNames() {
-                return new String[] { "readLine", "readAll", "close", "getResponseCode" };
-            }
-
-            @Override
-            public Object[] callMethod(ILuaContext context, int method, Object[] args) throws LuaException {
-                switch (method) {
-                    case 0:
-                        try {
-                            String line = reader.readLine();
-                            if (line != null) {
-                                return new Object[] { line };
-                            }
-
-                            return null;
-                        } catch (IOException var8) {
-                            return null;
-                        }
-                    case 1:
-                        try {
-                            StringBuilder result = new StringBuilder("");
-                            String line = reader.readLine();
-
-                            while (line != null) {
-                                result.append(line);
-                                line = reader.readLine();
-                                if (line != null) {
-                                    result.append("\n");
-                                }
-                            }
-
-                            return new Object[] { result.toString() };
-                        } catch (IOException var7) {
-                            return null;
-                        }
-                    case 2:
-                        try {
-                            reader.close();
-                            return null;
-                        } catch (IOException var6) {
-                            return null;
-                        }
-                    case 3:
-                        return new Object[] { responseCode };
-                    default:
-                        return null;
-                }
-            }
-        };
     }
 
     @Override
