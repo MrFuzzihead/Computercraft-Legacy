@@ -304,9 +304,12 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
             this.m_type = peripheral.getType();
             this.m_methods = peripheral.getMethodNames();
 
-            assert this.m_type != null;
-
-            assert this.m_methods != null;
+            if (this.m_type == null) {
+                throw new IllegalArgumentException("Peripheral type must not be null");
+            }
+            if (this.m_methods == null) {
+                throw new IllegalArgumentException("Peripheral method names must not be null");
+            }
 
             this.m_methodMap = new HashMap<>();
 

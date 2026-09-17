@@ -961,11 +961,18 @@ public class FileSystem {
         }
     }
 
+    /**
+     * Returns the sanitized path relative to the given mount location.
+     *
+     * @throws IllegalArgumentException if the path is not contained in the location
+     */
     public static String toLocal(String path, String location) {
         path = sanitizePath(path);
         location = sanitizePath(location);
 
-        assert contains(location, path);
+        if (!contains(location, path)) {
+            throw new IllegalArgumentException("Path is outside mount location");
+        }
 
         String local = path.substring(location.length());
         return local.startsWith("/") ? local.substring(1) : local;

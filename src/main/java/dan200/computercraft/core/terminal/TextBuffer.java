@@ -70,13 +70,13 @@ public class TextBuffer {
     }
 
     public void write(String text, int start, int end) {
-        int pos = start;
-        int var6 = Math.max(start, 0);
+        int sourceOrigin = start;
+        int clippedStart = Math.max(start, 0);
         end = Math.min(end, start + text.length());
         end = Math.min(end, this.m_text.length);
 
-        for (int i = var6; i < end; i++) {
-            this.m_text[i] = text.charAt(i - pos);
+        for (int i = clippedStart; i < end; i++) {
+            this.m_text[i] = text.charAt(i - sourceOrigin);
         }
     }
 
@@ -89,13 +89,13 @@ public class TextBuffer {
     }
 
     public void write(TextBuffer text, int start, int end) {
-        int pos = start;
-        int var6 = Math.max(start, 0);
+        int sourceOrigin = start;
+        int clippedStart = Math.max(start, 0);
         end = Math.min(end, start + text.length());
         end = Math.min(end, this.m_text.length);
 
-        for (int i = var6; i < end; i++) {
-            this.m_text[i] = text.charAt(i - pos);
+        for (int i = clippedStart; i < end; i++) {
+            this.m_text[i] = text.charAt(i - sourceOrigin);
         }
     }
 

@@ -861,15 +861,16 @@ public class TurtleBrain implements ITurtleAccess {
                     aabb.maxZ = aabb.maxZ - Facing.offsetsZForSide[moveDir] * push;
                 }
 
-                List list = world.getEntitiesWithinAABBExcludingEntity((Entity) null, aabb);
-                if (!list.isEmpty()) {
+                // Minecraft 1.7.10 exposes a raw list; this query contains only entities.
+                @SuppressWarnings("unchecked")
+                List<Entity> entities = world.getEntitiesWithinAABBExcludingEntity(null, aabb);
+                if (!entities.isEmpty()) {
                     double pushStep = 0.125;
                     double pushStepX = Facing.offsetsXForSide[moveDir] * pushStep;
                     double pushStepY = Facing.offsetsYForSide[moveDir] * pushStep;
                     double pushStepZ = Facing.offsetsZForSide[moveDir] * pushStep;
 
-                    for (int i = 0; i < list.size(); i++) {
-                        Entity entity = (Entity) list.get(i);
+                    for (Entity entity : entities) {
                         entity.moveEntity(pushStepX, pushStepY, pushStepZ);
                     }
                 }
