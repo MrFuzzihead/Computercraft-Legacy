@@ -71,6 +71,11 @@ public class ServerComputer extends ServerTerminal implements IComputer, IComput
         this.m_changedLastFrame = this.m_changed || this.m_computer.pollChanged();
         this.m_computer.clearChanged();
         this.m_changed = false;
+        advanceTimeout();
+    }
+
+    /** Age an inactive registry entry without advancing the computer or terminal. */
+    void advanceTimeout() {
         this.m_ticksSincePing++;
     }
 
