@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -205,7 +206,7 @@ class LoadedNpcIndexTest {
             assertSame(npc, tile.resolveNpc());
             assertEquals(Collections.singletonList(npc), tile.resolveNpcs());
             NpcInterfacePeripheral peripheral = new NpcInterfacePeripheral(tile);
-            var resolve = NpcInterfacePeripheral.class.getDeclaredMethod("resolveByUUID", String.class);
+            Method resolve = NpcInterfacePeripheral.class.getDeclaredMethod("resolveByUUID", String.class);
             resolve.setAccessible(true);
             assertSame(npc, resolve.invoke(peripheral, "id"));
             tile.clearLinks();

@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
+import java.lang.management.ThreadMXBean;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
@@ -334,7 +335,7 @@ class ComputerLockTest {
     }
 
     private static void assertComputerTaskBlockedOn(Computer computer) throws InterruptedException {
-        var threads = ManagementFactory.getThreadMXBean();
+        ThreadMXBean threads = ManagementFactory.getThreadMXBean();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
             for (ThreadInfo info : threads.getThreadInfo(threads.getAllThreadIds(), 32)) {
