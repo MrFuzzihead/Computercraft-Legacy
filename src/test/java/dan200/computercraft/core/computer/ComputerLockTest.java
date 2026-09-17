@@ -198,21 +198,11 @@ class ComputerLockTest {
     @Test
     void queuedEventRechecksStateUnderComputerMonitorAndDropsAfterShutdown() throws Exception {
         ILuaMachine machine = runningMachine();
-        CountDownLatch parked = new CountDownLatch(1);
-        CountDownLatch release = gate();
-        AtomicReference<Thread> worker = new AtomicReference<>();
-        queue(() -> {
-            worker.set(Thread.currentThread());
-            parked.countDown();
-            await(release);
-        });
-        await(parked);
-
         synchronized (computer) {
             computer.queueEvent("stale", new Object[] { 42 });
-            release.countDown();
-            // The task must block on Computer before inspecting its state, not enter Lua.
-            assertBlockedOn(worker.get(), computer);
+            // Lanes preserve ordering, not worker affinity. Observe the event task itself,
+            // rather than assuming it runs on the worker used by a preceding task.
+            assertComputerTaskBlockedOn(computer);
             computer.shutdown();
         }
         drain();
@@ -341,6 +331,33 @@ class ComputerLockTest {
             Thread.sleep(1);
         }
         fail("thread did not block on the expected monitor");
+    }
+
+    private static void assertComputerTaskBlockedOn(Computer computer) throws InterruptedException {
+        var threads = ManagementFactory.getThreadMXBean();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            for (ThreadInfo info : threads.getThreadInfo(threads.getAllThreadIds(), 32)) {
+                if (info == null || info.getThreadState() != Thread.State.BLOCKED
+                    || info.getLockInfo() == null
+                    || info.getLockInfo()
+                        .getIdentityHashCode() != System.identityHashCode(computer)
+                    || info.getLockOwnerId() != Thread.currentThread()
+                        .getId())
+                    continue;
+                for (StackTraceElement frame : info.getStackTrace()) {
+                    // Exclude the watchdog: abort() can also block on Computer, but is not
+                    // evidence that the queued event checked lifecycle state under its lock.
+                    if (frame.getClassName()
+                        .startsWith(Computer.class.getName() + "$")
+                        && frame.getMethodName()
+                            .equals("execute"))
+                        return;
+                }
+            }
+            Thread.sleep(1);
+        }
+        fail("computer task did not block on the expected monitor");
     }
 
     // Daemon helpers cannot pin the test JVM if a lock-order regression deadlocks them.
