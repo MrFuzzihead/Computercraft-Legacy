@@ -1,6 +1,5 @@
 package dan200.computercraft.shared.turtle.upgrades;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -29,9 +28,8 @@ import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.BlockNpcIn
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.INpcInterfaceHolder;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfaceManager;
 import dan200.computercraft.compat.customnpcs.peripheral.npcinterface.NpcInterfacePeripheral;
-import noppes.npcs.api.AbstractNpcAPI;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import noppes.npcs.api.entity.ICustomNpc;
-import noppes.npcs.api.entity.IEntity;
 
 /**
  * Turtle upgrade that embeds an NPC Interface into the turtle's tool slot.
@@ -329,36 +327,11 @@ public class TurtleNpcInterface implements ITurtleUpgrade {
         public List<ICustomNpc<?>> resolveNpcs() {
             Map<String, String> linked = readLinkedNpcs();
             if (linked.isEmpty()) return Collections.emptyList();
-            List<ICustomNpc<?>> result = new ArrayList<>();
-            try {
-                if (!AbstractNpcAPI.IsAvailable()) return result;
-                AbstractNpcAPI api = AbstractNpcAPI.Instance();
-                if (api == null) return result;
-                for (IEntity<?> entity : api.getLoadedEntities()) {
-                    if (entity instanceof ICustomNpc && linked.containsKey(entity.getUniqueID())) {
-                        result.add((ICustomNpc<?>) entity);
-                    }
-                }
-            } catch (Throwable t) {
-                // CNPC absent or incompatible
-            }
-            return result;
+            return LoadedNpcIndex.instance().findAll(linked.keySet());
         }
 
         private static ICustomNpc<?> resolveByUUID(String uuid) {
-            try {
-                if (!AbstractNpcAPI.IsAvailable()) return null;
-                AbstractNpcAPI api = AbstractNpcAPI.Instance();
-                if (api == null) return null;
-                for (IEntity<?> entity : api.getLoadedEntities()) {
-                    if (entity instanceof ICustomNpc && uuid.equals(entity.getUniqueID())) {
-                        return (ICustomNpc<?>) entity;
-                    }
-                }
-            } catch (Throwable t) {
-                // CNPC absent or incompatible
-            }
-            return null;
+            return LoadedNpcIndex.instance().find(uuid);
         }
 
         // -----------------------------------------------------------------

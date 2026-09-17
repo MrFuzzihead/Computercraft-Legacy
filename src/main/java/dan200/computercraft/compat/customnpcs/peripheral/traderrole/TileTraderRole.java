@@ -17,7 +17,7 @@ import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.peripheral.common.IPeripheralTile;
 import noppes.npcs.api.AbstractNpcAPI;
 import noppes.npcs.api.entity.ICustomNpc;
-import noppes.npcs.api.entity.IEntity;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import noppes.npcs.api.roles.IRoleTrader;
 
 /**
@@ -78,10 +78,8 @@ public class TileTraderRole extends TileGeneric implements IPeripheralTile {
             if (api == null) {
                 throw new LuaException("CustomNPCs API unavailable");
             }
-            for (IEntity<?> entity : api.getLoadedEntities()) {
-                if (!(entity instanceof ICustomNpc)) continue;
-                if (!m_linkedUUID.equals(entity.getUniqueID())) continue;
-                ICustomNpc<?> npc = (ICustomNpc<?>) entity;
+            ICustomNpc<?> npc = LoadedNpcIndex.instance().find(m_linkedUUID);
+            if (npc != null) {
                 if (!npc.isAlive()) {
                     throw new LuaException("NPC is dead");
                 }

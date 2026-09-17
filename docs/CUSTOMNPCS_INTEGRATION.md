@@ -4,6 +4,12 @@ Adds three new ComputerCraft peripherals and two turtle/pocket upgrades that int
 
 All features are fully gated on `isModLoaded("customnpcs")` and degrade gracefully if the mod is absent.
 
+### UUID lookup performance
+
+NPC Interface (block, pocket, and turtle) and Trader role UUID resolution share a lazy server-tick index of loaded NPCs across dimensions. Repeated polling, including missing UUIDs, no longer scans every loaded entity on each call. Names, health, roles, and other NPC properties are still read live; only loaded-entity membership is cached. An NPC loaded, unloaded, or replaced after the tick's first lookup is reflected on the next tick. Cache references are cleared at tick boundaries and server shutdown. Unlinking an interface does not evict NPCs used by other interfaces.
+
+This does not change Lua method signatures or make name/radius discovery scans use the UUID index. The NPC Detector continues using world-local spatial queries.
+
 ---
 
 ## Blocks
