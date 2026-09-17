@@ -182,6 +182,7 @@ public class ComputerCraft {
         prop = config.get("general", "http_blacklist", http_blacklist);
         prop.comment = "A semicolon limited list of wildcards for domains that can NOT be accessed through the \"http\" API on Computers, even if they are also whitelisted. Example: \"*.storage.googleapis.com\" will block access to just that domain.";
         http_blacklist = prop.getString();
+        dan200.computercraft.core.apis.HTTPRequest.prepareDomainPatterns();
         prop = config.get("general", "http_max_requests", http_max_requests);
         prop.comment = "The maximum number of HTTP requests a computer can have in flight at one time. Set to 0 for no limit.";
         http_max_requests = Math.max(0, prop.getInt());

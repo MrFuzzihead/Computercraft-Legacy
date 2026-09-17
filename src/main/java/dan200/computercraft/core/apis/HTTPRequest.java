@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.LuaException;
@@ -58,21 +57,13 @@ public class HTTPRequest {
         return m_executor;
     }
 
-    /**
-     * Tests a host against a semicolon-separated list of wildcard domain
-     * patterns (e.g. {@code "*.example.com;localhost"}). An empty list matches
-     * nothing.
-     */
-    private static boolean matchesDomain(String host, String list) {
-        for (String entry : list.split(";")) {
-            if (entry.isEmpty()) continue;
-            Pattern pattern = Pattern.compile("^\\Q" + entry.replaceAll("\\*", "\\\\E.*\\\\Q") + "\\E$");
-            if (pattern.matcher(host)
-                .matches()) {
-                return true;
-            }
-        }
-        return false;
+    static final DomainPatternCache WHITELIST = new DomainPatternCache();
+    static final DomainPatternCache BLACKLIST = new DomainPatternCache();
+
+    /** Precompile configured domains at startup; checks also detect later config changes. */
+    public static void prepareDomainPatterns() {
+        WHITELIST.get(ComputerCraft.http_whitelist);
+        BLACKLIST.get(ComputerCraft.http_blacklist);
     }
 
     public static URL checkURL(String urlString) throws LuaException {
@@ -87,8 +78,8 @@ public class HTTPRequest {
             .toLowerCase();
         if (!protocol.equals("http") && !protocol.equals("https")) throw new LuaException("URL not http");
 
-        if (!matchesDomain(url.getHost(), ComputerCraft.http_whitelist)) throw new LuaException("Domain not permitted");
-        if (matchesDomain(url.getHost(), ComputerCraft.http_blacklist)) throw new LuaException("Domain blocked");
+        if (!WHITELIST.get(ComputerCraft.http_whitelist).matches(url.getHost())) throw new LuaException("Domain not permitted");
+        if (BLACKLIST.get(ComputerCraft.http_blacklist).matches(url.getHost())) throw new LuaException("Domain blocked");
 
         return url;
     }
@@ -112,8 +103,8 @@ public class HTTPRequest {
             throw new LuaException("URL malformed");
         }
 
-        if (!matchesDomain(host, ComputerCraft.http_whitelist)) throw new LuaException("Domain not permitted");
-        if (matchesDomain(host, ComputerCraft.http_blacklist)) throw new LuaException("Domain blocked");
+        if (!WHITELIST.get(ComputerCraft.http_whitelist).matches(host)) throw new LuaException("Domain not permitted");
+        if (BLACKLIST.get(ComputerCraft.http_blacklist).matches(host)) throw new LuaException("Domain blocked");
 
         return uri;
     }
