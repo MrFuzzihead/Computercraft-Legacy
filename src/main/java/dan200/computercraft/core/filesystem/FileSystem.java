@@ -2,7 +2,6 @@ package dan200.computercraft.core.filesystem;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,8 +27,7 @@ import dan200.computercraft.core.lua.binfs.LuaExceptionStub;
 public class FileSystem {
 
     private Map<String, FileSystem.MountWrapper> m_mounts = new HashMap<>();
-    private Set<IMountedFile> m_openFiles = new HashSet<>();
-    private int openFilesCount;
+    private final Set<IMountedFile> m_openFiles = new HashSet<>();
 
     public FileSystem(String rootLabel, IMount rootMount) throws FileSystemException {
         this.mount(rootLabel, "", rootMount);
@@ -305,61 +303,7 @@ public class FileSystem {
         MountWrapper mount = getMount(path);
         InputStream stream = mount.openForRead(path);
         if (stream != null) {
-            // Wrap with PushbackInputStream(BufferedInputStream) so that \r\n handling never
-            // needs mark/reset (which BufferedInputStream can invalidate at buffer boundaries).
-            final PushbackInputStream reader = new PushbackInputStream(new BufferedInputStream(stream));
-            IMountedFileNormal file = new IMountedFileNormal() {
-
-                @Override
-                public byte[] readLine() throws IOException {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
-                    int val;
-                    while ((val = reader.read()) != -1) {
-                        if (val == '\r') {
-                            // Peek at the next byte to consume a \r\n pair.
-                            int next = reader.read();
-                            if (next != '\n' && next != -1) {
-                                // Not a \n — push it back so the next readLine() sees it.
-                                reader.unread(next);
-                            }
-                            return buffer.toByteArray();
-                        } else if (val == '\n') {
-                            return buffer.toByteArray();
-                        } else {
-                            buffer.write(val);
-                        }
-                    }
-                    // Reached EOF — return remaining content if any, otherwise null.
-                    return buffer.size() > 0 ? buffer.toByteArray() : null;
-                }
-
-                @Override
-                public byte[] readAll() throws IOException {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
-                    int nRead;
-                    byte[] data = new byte[1024];
-                    while ((nRead = reader.read(data, 0, data.length)) != -1) {
-                        buffer.write(data, 0, nRead);
-                    }
-
-                    return buffer.toByteArray();
-                }
-
-                @Override
-                public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
-                    throw new UnsupportedOperationException();
-                }
-
-                @Override
-                public void close() throws IOException {
-                    removeFile(this, reader);
-                }
-
-                @Override
-                public void flush() throws IOException {
-                    throw new UnsupportedOperationException();
-                }
-            };
+            IMountedFileNormal file = new StreamReadHandle(stream, false);
             addFile(file);
             return file;
         }
@@ -474,93 +418,7 @@ public class FileSystem {
         if (raf == null) {
             return null;
         }
-        IMountedFileReadWrite file = new IMountedFileReadWrite() {
-
-            @Override
-            public byte[] readLine() throws IOException {
-                return readLine(false);
-            }
-
-            @Override
-            public byte[] readLine(boolean withTrailing) throws IOException {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
-                int val;
-                while ((val = raf.read()) != -1) {
-                    if (val == '\r') {
-                        long pos = raf.getFilePointer();
-                        int next = raf.read();
-                        if (next != '\n' && next != -1) {
-                            raf.seek(pos);
-                        }
-                        if (withTrailing) buffer.write('\n');
-                        return buffer.toByteArray();
-                    } else if (val == '\n') {
-                        if (withTrailing) buffer.write('\n');
-                        return buffer.toByteArray();
-                    } else {
-                        buffer.write(val);
-                    }
-                }
-                return buffer.size() > 0 ? buffer.toByteArray() : null;
-            }
-
-            @Override
-            public byte[] read(int count) throws IOException {
-                if (count <= 0) return new byte[0];
-                byte[] buf = new byte[count];
-                int n = raf.read(buf, 0, count);
-                if (n == -1) return null;
-                return n == count ? buf : Arrays.copyOf(buf, n);
-            }
-
-            @Override
-            public byte[] readAll() throws IOException {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
-                int nRead;
-                byte[] data = new byte[1024];
-                while ((nRead = raf.read(data, 0, data.length)) != -1) {
-                    buffer.write(data, 0, nRead);
-                }
-                return buffer.toByteArray();
-            }
-
-            @Override
-            public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
-                raf.write(data, start, length);
-                if (newLine) raf.write('\n');
-            }
-
-            @Override
-            public long seek(String whence, long offset) throws IOException {
-                long newPos;
-                switch (whence) {
-                    case "set":
-                        newPos = offset;
-                        break;
-                    case "cur":
-                        newPos = raf.getFilePointer() + offset;
-                        break;
-                    case "end":
-                        newPos = raf.length() + offset;
-                        break;
-                    default:
-                        throw new IOException("Invalid whence value");
-                }
-                if (newPos < 0) throw new IOException("Cannot seek before the beginning of the file");
-                raf.seek(newPos);
-                return newPos;
-            }
-
-            @Override
-            public void flush() throws IOException {
-                // RandomAccessFile writes are unbuffered; nothing to flush
-            }
-
-            @Override
-            public void close() throws IOException {
-                removeFile(this, raf);
-            }
-        };
+        IMountedFileReadWrite file = new RandomAccessHandle(raf, true, true);
         addFile(file);
         return file;
     }
@@ -585,93 +443,7 @@ public class FileSystem {
         // Attempt RAF (seek-capable) path first.
         RandomAccessFile raf = mount.openForReadRandom(path); // null → mount doesn't support RAF
         if (raf != null) {
-            final RandomAccessFile rafFinal = raf;
-            IMountedFileNormal file = new IMountedFileNormal() {
-
-                @Override
-                public byte[] readLine() throws IOException {
-                    return readLine(false);
-                }
-
-                @Override
-                public byte[] readLine(boolean withTrailing) throws IOException {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
-                    int val;
-                    while ((val = rafFinal.read()) != -1) {
-                        if (val == '\r') {
-                            long pos = rafFinal.getFilePointer();
-                            int next = rafFinal.read();
-                            if (next != '\n' && next != -1) {
-                                rafFinal.seek(pos);
-                            }
-                            if (withTrailing) buffer.write('\n');
-                            return buffer.toByteArray();
-                        } else if (val == '\n') {
-                            if (withTrailing) buffer.write('\n');
-                            return buffer.toByteArray();
-                        } else {
-                            buffer.write(val);
-                        }
-                    }
-                    return buffer.size() > 0 ? buffer.toByteArray() : null;
-                }
-
-                @Override
-                public byte[] read(int count) throws IOException {
-                    if (count <= 0) return new byte[0];
-                    byte[] buf = new byte[count];
-                    int n = rafFinal.read(buf, 0, count);
-                    if (n == -1) return null;
-                    return n == count ? buf : Arrays.copyOf(buf, n);
-                }
-
-                @Override
-                public byte[] readAll() throws IOException {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
-                    int nRead;
-                    byte[] data = new byte[1024];
-                    while ((nRead = rafFinal.read(data, 0, data.length)) != -1) {
-                        buffer.write(data, 0, nRead);
-                    }
-                    return buffer.toByteArray();
-                }
-
-                @Override
-                public long seek(String whence, long offset) throws IOException {
-                    long newPos;
-                    switch (whence) {
-                        case "set":
-                            newPos = offset;
-                            break;
-                        case "cur":
-                            newPos = rafFinal.getFilePointer() + offset;
-                            break;
-                        case "end":
-                            newPos = rafFinal.length() + offset;
-                            break;
-                        default:
-                            throw new IOException("Invalid whence value");
-                    }
-                    if (newPos < 0) throw new IOException("Cannot seek before the beginning of the file");
-                    rafFinal.seek(newPos);
-                    return newPos;
-                }
-
-                @Override
-                public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
-                    throw new UnsupportedOperationException();
-                }
-
-                @Override
-                public void flush() throws IOException {
-                    throw new UnsupportedOperationException();
-                }
-
-                @Override
-                public void close() throws IOException {
-                    removeFile(this, rafFinal);
-                }
-            };
+            IMountedFileNormal file = new RandomAccessHandle(raf, true, false);
             addFile(file);
             return file;
         }
@@ -679,72 +451,7 @@ public class FileSystem {
         // Fall back to stream-based reading (seek not supported by this mount).
         InputStream stream = mount.openForRead(path);
         if (stream == null) return null;
-        final PushbackInputStream reader = new PushbackInputStream(new BufferedInputStream(stream));
-        IMountedFileNormal file = new IMountedFileNormal() {
-
-            @Override
-            public byte[] readLine() throws IOException {
-                return readLine(false);
-            }
-
-            @Override
-            public byte[] readLine(boolean withTrailing) throws IOException {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
-                int val;
-                while ((val = reader.read()) != -1) {
-                    if (val == '\r') {
-                        int next = reader.read();
-                        if (next != '\n' && next != -1) {
-                            reader.unread(next);
-                        }
-                        if (withTrailing) buffer.write('\n');
-                        return buffer.toByteArray();
-                    } else if (val == '\n') {
-                        if (withTrailing) buffer.write('\n');
-                        return buffer.toByteArray();
-                    } else {
-                        buffer.write(val);
-                    }
-                }
-                return buffer.size() > 0 ? buffer.toByteArray() : null;
-            }
-
-            @Override
-            public byte[] read(int count) throws IOException {
-                if (count <= 0) return new byte[0];
-                byte[] buf = new byte[count];
-                int n = reader.read(buf, 0, count);
-                if (n == -1) return null;
-                return n == count ? buf : Arrays.copyOf(buf, n);
-            }
-
-            @Override
-            public byte[] readAll() throws IOException {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
-                int nRead;
-                byte[] data = new byte[1024];
-                while ((nRead = reader.read(data, 0, data.length)) != -1) {
-                    buffer.write(data, 0, nRead);
-                }
-                return buffer.toByteArray();
-            }
-
-            @Override
-            public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void flush() throws IOException {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void close() throws IOException {
-                removeFile(this, reader);
-            }
-            // seek() inherits the default: throws IOException("seek not supported by this handle")
-        };
+        IMountedFileNormal file = new StreamReadHandle(stream, true);
         addFile(file);
         return file;
     }
@@ -766,55 +473,7 @@ public class FileSystem {
         path = sanitizePath(path);
         MountWrapper mount = getMount(path);
         final RandomAccessFile raf = mount.openForWriteRandom(path, append);
-        IMountedFileNormal file = new IMountedFileNormal() {
-
-            @Override
-            public byte[] readLine() throws IOException {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public byte[] readAll() throws IOException {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
-                raf.write(data, start, length);
-                if (newLine) raf.write('\n');
-            }
-
-            @Override
-            public long seek(String whence, long offset) throws IOException {
-                long newPos;
-                switch (whence) {
-                    case "set":
-                        newPos = offset;
-                        break;
-                    case "cur":
-                        newPos = raf.getFilePointer() + offset;
-                        break;
-                    case "end":
-                        newPos = raf.length() + offset;
-                        break;
-                    default:
-                        throw new IOException("Invalid whence value");
-                }
-                if (newPos < 0) throw new IOException("Cannot seek before the beginning of the file");
-                raf.seek(newPos);
-                return newPos;
-            }
-
-            @Override
-            public void flush() throws IOException {
-                // RandomAccessFile writes are unbuffered; no-op
-            }
-
-            @Override
-            public void close() throws IOException {
-                removeFile(this, raf);
-            }
-        };
+        IMountedFileNormal file = new RandomAccessHandle(raf, false, true);
         addFile(file);
         return file;
     }
@@ -981,7 +640,7 @@ public class FileSystem {
     public void addFile(IMountedFile file) {
         synchronized (m_openFiles) {
             m_openFiles.add(file);
-            if (++openFilesCount > ComputerCraft.maxFilesHandles) {
+            if (m_openFiles.size() > ComputerCraft.maxFilesHandles) {
                 // Ensure that we aren't over the open file limit
                 // We throw Lua exceptions as FileSystemExceptions won't be handled by fs.open
                 try {
@@ -997,9 +656,129 @@ public class FileSystem {
     public void removeFile(IMountedFile file, Closeable stream) throws IOException {
         synchronized (m_openFiles) {
             m_openFiles.remove(file);
-            openFilesCount--;
 
             stream.close();
+        }
+    }
+
+    private class StreamReadHandle extends AbstractReadHandle {
+
+        private final PushbackInputStream m_reader;
+        private final boolean m_extended;
+
+        StreamReadHandle(InputStream stream, boolean extended) {
+            m_reader = new PushbackInputStream(new BufferedInputStream(stream));
+            m_extended = extended;
+        }
+
+        @Override
+        protected int readByte() throws IOException {
+            return m_reader.read();
+        }
+
+        @Override
+        protected int readBytes(byte[] buffer) throws IOException {
+            return m_reader.read(buffer);
+        }
+
+        @Override
+        protected void unreadByte(int value) throws IOException {
+            m_reader.unread(value);
+        }
+
+        @Override
+        public byte[] readLine(boolean withTrailing) throws IOException {
+            return super.readLine(m_extended && withTrailing);
+        }
+
+        @Override
+        public byte[] read(int count) throws IOException {
+            if (!m_extended) throw new IOException("read not supported by this handle");
+            return super.read(count);
+        }
+
+        @Override
+        public void close() throws IOException {
+            removeFile(this, m_reader);
+        }
+    }
+
+    private class RandomAccessHandle extends AbstractReadHandle implements IMountedFileReadWrite {
+
+        private final RandomAccessFile m_file;
+        private final boolean m_readable;
+        private final boolean m_writable;
+
+        RandomAccessHandle(RandomAccessFile file, boolean readable, boolean writable) {
+            m_file = file;
+            m_readable = readable;
+            m_writable = writable;
+        }
+
+        private void checkReadable() {
+            if (!m_readable) throw new UnsupportedOperationException();
+        }
+
+        @Override
+        protected int readByte() throws IOException {
+            checkReadable();
+            return m_file.read();
+        }
+
+        @Override
+        protected int readBytes(byte[] buffer) throws IOException {
+            checkReadable();
+            return m_file.read(buffer);
+        }
+
+        @Override
+        protected void unreadByte(int value) throws IOException {
+            m_file.seek(m_file.getFilePointer() - 1);
+        }
+
+        @Override
+        public byte[] read(int count) throws IOException {
+            if (!m_readable) throw new IOException("read not supported by this handle");
+            return super.read(count);
+        }
+
+        @Override
+        public void write(byte[] data, int start, int length, boolean newLine) throws IOException {
+            if (!m_writable) throw new UnsupportedOperationException();
+            m_file.write(data, start, length);
+            if (newLine) m_file.write('\n');
+        }
+
+        @Override
+        public long seek(String whence, long offset) throws IOException {
+            long position;
+            switch (whence) {
+                case "set":
+                    position = offset;
+                    break;
+                case "cur":
+                    position = m_file.getFilePointer() + offset;
+                    break;
+                case "end":
+                    position = m_file.length() + offset;
+                    break;
+                default:
+                    throw new IOException("Invalid whence value");
+            }
+            if (position < 0) throw new IOException("Cannot seek before the beginning of the file");
+            m_file.seek(position);
+            return position;
+        }
+
+        @Override
+        public void flush() throws IOException {
+            if (!m_writable) throw new UnsupportedOperationException();
+            // RandomAccessFile writes are unbuffered.
+        }
+
+        @Override
+        public void close() throws IOException {
+            removeFile(this, m_file);
         }
     }
 

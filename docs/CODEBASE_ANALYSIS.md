@@ -231,11 +231,14 @@ Membership is a per-tick snapshot: NPCs loaded/unloaded/replaced after the first
 ### P6 🟡 Wired network BFS on every transmit
 `TileCable.dispatchPacket` runs a full BFS (`searchNetwork`, 256-block radius) for **every modem message**, and `findPeripherals` repeats it on every network change. Legacy behavior; fine for small networks, scales poorly for big cable farms. A per-network receiver index (like `WirelessNetwork`'s channel map) would remove the BFS from the hot path.
 
-### P7 🔵 Minor
-* `FixedWidthFontRenderer.getIndex(char)` does a linear scan over a 256-char string per glyph — precompute a `char → index` lookup table at font load.
-* `HTTPResponse.readLine` scans with `Arrays.copyOfRange` per line — fine, but a shared `ByteArrayInputStream`-style cursor would avoid copies.
-* `FileSystem` contains four near-identical copies of the `readLine`/`seek` handle implementations (read, read-write, read-seekable RAF, read-seekable stream, write-seekable) — extract a shared base class; ~200 lines saved and one place to fix bugs.
-* `FileSystem` tracks `m_openFiles` (HashSet) *and* `openFilesCount` (int) — redundant; use the set size.
+### P7 🔵 Minor — ✅ **FIXED**
+* `FixedWidthFontRenderer.getIndex(char)` now uses a lookup table built once at class initialization instead of scanning the font character string per glyph. The table covers all 65,536 Java character values and preserves first-occurrence mapping for duplicate characters, space for tab/CR/LF, and `?` for unsupported characters.
+* `FileSystem` now shares line parsing, counted reads, and read-all logic through `AbstractReadHandle`. Stream and random-access adapters supply byte access and one-byte lookahead; all three random-access modes share one seek implementation. CR/LF normalization, EOF results, legacy stream restrictions, read/write permissions, and close tracking remain unchanged.
+* `FileSystem` now enforces the handle limit using `m_openFiles.size()` under the existing lock; the redundant `openFilesCount` is removed. Rejected opens close their backing resource without removing accepted handles, and repeated closes cannot undercount active handles.
+
+**Report correction/scope:** `HTTPResponse` already uses one shared byte-array cursor across `readLine`, `read`, and `readAll`. `Arrays.copyOfRange` creates the returned `byte[]`, not an intermediate scanning buffer. A `ByteArrayInputStream` would not eliminate that output copy under the current Lua bridge contract. The existing binary-safe behavior and independent result arrays are retained; no zero-copy HTTP optimization is claimed.
+
+**Validation:** `FixedWidthFontRendererCharIndexTest` compares all character values with the legacy scan. `FileSystemReadHandleTest` covers stream/RAF/read-write parsing, buffer-boundary lookahead, mixed reads, seek modes/errors, and access restrictions. `FileSystemOpenFilesLimitTest` and `FileSystemHandleProbeTest` verify limits, repeated rejection/close, slot reuse, and rejected-stream cleanup. `HTTPResponseTest` adds mixed-read cursor and binary-result isolation coverage. Full suite: **1,321 tests pass**, no failures or skips on rerun. The first full run hit an existing `ComputerLockTest` monitor-wait timeout; no computer-lock code was changed. In-game rendering and performance benchmarks remain untested.
 
 ---
 
