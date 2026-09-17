@@ -660,18 +660,26 @@ end
 -- Install the lua part of the HTTP api (if enabled)
 if http then
     local nativeHTTPRequest = http.request
+    local nextRequestID = 0
+    local function allocateRequestID()
+        nextRequestID = nextRequestID + 1
+        return nextRequestID
+    end
 
     -- wrapRequest: performs a synchronous HTTP request and waits for the result.
     -- args: url, post body, headers, method verb, timeout (seconds), binary flag
     -- Returns: response on success; nil, errMsg, [responseOnError] on failure.
     local function wrapRequest( _url, _post, _headers, _method, _timeout, _binary )
-        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary )
+        local requestID = allocateRequestID()
+        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary, requestID )
         if ok then
+            -- Like other blocking APIs, unrelated events are not buffered here.
+            -- Use parallel or http.request when other events must be handled.
             while true do
-                local event, param1, param2, param3 = os.pullEvent()
-                if event == "http_success" and param1 == _url then
+                local event, param1, param2, param3, param4 = os.pullEvent()
+                if event == "http_success" and param1 == _url and param3 == requestID then
                     return param2
-                elseif event == "http_failure" and param1 == _url then
+                elseif event == "http_failure" and param1 == _url and param4 == requestID then
                     return nil, param2, param3
                 end
             end
@@ -736,12 +744,16 @@ if http then
     end
 
     http.websocket = function( _url, _headers )
-        http.websocketAsync( _url, _headers )
+        local requestID = allocateRequestID()
+        local ok, err = nativeWebsocket( _url, _headers, requestID )
+        if not ok then
+            return false, err
+        end
         while true do
-            local event, evUrl, param = os.pullEvent()
-            if event == "websocket_success" and evUrl == _url then
+            local event, evUrl, param, eventID = os.pullEvent()
+            if event == "websocket_success" and evUrl == _url and eventID == requestID then
                 return param
-            elseif event == "websocket_failure" and evUrl == _url then
+            elseif event == "websocket_failure" and evUrl == _url and eventID == requestID then
                 return false, param
             end
         end

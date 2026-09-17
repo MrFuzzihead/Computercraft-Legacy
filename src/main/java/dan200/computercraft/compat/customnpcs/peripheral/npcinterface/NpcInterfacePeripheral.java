@@ -10,6 +10,7 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import dan200.computercraft.compat.customnpcs.peripheral.NpcTypeNames;
 import noppes.npcs.api.AbstractNpcAPI;
 import noppes.npcs.api.entity.ICustomNpc;
@@ -134,17 +135,8 @@ public class NpcInterfacePeripheral implements IPeripheral {
                 return context.executeMainThreadTask(() -> {
                     String name = null;
                     try {
-                        if (AbstractNpcAPI.IsAvailable()) {
-                            AbstractNpcAPI api = AbstractNpcAPI.Instance();
-                            if (api != null) {
-                                for (IEntity<?> e : api.getLoadedEntities()) {
-                                    if (e instanceof ICustomNpc && uuid.equals(e.getUniqueID())) {
-                                        name = ((ICustomNpc<?>) e).getName();
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        ICustomNpc<?> npc = resolveByUUID(uuid);
+                        if (npc != null) name = npc.getName();
                     } catch (Throwable ignored) {}
                     m_holder.setLink(uuid, name);
                     return new Object[] { true };
@@ -478,19 +470,8 @@ public class NpcInterfacePeripheral implements IPeripheral {
 
     /** Resolves a loaded NPC entity by UUID. Must be called on the main thread. */
     private ICustomNpc<?> resolveByUUID(String uuid) {
-        try {
-            if (!AbstractNpcAPI.IsAvailable()) return null;
-            AbstractNpcAPI api = AbstractNpcAPI.Instance();
-            if (api == null) return null;
-            for (IEntity<?> entity : api.getLoadedEntities()) {
-                if (entity instanceof ICustomNpc && uuid.equals(entity.getUniqueID())) {
-                    return (ICustomNpc<?>) entity;
-                }
-            }
-        } catch (Throwable t) {
-            // CNPC absent or incompatible
-        }
-        return null;
+        return LoadedNpcIndex.instance()
+            .find(uuid);
     }
 
     // ---- Link helpers -------------------------------------------------------

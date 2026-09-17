@@ -104,6 +104,12 @@ public class ComputerCraft {
     public static final int pocketComputerGUIID = 106;
     public static boolean http_enable = true;
     public static String http_whitelist = "*";
+    public static String http_blacklist = "";
+    public static int http_max_requests = 16;
+    public static int http_max_websockets = 4;
+    public static int http_max_download = 16 * 1024 * 1024;
+    public static int http_threads = 8;
+    public static int http_timeout = 30000;
     public static boolean disable_lua51_features = false;
     public static boolean enableCommandBlock = false;
     public static boolean turtlesNeedFuel = true;
@@ -116,6 +122,7 @@ public class ComputerCraft {
     public static boolean funNames = true;
     public static String[] turtleDisabledActions = new String[0];
     public static int computerThreadTimeout = 7000;
+    public static int computerThreads = 4;
     public static String biosPath = "/assets/computercraft/lua/bios.lua";
     public static final String BIOS_PATH = "/assets/computercraft/lua/bios.lua";
     public static boolean bigInteger = false;
@@ -172,6 +179,25 @@ public class ComputerCraft {
         prop = config.get("general", "http_whitelist", http_whitelist);
         prop.comment = "A semicolon limited list of wildcards for domains that can be accessed through the \"http\" API on Computers. Set this to \"*\" to access to the entire internet. Example: \"*.pastebin.com;*.github.com;*.computercraft.info\" will restrict access to just those 3 domains.";
         http_whitelist = prop.getString();
+        prop = config.get("general", "http_blacklist", http_blacklist);
+        prop.comment = "A semicolon limited list of wildcards for domains that can NOT be accessed through the \"http\" API on Computers, even if they are also whitelisted. Example: \"*.storage.googleapis.com\" will block access to just that domain.";
+        http_blacklist = prop.getString();
+        dan200.computercraft.core.apis.HTTPRequest.prepareDomainPatterns();
+        prop = config.get("general", "http_max_requests", http_max_requests);
+        prop.comment = "The maximum number of HTTP requests a computer can have in flight at one time. Set to 0 for no limit.";
+        http_max_requests = Math.max(0, prop.getInt());
+        prop = config.get("general", "http_max_websockets", http_max_websockets);
+        prop.comment = "The maximum number of websocket connections a computer can have open at one time. Set to 0 for no limit.";
+        http_max_websockets = Math.max(0, prop.getInt());
+        prop = config.get("general", "http_max_download", http_max_download);
+        prop.comment = "The maximum size (in bytes) of a HTTP response body. Requests whose response exceeds this limit are aborted. Set to 0 for no limit.";
+        http_max_download = Math.max(0, prop.getInt());
+        prop = config.get("general", "http_threads", http_threads);
+        prop.comment = "The number of threads shared by all computers for performing HTTP requests. Requests above this number are queued until a thread is free.";
+        http_threads = Math.max(1, prop.getInt());
+        prop = config.get("general", "http_timeout", http_timeout);
+        prop.comment = "The default time (in milliseconds) to wait for a HTTP request before giving up. Set to 0 for no timeout.";
+        http_timeout = Math.max(0, prop.getInt());
         prop = config.get("general", "disable_lua51_features", disable_lua51_features);
         prop.comment = "Set this to true to disable Lua 5.1 functions that will be removed in a future update. Useful for ensuring forward compatibility of your programs now.";
         disable_lua51_features = prop.getBoolean(disable_lua51_features);
@@ -241,6 +267,9 @@ public class ComputerCraft {
         prop = config.get("general", "computerThreadTimeout", computerThreadTimeout);
         prop.comment = "The maximum time (in milliseconds) a computer thread is allowed to run before being considered crashed";
         computerThreadTimeout = prop.getInt();
+        prop = config.get("general", "computerThreads", computerThreads);
+        prop.comment = "The number of computer executor threads. Tasks are still serialized per computer, but more threads let more computers run concurrently.";
+        computerThreads = Math.max(1, prop.getInt());
         prop = config.get("general", "biosPath", biosPath);
         prop.comment = "The path to the bios file loaded into computers and turtles";
         biosPath = prop.getString();
@@ -295,6 +324,9 @@ public class ComputerCraft {
     private static void registerCustomNpcCompat() {
         try {
             if (noppes.npcs.api.AbstractNpcAPI.IsAvailable()) {
+                FMLCommonHandler.instance()
+                    .bus()
+                    .register(dan200.computercraft.compat.customnpcs.LoadedNpcIndex.instance());
                 noppes.npcs.api.AbstractNpcAPI.Instance()
                     .events()
                     .register(new dan200.computercraft.compat.customnpcs.chatbox.CustomNpcChatBoxBridge());
@@ -326,6 +358,12 @@ public class ComputerCraft {
 
     @EventHandler
     public void onServerStopped(FMLServerStoppedEvent event) {
+        try {
+            dan200.computercraft.compat.customnpcs.LoadedNpcIndex.instance()
+                .clear();
+        } catch (LinkageError ignored) {
+            // Optional CustomNPCs classes may be absent.
+        }
         if (FMLCommonHandler.instance()
             .getEffectiveSide() == Side.SERVER) {
             serverComputerRegistry.reset();

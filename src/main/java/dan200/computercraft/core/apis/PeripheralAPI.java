@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ArgumentDelegator;
@@ -282,7 +283,8 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
             synchronized (this.m_fileSystem) {
                 return !this.m_fileSystem.exists(desiredLoc) ? desiredLoc : null;
             }
-        } catch (FileSystemException var5) {
+        } catch (FileSystemException e) {
+            ComputerCraft.logger.warn("ComputerCraft: failed to check peripheral mount location " + desiredLoc, e);
             return null;
         }
     }
@@ -304,9 +306,12 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
             this.m_type = peripheral.getType();
             this.m_methods = peripheral.getMethodNames();
 
-            assert this.m_type != null;
-
-            assert this.m_methods != null;
+            if (this.m_type == null) {
+                throw new IllegalArgumentException("Peripheral type must not be null");
+            }
+            if (this.m_methods == null) {
+                throw new IllegalArgumentException("Peripheral method names must not be null");
+            }
 
             this.m_methodMap = new HashMap<>();
 
@@ -398,7 +403,12 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                     if (location != null) {
                         try {
                             PeripheralAPI.this.m_fileSystem.mount(driveName, location, mount);
-                        } catch (FileSystemException var8) {}
+                        } catch (FileSystemException e) {
+                            ComputerCraft.logger.warn(
+                                "ComputerCraft: failed to mount peripheral " + this.m_side + " at " + location,
+                                e);
+                            return null;
+                        }
                     }
                 }
 
@@ -426,7 +436,12 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                     if (location != null) {
                         try {
                             PeripheralAPI.this.m_fileSystem.mountWritable(driveName, location, mount);
-                        } catch (FileSystemException var8) {}
+                        } catch (FileSystemException e) {
+                            ComputerCraft.logger.warn(
+                                "ComputerCraft: failed to mount writable peripheral " + this.m_side + " at " + location,
+                                e);
+                            return null;
+                        }
                     }
                 }
 

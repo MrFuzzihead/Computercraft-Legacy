@@ -54,6 +54,8 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     private final IAPIEnvironment m_environment;
     private final String m_urlString;
+    /** Optional internal correlation ID, used only for initial connection completion. */
+    private final Number m_requestId;
 
     /** True between {@code onOpen} and {@code onClose}. Volatile for cross-thread visibility. */
     private volatile boolean m_open = false;
@@ -72,7 +74,13 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     public WebSocketRequest(String urlString, Map<String, String> headers, IAPIEnvironment environment)
         throws LuaException {
+        this(urlString, headers, environment, null);
+    }
+
+    public WebSocketRequest(String urlString, Map<String, String> headers, IAPIEnvironment environment,
+        Number requestId) throws LuaException {
         super(HTTPRequest.checkWebSocketURL(urlString), new Draft_6455(), nullToEmpty(headers), CONNECT_TIMEOUT_MS);
+        this.m_requestId = requestId;
         this.m_environment = environment;
         this.m_urlString = urlString;
 
@@ -237,6 +245,10 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     public String getConnectError() {
         return m_connectError != null ? m_connectError : "Connection refused";
+    }
+
+    public Number getRequestId() {
+        return m_requestId;
     }
 
     public String getURL() {

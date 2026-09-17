@@ -610,7 +610,11 @@ public class TurtleBrain implements ITurtleAccess {
     }
 
     public void setOverlay(ResourceLocation overlay, ResourceLocation hatOverlay) {
-        if (!Objects.equal(this.m_overlay, overlay) || !Objects.equal(this.m_hatOverlay, overlay)) {
+        // B3 fix: the second comparison used to test m_hatOverlay against the
+        // body-overlay argument, firing spurious updateBlock() calls whenever
+        // the two overlay textures differ and silently dropping hat-only
+        // changes when both fields already equalled the new body overlay.
+        if (!Objects.equal(this.m_overlay, overlay) || !Objects.equal(this.m_hatOverlay, hatOverlay)) {
             this.m_overlay = overlay;
             this.m_hatOverlay = hatOverlay;
             this.m_owner.updateBlock();
@@ -857,15 +861,16 @@ public class TurtleBrain implements ITurtleAccess {
                     aabb.maxZ = aabb.maxZ - Facing.offsetsZForSide[moveDir] * push;
                 }
 
-                List list = world.getEntitiesWithinAABBExcludingEntity((Entity) null, aabb);
-                if (!list.isEmpty()) {
+                // Minecraft 1.7.10 exposes a raw list; this query contains only entities.
+                @SuppressWarnings("unchecked")
+                List<Entity> entities = world.getEntitiesWithinAABBExcludingEntity(null, aabb);
+                if (!entities.isEmpty()) {
                     double pushStep = 0.125;
                     double pushStepX = Facing.offsetsXForSide[moveDir] * pushStep;
                     double pushStepY = Facing.offsetsYForSide[moveDir] * pushStep;
                     double pushStepZ = Facing.offsetsZForSide[moveDir] * pushStep;
 
-                    for (int i = 0; i < list.size(); i++) {
-                        Entity entity = (Entity) list.get(i);
+                    for (Entity entity : entities) {
                         entity.moveEntity(pushStepX, pushStepY, pushStepZ);
                     }
                 }

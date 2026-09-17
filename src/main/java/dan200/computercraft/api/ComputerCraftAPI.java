@@ -171,7 +171,9 @@ public final class ComputerCraftAPI {
                     "registerPermissionProvider",
                     new Class[] { ITurtlePermissionProvider.class });
             } catch (Exception var4) {
-                System.out.println("ComputerCraftAPI: ComputerCraft not found.");
+                // Do not reference ComputerCraft.logger here: this lookup also runs when the mod is absent.
+                org.apache.logging.log4j.LogManager.getLogger("ComputerCraftAPI")
+                    .warn("ComputerCraftAPI: ComputerCraft not found.", var4);
             } finally {
                 ccSearched = true;
             }
@@ -182,7 +184,8 @@ public final class ComputerCraftAPI {
         try {
             return computerCraft != null ? computerCraft.getMethod(name, args) : null;
         } catch (NoSuchMethodException var3) {
-            System.out.println("ComputerCraftAPI: ComputerCraft method " + name + " not found.");
+            org.apache.logging.log4j.LogManager.getLogger("ComputerCraftAPI")
+                .warn("ComputerCraftAPI: ComputerCraft method " + name + " not found.", var3);
             return null;
         }
     }

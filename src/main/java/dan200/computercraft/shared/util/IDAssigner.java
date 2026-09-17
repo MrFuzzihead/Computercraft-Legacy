@@ -8,6 +8,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
+import dan200.computercraft.ComputerCraft;
+
 public class IDAssigner {
 
     private IDAssigner() {}
@@ -56,14 +58,14 @@ public class IDAssigner {
                     br.close();
                 }
             } catch (IOException var16) {
-                var16.printStackTrace();
+                ComputerCraft.logger.error("ComputerCraft: failed to read " + lastidFile, var16);
                 return 0;
             }
 
             try {
                 id = Integer.parseInt(idString) + 1;
             } catch (NumberFormatException var14) {
-                var14.printStackTrace();
+                ComputerCraft.logger.error("ComputerCraft: invalid contents in " + lastidFile, var14);
                 return 0;
             }
         }
@@ -74,9 +76,8 @@ public class IDAssigner {
             out.newLine();
             out.close();
         } catch (IOException var13) {
-            System.out.println(
-                "An error occured while trying to create the computer folder. Please check you have relevant permissions.");
-            var13.printStackTrace();
+            ComputerCraft.logger
+                .error("ComputerCraft: failed to write " + lastidFile + "; check filesystem permissions", var13);
         }
 
         return id;

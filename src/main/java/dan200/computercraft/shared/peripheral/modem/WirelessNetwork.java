@@ -11,7 +11,8 @@ import net.minecraft.world.World;
 
 public class WirelessNetwork implements INetwork {
 
-    private static Map<World, WirelessNetwork> s_networks = new WeakHashMap<>();
+    // Guarded by the class monitor in get(); keep weak keys for unloaded worlds.
+    private static final Map<World, WirelessNetwork> s_networks = new WeakHashMap<>();
     private static final WirelessNetwork s_globalNetwork = new WirelessNetwork();
     private Map<Integer, Set<IReceiver>> m_receivers = new HashMap<>();
 
@@ -22,7 +23,7 @@ public class WirelessNetwork implements INetwork {
         return s_globalNetwork;
     }
 
-    public static WirelessNetwork get(World world) {
+    public static synchronized WirelessNetwork get(World world) {
         if (world != null) {
             WirelessNetwork network = s_networks.get(world);
             if (network == null) {

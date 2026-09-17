@@ -1,6 +1,12 @@
 package dan200.computercraft.compat.customnpcs.peripheral.npcinterface;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -21,7 +27,7 @@ import dan200.computercraft.api.lua.LuaException;
  *
  * <p>
  * Method index reference (matches {@link NpcInterfacePeripheral#METHOD_NAMES}):
- * 
+ *
  * <pre>
  *   Link management (no CNPC gate unless noted):
  *     0  link(uuid)

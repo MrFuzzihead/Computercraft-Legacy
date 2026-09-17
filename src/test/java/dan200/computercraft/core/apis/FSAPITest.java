@@ -1,10 +1,18 @@
 package dan200.computercraft.core.apis;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dan200.computercraft.api.filesystem.IMount;
+import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IPeripheral;
@@ -500,6 +509,138 @@ class FSAPITest {
     }
 
     // =========================================================================
+    // fs.open — one nil, message contract for every mode (B4)
+    // =========================================================================
+
+    @Test
+    void openMissingFileForReadModesReturnsNilAndNoSuchFile() throws LuaException {
+        assertEquals("No such file", expectOpenFailure("missing.txt", "r"));
+        assertEquals("No such file", expectOpenFailure("missing.txt", "rb"));
+        assertEquals("No such file", expectOpenFailure("missing.txt", "r+"));
+    }
+
+    @Test
+    void openOnReadOnlyMountReturnsNilAndAccessDenied() throws FileSystemException, LuaException {
+        fileSystem.mount("rom", "rom", new ReadOnlyStubMount());
+
+        for (String mode : new String[] { "w", "a", "wb", "ab", "r+", "w+" }) {
+            assertEquals("Access Denied", expectOpenFailure("rom/new.txt", mode), "wrong message for mode " + mode);
+        }
+    }
+
+    @Test
+    void openWriteModesOnADirectoryReturnNilAndCannotWriteToDirectory() throws Exception {
+        Files.createDirectory(tempDir.resolve("adir"));
+
+        for (String mode : new String[] { "w", "a", "wb", "ab" }) {
+            assertEquals(
+                "Cannot write to directory",
+                expectOpenFailure("adir", mode),
+                "wrong message for mode " + mode);
+        }
+    }
+
+    @Test
+    void openReadModesOnADirectoryReturnNilAndNoSuchFile() throws Exception {
+        Files.createDirectory(tempDir.resolve("adir"));
+
+        assertEquals("No such file", expectOpenFailure("adir", "r"));
+        assertEquals("No such file", expectOpenFailure("adir", "rb"));
+    }
+
+    @Test
+    void openOnMountReturningNullReadHandleReportsNoSuchFile() throws FileSystemException, LuaException {
+        // A mount that hands back null instead of throwing used to produce a bare nil
+        // (or, worse, a handle wrapping null) for the non-r+/w+ modes.
+        fileSystem.mount("nulls", "nulls", new NullStreamMount());
+
+        assertEquals("No such file", expectOpenFailure("nulls/ghost.txt", "r"));
+        assertEquals("No such file", expectOpenFailure("nulls/ghost.txt", "rb"));
+    }
+
+    @Test
+    void openOnMountReturningNullWriteHandleReportsFailure() throws FileSystemException, LuaException {
+        fileSystem.mountWritable("nullw", "nullw", new BrokenWritableMount(false));
+
+        assertEquals("Failed to open file", expectOpenFailure("nullw/file.bin", "wb"));
+        assertEquals("Failed to open file", expectOpenFailure("nullw/file.bin", "ab"));
+    }
+
+    @Test
+    void openFallsBackToAGenericMessageWhenTheMountReportsNothing() throws FileSystemException, LuaException {
+        // FileSystemException wraps the IOException's message, which may itself be null —
+        // the second return value must never be the string "null" or nil.
+        fileSystem.mountWritable("messageless", "messageless", new BrokenWritableMount(true));
+
+        assertEquals("Could not open file", expectOpenFailure("messageless/file.bin", "wb"));
+    }
+
+    @Test
+    void successfulOpenReturnsTheHandleAndNothingElse() throws Exception {
+        Files.write(tempDir.resolve("exists.txt"), "hi".getBytes(StandardCharsets.UTF_8));
+
+        for (String mode : new String[] { "r", "rb", "r+", "w", "wb", "a", "ab", "w+" }) {
+            // Read modes need an existing file; write modes get their own target.
+            String target = mode.startsWith("r") ? "exists.txt" : "out-" + mode.replace("+", "p") + ".txt";
+            Object[] result = api.callMethod(null, METHOD_OPEN, new Object[] { target, mode });
+            String what = "fs.open(" + target + ", \"" + mode + "\")";
+
+            assertNotNull(result, what + " should return a handle");
+            assertEquals(1, result.length, what + " must not return a trailing error message on success");
+            assertInstanceOf(ILuaObject.class, result[0], what + " should return a file handle");
+
+            closeHandle(mode, (ILuaObject) result[0]);
+        }
+    }
+
+    @Test
+    void unsupportedModeStillRaisesALuaError() {
+        LuaException e = assertThrows(
+            LuaException.class,
+            () -> api.callMethod(null, METHOD_OPEN, new Object[] { "missing.txt", "x" }));
+        assertEquals("Unsupported mode", e.getMessage());
+    }
+
+    /**
+     * Calls {@code fs.open} and asserts the documented contract for a <em>failed</em>
+     * open: two return values, {@code nil} followed by a non-empty message. Returns the
+     * message for further assertions.
+     */
+    private String expectOpenFailure(String path, String mode) throws LuaException {
+        String what = "fs.open(" + path + ", \"" + mode + "\")";
+        Object[] result = api.callMethod(null, METHOD_OPEN, new Object[] { path, mode });
+
+        assertNotNull(result, what + " must return nil + message, not nothing at all");
+        assertEquals(2, result.length, what + " must return exactly two values");
+        assertNull(result[0], what + " must return nil as the first value");
+        assertInstanceOf(String.class, result[1], what + " must return an error message");
+        assertFalse(((String) result[1]).isEmpty(), what + " must not return an empty message");
+        return (String) result[1];
+    }
+
+    /** Close a handle using the {@code close} index of the wrapper for {@code mode}. */
+    private static void closeHandle(String mode, ILuaObject handle) throws LuaException, InterruptedException {
+        int close;
+        switch (mode) {
+            case "r":
+                close = READER_CLOSE;
+                break;
+            case "w":
+            case "a":
+                close = WRITER_CLOSE;
+                break;
+            case "r+":
+            case "w+":
+                close = RW_CLOSE;
+                break;
+            default:
+                // The rb/wb/ab stream wrappers expose { read|write, close, ... }.
+                close = 1;
+        }
+        handle.callMethod(null, close, new Object[0]);
+    }
+
+    // =========================================================================
     // Stubs
     // =========================================================================
 
@@ -650,5 +791,99 @@ class FSAPITest {
             return new ByteArrayInputStream(CONTENT);
         }
         // openForReadRandom intentionally NOT overridden → uses default which throws IOException
+    }
+
+    /**
+     * Read-only {@link IMount} that claims {@code ghost.txt} exists but returns {@code null}
+     * from {@link IMount#openForRead} — a misbehaving mount, which {@link FileSystem} turns
+     * into a {@code null} handle rather than an exception.
+     */
+    private static class NullStreamMount implements IMount {
+
+        @Override
+        public boolean exists(String path) {
+            return path.isEmpty() || path.equals("ghost.txt");
+        }
+
+        @Override
+        public boolean isDirectory(String path) {
+            return path.isEmpty();
+        }
+
+        @Override
+        public void list(String path, List<String> out) {
+            if (path.isEmpty()) out.add("ghost.txt");
+        }
+
+        @Override
+        public long getSize(String path) {
+            return 0L;
+        }
+
+        @Override
+        public InputStream openForRead(String path) {
+            return null;
+        }
+    }
+
+    /**
+     * Writable {@link IWritableMount} that misbehaves when opening a file for writing:
+     * either it returns {@code null}, or it throws an {@link IOException} with no message
+     * at all (which {@link FileSystem} wraps into a message-less
+     * {@code FileSystemException}).
+     */
+    private static class BrokenWritableMount implements IWritableMount {
+
+        private final boolean m_messageless;
+
+        BrokenWritableMount(boolean messageless) {
+            m_messageless = messageless;
+        }
+
+        @Override
+        public boolean exists(String path) {
+            return path.isEmpty();
+        }
+
+        @Override
+        public boolean isDirectory(String path) {
+            return path.isEmpty();
+        }
+
+        @Override
+        public void list(String path, List<String> out) {}
+
+        @Override
+        public long getSize(String path) {
+            return 0L;
+        }
+
+        @Override
+        public InputStream openForRead(String path) throws IOException {
+            throw new IOException("No such file");
+        }
+
+        @Override
+        public void makeDirectory(String path) {}
+
+        @Override
+        public void delete(String path) {}
+
+        @Override
+        public OutputStream openForWrite(String path) throws IOException {
+            if (m_messageless) throw new IOException();
+            return null;
+        }
+
+        @Override
+        public OutputStream openForAppend(String path) throws IOException {
+            if (m_messageless) throw new IOException();
+            return null;
+        }
+
+        @Override
+        public long getRemainingSpace() {
+            return 1024L;
+        }
     }
 }

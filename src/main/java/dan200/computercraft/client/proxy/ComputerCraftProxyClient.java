@@ -14,6 +14,7 @@ import net.minecraft.client.resources.IResourceManager;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.NetworkManager;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
@@ -31,7 +32,6 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.ClientTickEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.Phase;
-import cpw.mods.fml.common.network.FMLNetworkEvent;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.client.audio.SpeakerManager;
 import dan200.computercraft.client.gui.FixedWidthFontRenderer;
@@ -46,6 +46,8 @@ import dan200.computercraft.client.render.TileEntityMonitorRenderer;
 import dan200.computercraft.shared.computer.blocks.TileComputer;
 import dan200.computercraft.shared.media.inventory.ContainerHeldItem;
 import dan200.computercraft.shared.media.items.ItemPrintout;
+import dan200.computercraft.shared.network.ClientPacketDispatcher;
+import dan200.computercraft.shared.network.ComputerCraftPacket;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
@@ -60,6 +62,30 @@ import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 import dan200.computercraft.shared.turtle.entity.TurtleVisionCamera;
 
 public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
+
+    private final ClientPacketDispatcher m_clientPackets = new ClientPacketDispatcher(
+        task -> Minecraft.getMinecraft()
+            .func_152344_a(task),
+        () -> {
+            ComputerCraft.clientComputerRegistry.reset();
+            SpeakerManager.INSTANCE.stopAll();
+        },
+        packet -> handlePacket(packet, null));
+
+    @Override
+    public void handleClientPacket(NetworkManager connection, ComputerCraftPacket packet) {
+        m_clientPackets.receive(connection, packet);
+    }
+
+    @Override
+    public void clientConnected(NetworkManager connection) {
+        m_clientPackets.connected(connection);
+    }
+
+    @Override
+    public void clientDisconnected(NetworkManager connection) {
+        m_clientPackets.disconnected(connection);
+    }
 
     private long m_tickCount;
     private FixedWidthFontRenderer m_fixedWidthFontRenderer;
@@ -414,11 +440,6 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
             if (event.phase == Phase.START) {
                 ComputerCraftProxyClient.this.m_tickCount++;
             }
-        }
-
-        @SubscribeEvent
-        public void onClientDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
-            SpeakerManager.INSTANCE.stopAll();
         }
     }
 

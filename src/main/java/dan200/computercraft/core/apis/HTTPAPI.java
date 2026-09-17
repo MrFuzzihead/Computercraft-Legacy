@@ -1,15 +1,13 @@
 package dan200.computercraft.core.apis;
 
-import java.io.BufferedReader;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.ILuaContext;
-import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
 
 public class HTTPAPI implements ILuaAPI {
@@ -44,11 +42,19 @@ public class HTTPAPI implements ILuaAPI {
                 HTTPRequest h = it.next();
                 if (h.isComplete()) {
                     String url = h.getURL();
+                    Number requestId = h.getRequestId();
+                    HTTPResponse response = h.asResponse();
                     if (h.wasSuccessful()) {
-                        m_apiEnvironment.queueEvent("http_success", new Object[] { url, h.asResponse() });
+                        m_apiEnvironment.queueEvent(
+                            "http_success",
+                            requestId == null ? new Object[] { url, response }
+                                : new Object[] { url, response, requestId });
                     } else {
-                        m_apiEnvironment
-                            .queueEvent("http_failure", new Object[] { url, "Could not connect", h.asResponse() });
+                        String reason = h.getFailureReason() != null ? h.getFailureReason() : "Could not connect";
+                        m_apiEnvironment.queueEvent(
+                            "http_failure",
+                            requestId == null ? new Object[] { url, reason, response }
+                                : new Object[] { url, reason, response, requestId });
                     }
                     it.remove();
                 }
@@ -71,15 +77,20 @@ public class HTTPAPI implements ILuaAPI {
         }
         for (WebSocketRequest ws : completedWebsockets) {
             String url = ws.getURL();
+            Number requestId = ws.getRequestId();
             if (ws.wasConnectSuccessful()) {
+                WebSocketHandle handle = new WebSocketHandle(url, ws, m_apiEnvironment);
                 m_apiEnvironment.queueEvent(
                     "websocket_success",
-                    new Object[] { url, new WebSocketHandle(url, ws, m_apiEnvironment) });
+                    requestId == null ? new Object[] { url, handle } : new Object[] { url, handle, requestId });
                 synchronized (m_activeWebsockets) {
                     m_activeWebsockets.add(ws);
                 }
             } else {
-                m_apiEnvironment.queueEvent("websocket_failure", new Object[] { url, ws.getConnectError() });
+                m_apiEnvironment.queueEvent(
+                    "websocket_failure",
+                    requestId == null ? new Object[] { url, ws.getConnectError() }
+                        : new Object[] { url, ws.getConnectError(), requestId });
             }
         }
 
@@ -87,61 +98,6 @@ public class HTTPAPI implements ILuaAPI {
         synchronized (m_activeWebsockets) {
             m_activeWebsockets.removeIf(ws -> !ws.isConnectionOpen());
         }
-    }
-
-    private static ILuaObject wrapBufferedReader(final BufferedReader reader, final int responseCode) {
-        return new ILuaObject() {
-
-            @Override
-            public String[] getMethodNames() {
-                return new String[] { "readLine", "readAll", "close", "getResponseCode" };
-            }
-
-            @Override
-            public Object[] callMethod(ILuaContext context, int method, Object[] args) throws LuaException {
-                switch (method) {
-                    case 0:
-                        try {
-                            String line = reader.readLine();
-                            if (line != null) {
-                                return new Object[] { line };
-                            }
-
-                            return null;
-                        } catch (IOException var8) {
-                            return null;
-                        }
-                    case 1:
-                        try {
-                            StringBuilder result = new StringBuilder("");
-                            String line = reader.readLine();
-
-                            while (line != null) {
-                                result.append(line);
-                                line = reader.readLine();
-                                if (line != null) {
-                                    result.append("\n");
-                                }
-                            }
-
-                            return new Object[] { result.toString() };
-                        } catch (IOException var7) {
-                            return null;
-                        }
-                    case 2:
-                        try {
-                            reader.close();
-                            return null;
-                        } catch (IOException var6) {
-                            return null;
-                        }
-                    case 3:
-                        return new Object[] { responseCode };
-                    default:
-                        return null;
-                }
-            }
-        };
     }
 
     @Override
@@ -185,11 +141,16 @@ public class HTTPAPI implements ILuaAPI {
                 String urlString = args[0].toString();
                 String data = args.length > 1 && args[1] instanceof String ? (String) args[1] : null;
                 String verb = args.length > 3 && args[3] instanceof String ? (String) args[3] : null;
-                int timeout = 0;
+                // Default to the configured timeout (http_timeout); an explicit
+                // Lua argument overrides it (finding P2 — with a bounded
+                // request pool, an untimed hung request would permanently
+                // consume a pool thread).
+                int timeout = ComputerCraft.http_timeout;
                 if (args.length > 4 && args[4] instanceof Number) {
                     timeout = (int) (((Number) args[4]).doubleValue() * 1000);
                 }
                 boolean binary = args.length > 5 && Boolean.TRUE.equals(args[5]);
+                Number requestId = args.length > 6 && args[6] instanceof Number ? (Number) args[6] : null;
 
                 HashMap<String, String> headers = null;
                 if (args.length >= 3 && args[2] instanceof Map) {
@@ -204,9 +165,22 @@ public class HTTPAPI implements ILuaAPI {
                     }
                 }
 
+                int maxRequests = ComputerCraft.http_max_requests;
+                synchronized (this.m_httpRequests) {
+                    if (maxRequests > 0 && this.m_httpRequests.size() >= maxRequests) {
+                        return new Object[] { Boolean.valueOf(false), "Too many ongoing HTTP requests" };
+                    }
+                }
+
                 try {
-                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary);
+                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary, requestId);
                     synchronized (this.m_httpRequests) {
+                        // Re-check under lock: another computer thread (advanced
+                        // computers each run on their own task) may have raced us.
+                        if (maxRequests > 0 && this.m_httpRequests.size() >= maxRequests) {
+                            request.cancel();
+                            return new Object[] { Boolean.valueOf(false), "Too many ongoing HTTP requests" };
+                        }
                         this.m_httpRequests.add(request);
                     }
 
@@ -246,8 +220,23 @@ public class HTTPAPI implements ILuaAPI {
                     }
                 }
 
+                Number requestId = args.length > 2 && args[2] instanceof Number ? (Number) args[2] : null;
+                int maxWebsockets = ComputerCraft.http_max_websockets;
+                synchronized (this.m_pendingWebsockets) {
+                    synchronized (this.m_activeWebsockets) {
+                        int open = this.m_pendingWebsockets.size() + this.m_activeWebsockets.size();
+                        if (maxWebsockets > 0 && open >= maxWebsockets) {
+                            return new Object[] { Boolean.valueOf(false), "Too many ongoing websockets" };
+                        }
+                    }
+                }
+
                 try {
-                    WebSocketRequest request = new WebSocketRequest(urlString, headers, this.m_apiEnvironment);
+                    WebSocketRequest request = new WebSocketRequest(
+                        urlString,
+                        headers,
+                        this.m_apiEnvironment,
+                        requestId);
                     synchronized (this.m_pendingWebsockets) {
                         this.m_pendingWebsockets.add(request);
                     }

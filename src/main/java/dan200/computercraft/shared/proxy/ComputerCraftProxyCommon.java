@@ -183,6 +183,12 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
             case 4:
             case 5:
             case 6:
+                // Payload arrays are attacker-controlled (S4); drop malformed
+                // packets instead of indexing past the end.
+                if (!packet.hasInts(1)) {
+                    break;
+                }
+
                 int instance = packet.m_dataInt[0];
                 ServerComputer computer = ComputerCraft.serverComputerRegistry.get(instance);
                 if (computer != null) {
@@ -190,6 +196,10 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 }
                 break;
             case 7:
+                if (!packet.hasInts(1)) {
+                    break;
+                }
+
                 int instanceIDx = packet.m_dataInt[0];
                 if (!ComputerCraft.clientComputerRegistry.contains(instanceIDx)) {
                     ComputerCraft.clientComputerRegistry.add(instanceIDx, new ClientComputer(instanceIDx));
@@ -199,12 +209,20 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                     .handlePacket(packet, player);
                 break;
             case 8:
+                if (!packet.hasInts(1)) {
+                    break;
+                }
+
                 int instanceID = packet.m_dataInt[0];
                 if (ComputerCraft.clientComputerRegistry.contains(instanceID)) {
                     ComputerCraft.clientComputerRegistry.remove(instanceID);
                 }
                 break;
             case 9:
+                if (!packet.hasInts(3)) {
+                    break;
+                }
+
                 int x = packet.m_dataInt[0];
                 int y = packet.m_dataInt[1];
                 int z = packet.m_dataInt[2];
@@ -216,17 +234,25 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 }
                 break;
             case ComputerCraftPacket.SpeakerAudio: {
+                if (!packet.hasInts(4)) {
+                    break;
+                }
+
                 int sx = packet.m_dataInt[0];
                 int sy = packet.m_dataInt[1];
                 int sz = packet.m_dataInt[2];
                 float vol = packet.m_dataInt[3] / 1000.0f;
-                int format = (packet.m_dataInt != null && packet.m_dataInt.length > 4) ? packet.m_dataInt[4] : 0;
+                int format = (packet.m_dataInt.length > 4) ? packet.m_dataInt[4] : 0;
                 byte[] audioData = (packet.m_dataByte != null && packet.m_dataByte.length > 0
                     && packet.m_dataByte[0] != null) ? packet.m_dataByte[0] : new byte[0];
                 ComputerCraft.proxy.playSpeakerAudio(sx, sy, sz, audioData, vol, format);
                 break;
             }
             case ComputerCraftPacket.SpeakerStop: {
+                if (!packet.hasInts(3)) {
+                    break;
+                }
+
                 ComputerCraft.proxy.stopSpeaker(packet.m_dataInt[0], packet.m_dataInt[1], packet.m_dataInt[2]);
                 break;
             }
@@ -708,12 +734,12 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
 
         @SubscribeEvent
         public void onConnectionOpened(ClientConnectedToServerEvent event) {
-            ComputerCraft.clientComputerRegistry.reset();
+            ComputerCraft.proxy.clientConnected(event.manager);
         }
 
         @SubscribeEvent
         public void onConnectionClosed(ClientDisconnectionFromServerEvent event) {
-            ComputerCraft.clientComputerRegistry.reset();
+            ComputerCraft.proxy.clientDisconnected(event.manager);
         }
 
         @SubscribeEvent
