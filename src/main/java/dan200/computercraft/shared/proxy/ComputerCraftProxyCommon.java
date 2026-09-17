@@ -734,12 +734,12 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
 
         @SubscribeEvent
         public void onConnectionOpened(ClientConnectedToServerEvent event) {
-            ComputerCraft.clientComputerRegistry.reset();
+            ComputerCraft.proxy.clientConnected(event.manager);
         }
 
         @SubscribeEvent
         public void onConnectionClosed(ClientDisconnectionFromServerEvent event) {
-            ComputerCraft.clientComputerRegistry.reset();
+            ComputerCraft.proxy.clientDisconnected(event.manager);
         }
 
         @SubscribeEvent

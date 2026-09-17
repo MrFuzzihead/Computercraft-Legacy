@@ -5,6 +5,7 @@ import java.io.File;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.NetworkManager;
 import net.minecraft.world.World;
 
 import dan200.computercraft.shared.computer.blocks.TileComputer;
@@ -44,6 +45,12 @@ public interface IComputerCraftProxy {
     File getWorldDir(World var1);
 
     void handlePacket(ComputerCraftPacket var1, EntityPlayer var2);
+
+    default void handleClientPacket(NetworkManager connection, ComputerCraftPacket packet) {}
+
+    default void clientConnected(NetworkManager connection) {}
+
+    default void clientDisconnected(NetworkManager connection) {}
 
     void playSpeakerAudio(int x, int y, int z, byte[] dfpwm, float volume);
 
