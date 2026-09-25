@@ -140,6 +140,7 @@ class HTTPAPITest {
      * </p>
      */
     private static final String PREAMBLE = "local _events = {}\n" + "local _last_req = {}\n"
+        + "local _nextTimer = 0\n"
         + "os = {\n"
         + "    pullEvent = function()\n"
         + "        if #_events > 0 then\n"
@@ -147,7 +148,12 @@ class HTTPAPITest {
         + "        end\n"
         + "        error('event queue exhausted')\n"
         + "    end,\n"
-        + "    queueEvent = function() end\n"
+        + "    queueEvent = function() end,\n"
+        + "    startTimer = function()\n"
+        + "        _nextTimer = _nextTimer + 1\n"
+        + "        return _nextTimer\n"
+        + "    end,\n"
+        + "    cancelTimer = function() end\n"
         + "}\n"
         + "http = {\n"
         + "    request = function(...)\n"
@@ -196,6 +202,22 @@ class HTTPAPITest {
         assertNotNull(capture.args);
         assertNull(capture.args[0], "r1 should be nil");
         assertEquals("Connection refused", capture.args[1], "r2 should be the error message");
+        assertNull(capture.args[2], "r3 should be nil when no response handle");
+    }
+
+    /** A tagged failure with a nil response slot must preserve the request ID. */
+    @Test
+    void getFailureWithNilResponsePreservesRequestId() {
+        ResultCapture capture = new ResultCapture();
+        CobaltMachine machine = buildMachine(capture);
+        String lua = PREAMBLE + httpSection
+            + "_events = { {'http_failure', 'http://test.com', 'Download limit exceeded', nil, 1} }\n"
+            + "local r1, r2, r3 = http.get({ url = 'http://test.com', timeout = 10 })\n"
+            + "_capture(r1, r2, r3)\n";
+        run(machine, lua);
+        assertNotNull(capture.args, "http.get should receive the tagged failure");
+        assertNull(capture.args[0], "r1 should be nil");
+        assertEquals("Download limit exceeded", capture.args[1]);
         assertNull(capture.args[2], "r3 should be nil when no response handle");
     }
 

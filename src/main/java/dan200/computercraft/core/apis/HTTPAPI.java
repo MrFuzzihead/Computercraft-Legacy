@@ -49,12 +49,20 @@ public class HTTPAPI implements ILuaAPI {
                             "http_success",
                             requestId == null ? new Object[] { url, response }
                                 : new Object[] { url, response, requestId });
+                        if (h.isInternalEvent() && requestId != null) {
+                            m_apiEnvironment
+                                .queueEvent("http_internal_success", new Object[] { requestId, url, response });
+                        }
                     } else {
                         String reason = h.getFailureReason() != null ? h.getFailureReason() : "Could not connect";
                         m_apiEnvironment.queueEvent(
                             "http_failure",
                             requestId == null ? new Object[] { url, reason, response }
                                 : new Object[] { url, reason, response, requestId });
+                        if (h.isInternalEvent() && requestId != null) {
+                            m_apiEnvironment
+                                .queueEvent("http_internal_failure", new Object[] { requestId, url, reason, response });
+                        }
                     }
                     it.remove();
                 }
@@ -151,6 +159,7 @@ public class HTTPAPI implements ILuaAPI {
                 }
                 boolean binary = args.length > 5 && Boolean.TRUE.equals(args[5]);
                 Number requestId = args.length > 6 && args[6] instanceof Number ? (Number) args[6] : null;
+                boolean internalEvent = args.length > 7 && Boolean.TRUE.equals(args[7]);
 
                 HashMap<String, String> headers = null;
                 if (args.length >= 3 && args[2] instanceof Map) {
@@ -173,7 +182,15 @@ public class HTTPAPI implements ILuaAPI {
                 }
 
                 try {
-                    HTTPRequest request = new HTTPRequest(urlString, data, headers, verb, timeout, binary, requestId);
+                    HTTPRequest request = new HTTPRequest(
+                        urlString,
+                        data,
+                        headers,
+                        verb,
+                        timeout,
+                        binary,
+                        requestId,
+                        internalEvent);
                     synchronized (this.m_httpRequests) {
                         // Re-check under lock: another computer thread (advanced
                         // computers each run on their own task) may have raced us.

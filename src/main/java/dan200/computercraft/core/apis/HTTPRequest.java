@@ -153,15 +153,24 @@ public class HTTPRequest {
     private final boolean m_binary;
     /** Optional internal correlation ID; null preserves legacy completion event shapes. */
     private final Number m_requestId;
+    /** Whether the blocking Lua wrapper requested the private completion event. */
+    private final boolean m_internalEvent;
 
     public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
         final int timeout, final boolean binary) throws LuaException {
-        this(url, postText, headers, verb, timeout, binary, null);
+        this(url, postText, headers, verb, timeout, binary, null, false);
     }
 
     public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
         final int timeout, final boolean binary, final Number requestId) throws LuaException {
+        this(url, postText, headers, verb, timeout, binary, requestId, false);
+    }
+
+    public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
+        final int timeout, final boolean binary, final Number requestId, final boolean internalEvent)
+        throws LuaException {
         m_requestId = requestId;
+        m_internalEvent = internalEvent;
         urlString = url;
         this.url = checkURL(url);
         this.m_timeout = timeout;
@@ -334,6 +343,10 @@ public class HTTPRequest {
 
     public Number getRequestId() {
         return m_requestId;
+    }
+
+    public boolean isInternalEvent() {
+        return m_internalEvent;
     }
 
     public String getURL() {

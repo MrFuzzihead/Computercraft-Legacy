@@ -126,6 +126,30 @@ class HTTPRequestCorrelationTest {
         if (tagged) assertSame(id, event[3]);
     }
 
+    @Test
+    void blockingCompletionQueuesPrivateEventWithIdFirst() throws Exception {
+        Number id = Integer.valueOf(2001);
+        HTTPRequest request = mock(HTTPRequest.class);
+        when(request.isComplete()).thenReturn(true);
+        when(request.getURL()).thenReturn("http://127.0.0.1:1234/big");
+        when(request.getRequestId()).thenReturn(id);
+        when(request.isInternalEvent()).thenReturn(true);
+        when(request.wasSuccessful()).thenReturn(false);
+        when(request.getFailureReason()).thenReturn("Download limit exceeded");
+        requests("m_httpRequests").add(request);
+
+        api.advance(0);
+        api.advance(0);
+
+        ArgumentCaptor<Object[]> publicEvent = ArgumentCaptor.forClass(Object[].class);
+        ArgumentCaptor<Object[]> internalEvent = ArgumentCaptor.forClass(Object[].class);
+        verify(environment).queueEvent(eq("http_failure"), publicEvent.capture());
+        verify(environment).queueEvent(eq("http_internal_failure"), internalEvent.capture());
+        assertArrayEquals(
+            new Object[] { id, "http://127.0.0.1:1234/big", "Download limit exceeded", null },
+            internalEvent.getValue());
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = { false, true })
     void websocketSuccessShape(boolean tagged) throws Exception {
