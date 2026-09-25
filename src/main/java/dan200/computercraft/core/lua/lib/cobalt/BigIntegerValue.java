@@ -1,6 +1,9 @@
 package dan200.computercraft.core.lua.lib.cobalt;
 
-import static org.squiddev.cobalt.Constants.*;
+import static org.squiddev.cobalt.Constants.FALSE;
+import static org.squiddev.cobalt.Constants.TRUE;
+import static org.squiddev.cobalt.Constants.TSTRING;
+import static org.squiddev.cobalt.Constants.TUSERDATA;
 import static org.squiddev.cobalt.ValueFactory.valueOf;
 
 import java.math.BigInteger;

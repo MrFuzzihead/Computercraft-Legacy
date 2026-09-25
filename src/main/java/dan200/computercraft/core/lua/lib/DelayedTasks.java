@@ -70,7 +70,7 @@ public class DelayedTasks {
                     } else {
                         previous.next = task.next;
                     }
-                    if (task == last) last = null;
+                    if (task == last) last = previous;
                 }
             } else {
                 previous = task;
@@ -102,6 +102,7 @@ public class DelayedTasks {
                     } else {
                         previous.next = task.next;
                     }
+                    if (task == last) last = previous;
                     taskCount--;
                     return;
                 }

@@ -9,8 +9,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.IBlockAccess;
 import net.minecraftforge.client.IItemRenderer;
-import net.minecraftforge.client.IItemRenderer.ItemRenderType;
-import net.minecraftforge.client.IItemRenderer.ItemRendererHelper;
 import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraftforge.common.MinecraftForge;
 

@@ -135,12 +135,20 @@ function os.pullEventRaw( sFilter )
     return coroutine.yield( sFilter )
 end
 
-function os.pullEvent( sFilter )
-    local eventData = { os.pullEventRaw( sFilter ) }
-    if eventData[1] == "terminate" then
+-- Forward all event return values without converting them to a table. A
+-- table would create holes around nil arguments and could truncate the
+-- request ID used by blocking HTTP/WebSocket calls; a vararg pass-through
+-- preserves both nil slots and the original event arity.
+local function checkTerminate( ... )
+    local sEvent = ...
+    if sEvent == "terminate" then
         error( "Terminated", 0 )
     end
-    return table.unpack( eventData )
+    return ...
+end
+
+function os.pullEvent( sFilter )
+    return checkTerminate( os.pullEventRaw( sFilter ) )
 end
 
 -- Install globals
@@ -660,21 +668,57 @@ end
 -- Install the lua part of the HTTP api (if enabled)
 if http then
     local nativeHTTPRequest = http.request
+    local nextRequestID = 0
+    local function allocateRequestID()
+        nextRequestID = nextRequestID + 1
+        return nextRequestID
+    end
 
     -- wrapRequest: performs a synchronous HTTP request and waits for the result.
     -- args: url, post body, headers, method verb, timeout (seconds), binary flag
     -- Returns: response on success; nil, errMsg, [responseOnError] on failure.
     local function wrapRequest( _url, _post, _headers, _method, _timeout, _binary )
-        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary )
+        local requestID = allocateRequestID()
+        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary, requestID, true )
         if ok then
+            -- Like other blocking APIs, unrelated events are not buffered here.
+            -- Use parallel or http.request when other events must be handled.
+            -- The native request's timeout bounds socket I/O, but it does not
+            -- bound this Lua event wait. Add a small grace-period watchdog for
+            -- explicitly bounded requests so a lost completion event cannot
+            -- wedge the computer forever.
+            local watchdog
+            if type(_timeout) == "number" and _timeout > 0 then
+                watchdog = os.startTimer(_timeout + 1)
+            end
             while true do
-                local event, param1, param2, param3 = os.pullEvent()
-                if event == "http_success" and param1 == _url then
+                local event, param1, param2, param3, param4 = os.pullEvent()
+                if watchdog and event == "timer" and param1 == watchdog then
+                    return nil, "Request timed out"
+                elseif event == "http_internal_success" and param1 == requestID then
+                    if watchdog then pcall(os.cancelTimer, watchdog) end
+                    return param3
+                elseif event == "http_internal_failure" and param1 == requestID then
+                    if watchdog then pcall(os.cancelTimer, watchdog) end
+                    return nil, param3, param4
+                elseif event == "http_success" and param1 == _url and param3 == requestID then
+                    if watchdog then pcall(os.cancelTimer, watchdog) end
                     return param2
                 elseif event == "http_failure" and param1 == _url then
-                    return nil, param2, param3
+                    -- Newer events keep an explicit nil response slot before
+                    -- requestID. Older/bridged events may collapse that slot;
+                    -- accept requestID in the third position as a safe
+                    -- compatibility fallback (reason is always a string).
+                    if param4 == requestID then
+                        if watchdog then pcall(os.cancelTimer, watchdog) end
+                        return nil, param2, param3
+                    elseif param4 == nil and param3 == requestID then
+                        if watchdog then pcall(os.cancelTimer, watchdog) end
+                        return nil, param2, nil
+
                 end
             end
+        end
         end
         return nil, err
     end
@@ -736,12 +780,16 @@ if http then
     end
 
     http.websocket = function( _url, _headers )
-        http.websocketAsync( _url, _headers )
+        local requestID = allocateRequestID()
+        local ok, err = nativeWebsocket( _url, _headers, requestID )
+        if not ok then
+            return false, err
+        end
         while true do
-            local event, evUrl, param = os.pullEvent()
-            if event == "websocket_success" and evUrl == _url then
+            local event, evUrl, param, eventID = os.pullEvent()
+            if event == "websocket_success" and evUrl == _url and eventID == requestID then
                 return param
-            elseif event == "websocket_failure" and evUrl == _url then
+            elseif event == "websocket_failure" and evUrl == _url and eventID == requestID then
                 return false, param
             end
         end

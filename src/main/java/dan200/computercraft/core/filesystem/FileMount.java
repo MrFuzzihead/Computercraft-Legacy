@@ -59,6 +59,10 @@ public class FileMount implements IWritableMount {
             }
 
             String[] paths = file.list();
+            if (paths == null) {
+                // File.list() returns null when the directory cannot be read (B6).
+                throw new IOException("Access denied");
+            }
 
             for (String subPath : paths) {
                 if (new File(file, subPath).exists()) {
@@ -145,6 +149,10 @@ public class FileMount implements IWritableMount {
     private void deleteRecursively(File file) throws IOException {
         if (file.isDirectory()) {
             String[] children = file.list();
+            if (children == null) {
+                // File.list() returns null when the directory cannot be read (B6).
+                throw new IOException("Access denied");
+            }
 
             for (int i = 0; i < children.length; i++) {
                 this.deleteRecursively(new File(file, children[i]));
@@ -341,6 +349,11 @@ public class FileMount implements IWritableMount {
         } else {
             long size = MINIMUM_FILE_SIZE;
             String[] contents = file.list();
+            if (contents == null) {
+                // Unreadable directory: account for the directory itself only,
+                // rather than NPE-ing during construction (B6).
+                return size;
+            }
 
             for (int i = 0; i < contents.length; i++) {
                 size += this.measureUsedSpace(new File(file, contents[i]));

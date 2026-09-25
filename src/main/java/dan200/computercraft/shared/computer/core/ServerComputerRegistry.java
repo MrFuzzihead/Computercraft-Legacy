@@ -17,13 +17,19 @@ public class ServerComputerRegistry extends ComputerRegistry<ServerComputer> {
             // This allows computers to continue running when the player is outside
             // the 64-block TileEntity tick range but the chunk remains loaded
             // (e.g. via a chunk loader, or normal server view-distance).
-            if (isChunkLoaded(computer)) {
+            boolean chunkLoaded = isChunkLoaded(computer);
+            if (chunkLoaded) {
                 computer.keepAlive();
             }
             if (computer.hasTimedOut()) {
                 computer.unload();
                 computer.broadcastDelete();
                 it.remove();
+            } else if (computer.getPosition() != null && !chunkLoaded) {
+                // Positioned computers require a loaded world/chunk. Keep aging them
+                // so a missed chunk-unload callback cannot leave an immortal entry.
+                // Pocket computers have no position and retain their normal tick path.
+                computer.advanceTimeout();
             } else {
                 computer.update();
                 if (computer.hasTerminalChanged() || computer.hasOutputChanged()) {

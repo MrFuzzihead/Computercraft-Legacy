@@ -5,4 +5,10 @@ http.get( url, [headers] )
 http.post( url, postData, [headers] )
 
 The HTTP API may be disabled in ComputerCraft.cfg
-A period of time after a http.request() call is made, a "http_success" or "http_failure" event will be raised. Arguments are the url and a file handle if successful. http.get() and http.post() block until this event fires instead.
+A period of time after a http.request() call is made, a "http_success" or "http_failure" event will be raised. Success arguments are url, response; failure arguments are url, error, optional response. http.get() and http.post() block until their own request completes instead.
+
+http.websocket( url, [headers] ) opens a connection and returns its handle, or false, error on failure. http.websocketAsync( url, [headers] ) opens it asynchronously and raises websocket_success(url, handle) or websocket_failure(url, error).
+
+Blocking get/post/websocket calls use internal request IDs, so concurrent calls to the same URL do not share completion results. Their completion events append an internal ID after the usual arguments. Asynchronous request/websocketAsync events retain their original arguments.
+
+Blocking calls discard unrelated events in the waiting coroutine; they do not buffer or replay timers, redstone events, or other requests' completions. Use parallel to handle other events concurrently, or use the asynchronous APIs in your own event loop. WebSocket message/close events and handle.receive still match by URL, so avoid receiving from multiple connections to the same URL.

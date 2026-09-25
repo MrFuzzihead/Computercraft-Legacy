@@ -70,6 +70,8 @@ public class HTTPResponse implements ILuaObject {
                 }
 
                 if (returnEnd <= start) return new Object[] { "" };
+                // All reads share index. The Lua bridge requires a byte[], so this is
+                // the output copy, not an intermediate scanning buffer.
                 return new Object[] { Arrays.copyOfRange(result, start, returnEnd) };
             }
             case 1: {

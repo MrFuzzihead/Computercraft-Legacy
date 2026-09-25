@@ -1,6 +1,10 @@
 package dan200.computercraft.core.lua;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -36,6 +40,9 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
  * or any other unrecognised mode now returns {@code nil, "Unsupported mode"}
  * instead of throwing a Lua error. An unresolvable path returns
  * {@code nil, "Failed to open file"}.</li>
+ * <li><b>io.open reason pass-through</b> — when {@code fs.open} returns
+ * {@code nil, reason} (as it now does for every mode), that reason is returned
+ * rather than the generic {@code "Failed to open file"}.</li>
  * </ol>
  *
  * <h2>Test strategy</h2>
@@ -301,6 +308,21 @@ class IOAPITest {
         assertNull(cap.args[0], "open for a missing file must return nil as first value");
         assertNotNull(cap.args[1], "open for a missing file must return an error string");
         assertFalse(((String) cap.args[1]).isEmpty(), "Error message must be non-empty");
+    }
+
+    @Test
+    void openPropagatesTheReasonFromFsOpen() {
+        // fs.open now reports nil, reason for every mode (B4) — io.open must pass it on
+        // instead of replacing it with its own generic text.
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "fs.open = function( path, mode ) return nil, 'Access Denied' end\n"
+                + "local f, err = open( 'secret.txt', 'w' )\n"
+                + "_capture( f, err )");
+        assertNotNull(cap.args);
+        assertNull(cap.args[0]);
+        assertEquals("Access Denied", cap.args[1], "io.open must pass fs.open's reason through");
     }
 
     @Test

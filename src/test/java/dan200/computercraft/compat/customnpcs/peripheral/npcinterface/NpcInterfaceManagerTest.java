@@ -1,7 +1,9 @@
 package dan200.computercraft.compat.customnpcs.peripheral.npcinterface;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

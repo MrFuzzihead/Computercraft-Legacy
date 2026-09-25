@@ -70,13 +70,13 @@ public class TextBuffer {
     }
 
     public void write(String text, int start, int end) {
-        int pos = start;
-        int var6 = Math.max(start, 0);
+        int sourceOrigin = start;
+        int clippedStart = Math.max(start, 0);
         end = Math.min(end, start + text.length());
         end = Math.min(end, this.m_text.length);
 
-        for (int i = var6; i < end; i++) {
-            this.m_text[i] = text.charAt(i - pos);
+        for (int i = clippedStart; i < end; i++) {
+            this.m_text[i] = text.charAt(i - sourceOrigin);
         }
     }
 
@@ -89,13 +89,13 @@ public class TextBuffer {
     }
 
     public void write(TextBuffer text, int start, int end) {
-        int pos = start;
-        int var6 = Math.max(start, 0);
+        int sourceOrigin = start;
+        int clippedStart = Math.max(start, 0);
         end = Math.min(end, start + text.length());
         end = Math.min(end, this.m_text.length);
 
-        for (int i = var6; i < end; i++) {
-            this.m_text[i] = text.charAt(i - pos);
+        for (int i = clippedStart; i < end; i++) {
+            this.m_text[i] = text.charAt(i - sourceOrigin);
         }
     }
 
@@ -129,6 +129,11 @@ public class TextBuffer {
         start = Math.max(start, 0);
         end = Math.min(end, this.m_text.length);
         int textLength = text.length();
+        if (textLength == 0) {
+            // An empty pattern tiles to nothing; without this guard the modulo
+            // below divides by zero (finding B1 in docs/CODEBASE_ANALYSIS.md).
+            return;
+        }
 
         for (int i = start; i < end; i++) {
             this.m_text[i] = text.charAt((i - pos) % textLength);
@@ -148,6 +153,10 @@ public class TextBuffer {
         start = Math.max(start, 0);
         end = Math.min(end, this.m_text.length);
         int textLength = text.length();
+        if (textLength == 0) {
+            // Same empty-pattern guard as fill(String, int, int).
+            return;
+        }
 
         for (int i = start; i < end; i++) {
             this.m_text[i] = text.charAt((i - pos) % textLength);

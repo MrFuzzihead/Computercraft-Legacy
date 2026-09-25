@@ -7,6 +7,12 @@ import dan200.computercraft.core.terminal.Terminal;
 
 public class TermAPI implements ILuaAPI {
 
+    /**
+     * The 16 blit palette characters in index order — same set the renderer
+     * ({@code FixedWidthFontRenderer}) and {@code Terminal} use for colour rows.
+     */
+    private static final String BASE16 = "0123456789abcdef";
+
     private Terminal m_terminal;
     private IComputerEnvironment m_environment;
 
@@ -36,6 +42,26 @@ public class TermAPI implements ILuaAPI {
             "isColor", "getTextColour", "getTextColor", "getBackgroundColour", "getBackgroundColor", "blit",
             "getCursorBlink", "nativePaletteColor", "nativePaletteColour", "setPaletteColor", "setPaletteColour",
             "getPaletteColor", "getPaletteColour" };
+    }
+
+    /**
+     * Validates a blit colour string, mirroring the renderer's
+     * {@code "0123456789abcdef".indexOf} logic: every character must be one of
+     * the 16 lowercase hex palette characters.
+     *
+     * @param colour the string to validate
+     * @return the same string
+     * @throws LuaException with CC:Tweaked's {@code Invalid colour} message if any
+     *                      character is not a valid blit colour character
+     */
+    public static String checkColour(String colour) throws LuaException {
+        for (int i = 0; i < colour.length(); i++) {
+            if (BASE16.indexOf(colour.charAt(i)) < 0) {
+                throw new LuaException("Invalid colour");
+            }
+        }
+
+        return colour;
     }
 
     public static int parseColour(Object[] args, boolean _enableColours) throws LuaException {
@@ -162,10 +188,15 @@ public class TermAPI implements ILuaAPI {
                 return new Object[] { this.m_environment.isColour() };
             case 14:
             case 15:
-                return encodeColour(this.m_terminal.getTextColour());
+                // B9: read terminal state under the terminal lock, like every writer.
+                synchronized (this.m_terminal) {
+                    return encodeColour(this.m_terminal.getTextColour());
+                }
             case 16:
             case 17:
-                return encodeColour(this.m_terminal.getBackgroundColour());
+                synchronized (this.m_terminal) {
+                    return encodeColour(this.m_terminal.getBackgroundColour());
+                }
             case 18:
                 if (args.length >= 3 && args[0] instanceof String
                     && args[1] instanceof String
@@ -174,6 +205,10 @@ public class TermAPI implements ILuaAPI {
                     String textColour = (String) args[1];
                     String backgroundColour = (String) args[2];
                     if (textColour.length() == text18.length() && backgroundColour.length() == text18.length()) {
+                        // Validate both colour strings before touching the terminal, so a
+                        // rejected blit writes nothing (no buffer garbage, no cursor move).
+                        checkColour(textColour);
+                        checkColour(backgroundColour);
                         synchronized (this.m_terminal) {
                             this.m_terminal.blit(text18, textColour, backgroundColour);
                             this.m_terminal.setCursorPos(

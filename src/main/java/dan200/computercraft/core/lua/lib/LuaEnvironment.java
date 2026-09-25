@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ArgumentDelegator;
@@ -182,7 +183,8 @@ public class LuaEnvironment implements ILuaEnvironment {
                 synchronized (getFs()) {
                     return !fs.exists(desiredLoc) ? desiredLoc : null;
                 }
-            } catch (FileSystemException ignored) {
+            } catch (FileSystemException e) {
+                ComputerCraft.logger.warn("Computer {} failed to check mount location '{}'", getID(), desiredLoc, e);
                 return null;
             }
         }
@@ -199,7 +201,10 @@ public class LuaEnvironment implements ILuaEnvironment {
                 if (location != null) {
                     try {
                         getFs().mount(driveName, location, mount);
-                    } catch (FileSystemException ignored) {}
+                    } catch (FileSystemException e) {
+                        ComputerCraft.logger.warn("Computer {} failed to mount at '{}'", getID(), location, e);
+                        return null;
+                    }
 
                     mounts.add(location);
                 }
@@ -220,7 +225,11 @@ public class LuaEnvironment implements ILuaEnvironment {
                 if (location != null) {
                     try {
                         getFs().mountWritable(driveName, location, mount);
-                    } catch (FileSystemException ignored) {}
+                    } catch (FileSystemException e) {
+                        ComputerCraft.logger
+                            .warn("Computer {} failed to mount writable storage at '{}'", getID(), location, e);
+                        return null;
+                    }
 
                     mounts.add(location);
                 }

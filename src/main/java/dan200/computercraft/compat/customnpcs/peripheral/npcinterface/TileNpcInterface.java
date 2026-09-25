@@ -16,12 +16,11 @@ import net.minecraft.util.IIcon;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.compat.customnpcs.LoadedNpcIndex;
 import dan200.computercraft.shared.common.TileGeneric;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.peripheral.common.IPeripheralTile;
-import noppes.npcs.api.AbstractNpcAPI;
 import noppes.npcs.api.entity.ICustomNpc;
-import noppes.npcs.api.entity.IEntity;
 
 /**
  * Tile entity for the NPC Interface block.
@@ -207,36 +206,13 @@ public class TileNpcInterface extends TileGeneric implements IPeripheralTile, IN
             if (m_linkedNpcs.isEmpty()) return Collections.emptyList();
             snapshot = new LinkedHashMap<>(m_linkedNpcs);
         }
-        List<ICustomNpc<?>> result = new ArrayList<>();
-        try {
-            if (!AbstractNpcAPI.IsAvailable()) return result;
-            AbstractNpcAPI api = AbstractNpcAPI.Instance();
-            if (api == null) return result;
-            for (IEntity<?> entity : api.getLoadedEntities()) {
-                if (entity instanceof ICustomNpc && snapshot.containsKey(entity.getUniqueID())) {
-                    result.add((ICustomNpc<?>) entity);
-                }
-            }
-        } catch (Throwable t) {
-            // CNPC absent or incompatible
-        }
-        return result;
+        return LoadedNpcIndex.instance()
+            .findAll(snapshot.keySet());
     }
 
     private static ICustomNpc<?> resolveByUUID(String uuid) {
-        try {
-            if (!AbstractNpcAPI.IsAvailable()) return null;
-            AbstractNpcAPI api = AbstractNpcAPI.Instance();
-            if (api == null) return null;
-            for (IEntity<?> entity : api.getLoadedEntities()) {
-                if (entity instanceof ICustomNpc && uuid.equals(entity.getUniqueID())) {
-                    return (ICustomNpc<?>) entity;
-                }
-            }
-        } catch (Throwable t) {
-            // CNPC absent or incompatible
-        }
-        return null;
+        return LoadedNpcIndex.instance()
+            .find(uuid);
     }
 
     // -------------------------------------------------------------------------

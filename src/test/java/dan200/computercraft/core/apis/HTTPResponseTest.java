@@ -1,6 +1,11 @@
 package dan200.computercraft.core.apis;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -29,6 +34,22 @@ class HTTPResponseTest {
     private static final int METHOD_CLOSE = 3;
     private static final int METHOD_GET_RESPONSE_CODE = 4;
     private static final int METHOD_GET_RESPONSE_HEADERS = 5;
+
+    @Test
+    void mixedReadsUseOneCursorAndReturnIndependentBinaryResults() throws Exception {
+        byte[] body = { 'a', '\r', '\n', 0, (byte) 255, '\r', 'z' };
+        HTTPResponse response = new HTTPResponse(200, "OK", body, new HashMap<>());
+        byte[] line = (byte[]) response.callMethod(null, METHOD_READ_LINE, new Object[] { true })[0];
+        assertArrayEquals(new byte[] { 'a', '\r', '\n' }, line);
+        line[0] = 'X';
+        assertEquals('a', body[0]);
+        assertArrayEquals(
+            new byte[] { 0, (byte) 255 },
+            (byte[]) response.callMethod(null, METHOD_READ, new Object[] { 2 })[0]);
+        assertEquals("", response.callMethod(null, METHOD_READ_LINE, new Object[0])[0]);
+        assertEquals("z", str(response.callMethod(null, METHOD_READ_ALL, new Object[0])));
+        assertNilReturn(response.callMethod(null, METHOD_READ_LINE, new Object[0]));
+    }
 
     // =========================================================================
     // Helpers

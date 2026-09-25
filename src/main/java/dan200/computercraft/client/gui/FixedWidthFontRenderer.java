@@ -299,17 +299,34 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
         }
     }
 
-    private static int getIndex(char ch) {
+    /** Maps each drawable character to its display-list index; built once at class load. */
+    private static final int[] CHAR_INDEX = buildCharIndex();
+
+    static int getIndex(char ch) {
+        return CHAR_INDEX[ch];
+    }
+
+    /**
+     * Precomputed replacement for the former per-glyph linear scan over
+     * {@code defaultChars}. Preserves the legacy lookup exactly: a char maps to the index
+     * of its <em>first</em> occurrence in {@code defaultChars}; unmapped chars resolve to
+     * the index of {@code '?'}, except tab/CR/LF which resolve to the index of space.
+     */
+    private static int[] buildCharIndex() {
         String defaultChars = "ÀÁÂÈÊËÍÓÔÕÚßãõğİıŒœŞşŴŵžȇ\u0000\u0000\u0000\u0000\u0000\u0000\u0000 !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u0000ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞∅∈∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u0000";
-        int index = defaultChars.indexOf(ch);
-        if (index < 0) {
-            if (ch != '\t' && ch != '\r' && ch != '\n') {
-                index = defaultChars.indexOf(63);
-            } else {
-                index = defaultChars.indexOf(32);
-            }
+        int[] table = new int[65536];
+        java.util.Arrays.fill(table, -1);
+        for (int i = 0; i < defaultChars.length(); i++) {
+            char ch = defaultChars.charAt(i);
+            if (table[ch] == -1) table[ch] = i; // first occurrence wins, like String.indexOf
         }
-        return index;
+        int fallback = defaultChars.indexOf('?');
+        for (int i = 0; i < 65536; i++) {
+            if (table[i] == -1) table[i] = fallback;
+        }
+        int space = defaultChars.indexOf(' ');
+        table['\t'] = table['\r'] = table['\n'] = space;
+        return table;
     }
 
     public int getStringWidth(String s) {

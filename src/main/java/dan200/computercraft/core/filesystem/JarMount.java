@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -32,26 +34,49 @@ public class JarMount implements IMount {
                 throw new IOException("Zip does not contain path");
             } else {
                 Enumeration<? extends ZipEntry> zipEntries = this.m_zipFile.entries();
+                // Children can be enumerated before their parent directory
+                // entry, so collect them and attach them once the root is known.
+                List<JarMount.FileInZip> pendingChildren = new ArrayList<>();
 
                 while (zipEntries.hasMoreElements()) {
                     ZipEntry entry = zipEntries.nextElement();
                     String entryName = entry.getName();
-                    if (entryName.startsWith(subPath)) {
-                        entryName = FileSystem.toLocal(entryName, subPath);
+                    if (!isUnderPath(entryName, subPath)) {
+                        continue;
+                    }
+
+                    entryName = FileSystem.toLocal(entryName, subPath);
+                    if (entryName.isEmpty()) {
                         if (this.m_root == null) {
-                            if (entryName.equals("")) {
-                                this.m_root = new JarMount.FileInZip(entryName, entry.isDirectory(), entry.getSize());
-                                this.m_rootPath = subPath;
-                                if (!this.m_root.isDirectory()) {
-                                    break;
-                                }
-                            }
-                        } else {
-                            JarMount.FileInZip parent = this.m_root.getParent(entryName);
-                            if (parent != null) {
-                                parent.insertChild(
-                                    new JarMount.FileInZip(entryName, entry.isDirectory(), entry.getSize()));
-                            }
+                            this.m_root = new JarMount.FileInZip(entryName, entry.isDirectory(), entry.getSize());
+                            this.m_rootPath = subPath;
+                        }
+                        if (!this.m_root.isDirectory()) {
+                            break;
+                        }
+                    } else {
+                        pendingChildren.add(new JarMount.FileInZip(entryName, entry.isDirectory(), entry.getSize()));
+                    }
+                }
+
+                if (this.m_root == null) {
+                    // The sub-path exists as a zip entry but no entry resolved
+                    // to the mount root: fail cleanly instead of NPE-ing on the
+                    // first exists()/list() call (B7).
+                    this.m_zipFile.close();
+                    throw new IOException("Zip does not contain path");
+                }
+
+                if (this.m_root.isDirectory()) {
+                    // Attach parents before children so intermediate
+                    // directories exist in the tree.
+                    pendingChildren.sort(
+                        Comparator.comparingInt((JarMount.FileInZip file) -> pathDepth(file.getPath()))
+                            .thenComparing(JarMount.FileInZip::getPath));
+                    for (JarMount.FileInZip child : pendingChildren) {
+                        JarMount.FileInZip parent = this.m_root.getParent(child.getPath());
+                        if (parent != null) {
+                            parent.insertChild(child);
                         }
                     }
                 }
@@ -59,6 +84,26 @@ public class JarMount implements IMount {
         } else {
             throw new FileNotFoundException();
         }
+    }
+
+    /**
+     * Returns {@code true} if {@code entryName} is the mount root or a genuine
+     * descendant of it. A plain {@code startsWith} check would also match
+     * unrelated prefix siblings (e.g. {@code "romario/x"} for {@code "rom"}).
+     */
+    private static boolean isUnderPath(String entryName, String subPath) {
+        String base = subPath.endsWith("/") ? subPath.substring(0, subPath.length() - 1) : subPath;
+        return entryName.equals(subPath) || entryName.equals(base) || entryName.startsWith(base + "/");
+    }
+
+    /** Number of path separators, used to attach parents before children. */
+    private static int pathDepth(String path) {
+        int depth = 0;
+        for (int i = 0; i < path.length(); i++) {
+            if (path.charAt(i) == '/') depth++;
+        }
+
+        return depth;
     }
 
     @Override

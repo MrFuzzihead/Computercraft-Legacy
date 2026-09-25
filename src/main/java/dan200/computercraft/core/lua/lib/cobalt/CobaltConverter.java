@@ -1,6 +1,10 @@
 package dan200.computercraft.core.lua.lib.cobalt;
 
-import static org.squiddev.cobalt.Constants.*;
+import static org.squiddev.cobalt.Constants.NIL;
+import static org.squiddev.cobalt.Constants.TBOOLEAN;
+import static org.squiddev.cobalt.Constants.TNUMBER;
+import static org.squiddev.cobalt.Constants.TSTRING;
+import static org.squiddev.cobalt.Constants.TTABLE;
 
 import java.util.HashMap;
 import java.util.IdentityHashMap;

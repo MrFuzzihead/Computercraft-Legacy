@@ -1,6 +1,8 @@
 package dan200.computercraft.shared.peripheral.inventory;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.item.ItemStack;
