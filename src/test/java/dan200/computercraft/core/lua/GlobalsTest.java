@@ -3,6 +3,7 @@ package dan200.computercraft.core.lua;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -21,8 +22,13 @@ import org.squiddev.cobalt.Varargs;
 import org.squiddev.cobalt.function.VarArgFunction;
 
 import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.api.filesystem.IMount;
+import dan200.computercraft.api.filesystem.IWritableMount;
+import dan200.computercraft.core.computer.Computer;
+import dan200.computercraft.core.computer.IComputerEnvironment;
 import dan200.computercraft.core.lua.lib.cobalt.CobaltConverter;
 import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
+import dan200.computercraft.core.terminal.Terminal;
 
 /**
  * Unit tests for the {@code _G} additions:
@@ -88,12 +94,70 @@ class GlobalsTest {
     }
 
     private static CobaltMachine buildMachine(ResultCapture capture) {
+        return buildMachine(capture, "");
+    }
+
+    private static CobaltMachine buildMachine(ResultCapture capture, String hostString) {
         ComputerCraft.bigInteger = false;
         ComputerCraft.bitop = false;
         ComputerCraft.timeoutError = false;
-        CobaltMachine machine = new CobaltMachine(null);
+        CobaltMachine machine = new CobaltMachine(newComputer(hostString));
         injectCapture(machine, capture);
         return machine;
+    }
+
+    /**
+     * Builds a real (but never turned on) {@link Computer} for the machine to
+     * query. {@code CobaltMachine}'s constructor reads
+     * {@code computer.getAPIEnvironment().getComputerEnvironment()} to populate
+     * the {@code _HOST} global, so a {@code null} computer is no longer a usable
+     * fixture.
+     *
+     * @param hostString value the environment reports as its host identity
+     */
+    private static Computer newComputer(String hostString) {
+        return new Computer(new IComputerEnvironment() {
+
+            @Override
+            public int getDay() {
+                return 1;
+            }
+
+            @Override
+            public double getTimeOfDay() {
+                return 0.0;
+            }
+
+            @Override
+            public boolean isColour() {
+                return true;
+            }
+
+            @Override
+            public long getComputerSpaceLimit() {
+                return 1024 * 1024;
+            }
+
+            @Override
+            public int assignNewID() {
+                return 1;
+            }
+
+            @Override
+            public IWritableMount createSaveDirMount(String subPath, long capacity) {
+                return mock(IWritableMount.class);
+            }
+
+            @Override
+            public IMount createResourceMount(String domain, String subPath) {
+                return mock(IMount.class);
+            }
+
+            @Override
+            public String getHostString() {
+                return hostString;
+            }
+        }, new Terminal(51, 19), 1);
     }
 
     private static void injectCapture(CobaltMachine machine, ResultCapture capture) {
@@ -180,6 +244,30 @@ class GlobalsTest {
         sb.append("end\n");
 
         return sb.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // _HOST global
+    // -------------------------------------------------------------------------
+
+    @Test
+    void hostGlobalIsSetFromTheComputerEnvironment() {
+        ResultCapture cap = buildCapture();
+        run(buildMachine(cap, "ComputerCraft 2.3.6 (Minecraft 1.7.10)"), "_capture(_HOST)");
+        assertArrayEquals(
+            new Object[] { "ComputerCraft 2.3.6 (Minecraft 1.7.10)" },
+            cap.args,
+            "_HOST should equal IComputerEnvironment#getHostString()");
+    }
+
+    @Test
+    void hostGlobalIsAlwaysPresentEvenWhenTheEnvironmentDoesNotIdentifyItself() {
+        ResultCapture cap = buildCapture();
+        run(buildMachine(cap), "if _HOST == nil then _capture('MISSING') else _capture(_HOST) end");
+        assertArrayEquals(
+            new Object[] { "" },
+            cap.args,
+            "_HOST should always be defined, defaulting to the interface's empty string");
     }
 
     // -------------------------------------------------------------------------

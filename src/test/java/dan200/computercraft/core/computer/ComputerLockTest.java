@@ -57,6 +57,9 @@ class ComputerLockTest {
         field("s_romMount").set(null, mock(IMount.class));
         IComputerEnvironment environment = mock(IComputerEnvironment.class);
         when(environment.createSaveDirMount(anyString(), anyLong())).thenReturn(mock(IWritableMount.class));
+        // A Mockito mock returns null for String-returning methods rather than the interface
+        // default, and CobaltMachine feeds this straight to Lua's _HOST global.
+        when(environment.getHostString()).thenReturn("ComputerCraft test (Minecraft 1.7.10)");
         computer = new Computer(environment, new Terminal(51, 19), 123);
         api = mock(ILuaAPI.class);
         when(api.getNames()).thenReturn(new String[] { "probe" });

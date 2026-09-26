@@ -8,8 +8,6 @@ import static org.squiddev.cobalt.ValueFactory.varargsOf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -46,7 +44,6 @@ import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.core.computer.Computer;
-import dan200.computercraft.core.computer.IComputerEnvironment;
 import dan200.computercraft.core.computer.ITask;
 import dan200.computercraft.core.computer.MainThread;
 import dan200.computercraft.core.lua.ILuaMachine;
@@ -57,19 +54,6 @@ import dan200.computercraft.core.lua.ILuaMachine;
 public class CobaltMachine implements ILuaMachine, ILuaContext {
 
     private static final String[] ILLEGAL_NAMES = new String[] { "collectgarbage", "dofile", "loadfile", "print" };
-
-    private static final Method getHost;
-
-    static {
-        Method host = null;
-        try {
-            host = IComputerEnvironment.class.getMethod("getHostString");
-        } catch (NoSuchMethodException ignored) {} catch (RuntimeException e) {
-            ComputerCraft.logger.error("Unknown error getting host string", e);
-        }
-
-        getHost = host;
-    }
 
     private final Computer computer;
     private final LuaState state;
@@ -149,23 +133,14 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
             globals.rawset(global, Constants.NIL);
         }
 
-        if (getHost != null) {
-            try {
-                // We have to use reflection for different CC versions
-                globals.rawset(
-                    "_HOST",
-                    valueOf(
-                        (String) getHost.invoke(
-                            computer.getAPIEnvironment()
-                                .getComputerEnvironment())));
-            } catch (InvocationTargetException e) {
-                ComputerCraft.logger.error("Cannot find getHostString", e);
-            } catch (IllegalAccessException e) {
-                ComputerCraft.logger.error("Cannot find getHostString", e);
-            } catch (RuntimeException e) {
-                ComputerCraft.logger.error("Unknown error with setting _HOST", e);
-            }
-        }
+        // Always defined: IComputerEnvironment#getHostString() is a default method
+        // returning "", so environments that do not identify themselves yield "".
+        globals.rawset(
+            "_HOST",
+            valueOf(
+                computer.getAPIEnvironment()
+                    .getComputerEnvironment()
+                    .getHostString()));
 
         globals.rawset("_CC_VERSION", valueOf(ComputerCraft.getVersion()));
         globals.rawset("_MC_VERSION", valueOf("1.7.10"));
