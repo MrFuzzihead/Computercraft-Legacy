@@ -1,5 +1,6 @@
 package dan200.computercraft.shared.peripheral.generic.energy.rf;
 
+import cpw.mods.fml.common.Loader;
 import dan200.computercraft.shared.peripheral.common.DefaultPeripheralProvider;
 
 /**
@@ -16,8 +17,11 @@ public final class RFIntegration {
 
     private RFIntegration() {}
 
-    private static final String[] RF_API_CLASSES = { "cofh.api.energy.IEnergyReceiver",
-        "cofh.api.energy.IEnergyProvider", "cofh.api.energy.IEnergyStorage", };
+    /**
+     * The modid of CoFH Core, which provides {@code cofh.api.energy.*}. Declared as a
+     * compile-only dependency, so it is absent unless the player installs it.
+     */
+    private static final String COFH_MODID = "CoFHCore";
 
     /**
      * Registers the CoFH RF adapter factory with the given provider.
@@ -41,11 +45,11 @@ public final class RFIntegration {
 
     private static boolean isRFAvailable() {
         try {
-            for (String className : RF_API_CLASSES) {
-                Class.forName(className, false, RFIntegration.class.getClassLoader());
-            }
-            return true;
-        } catch (ClassNotFoundException | LinkageError ignored) {
+            return Loader.isModLoaded(COFH_MODID);
+        } catch (RuntimeException | LinkageError ignored) {
+            // FML's Loader is only populated inside a running game, so this can fail outside one
+            // (unit tests, an early preInit). Treat that as "not available", which is the safe
+            // answer: it skips RF integration rather than resolving the absent cofh classes.
             return false;
         }
     }

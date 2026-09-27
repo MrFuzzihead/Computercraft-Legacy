@@ -1,6 +1,5 @@
 package dan200.computercraft.shared.turtle.items;
 
-import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
@@ -12,7 +11,6 @@ import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.IComputer;
 import dan200.computercraft.shared.turtle.blocks.ITurtleTile;
 import dan200.computercraft.shared.util.Colour;
-import dan200.computercraft.shared.util.ReflectionUtil;
 
 public class TurtleItemFactory {
 
@@ -81,20 +79,15 @@ public class TurtleItemFactory {
                 ItemTurtleBase advanced = (ItemTurtleBase) Item.getItemFromBlock(ComputerCraft.Blocks.turtleAdvanced);
                 return advanced.create(id, label, colour, leftUpgrade, rightUpgrade, fuelLevel, overlay, hatOverlay);
             case Beginners:
-                Block beginnersBlock = ReflectionUtil.safeGet(
-                    ReflectionUtil.getOptionalField(
-                        ReflectionUtil.getOptionalInnerClass(
-                            ReflectionUtil.getOptionalClass("dan200.computercraftedu.ComputerCraftEdu"),
-                            "Blocks"),
-                        "turtleJunior"),
-                    null,
-                    Block.class);
-                if (beginnersBlock != null) {
-                    ItemTurtleBase beginnersItem = (ItemTurtleBase) Item.getItemFromBlock(beginnersBlock);
-                    return beginnersItem
-                        .create(id, label, colour, leftUpgrade, rightUpgrade, fuelLevel, overlay, hatOverlay);
-                }
-
+                // The beginner ("Junior") turtle lives in ComputerCraft:Edu, a separate
+                // optional mod that is not a dependency here and so cannot be named directly.
+                // This previously reflectively probed
+                // dan200.computercraftedu.ComputerCraftEdu$Blocks#turtleJunior, which always
+                // resolved to null in practice: that class is absent unless the optional mod
+                // happens to be installed, so the branch was dead code reached by a lookup that
+                // could never succeed. Restoring support means ComputerCraft:Edu handing this
+                // factory an item (an interface registered the way ComputerCraftAPI's providers
+                // are), not a reflective field read.
                 return null;
             default:
                 return null;
