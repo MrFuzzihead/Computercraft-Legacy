@@ -142,16 +142,23 @@ public class TurtleTool implements ITurtleUpgrade {
                 }
             });
             boolean placed = false;
-            if (hitEntity.canAttackWithItem() && !hitEntity.hitByEntity(turtlePlayer)) {
-                float damage = (float) turtlePlayer.getEntityAttribute(SharedMonsterAttributes.attackDamage)
-                    .getAttributeValue();
-                damage *= this.getDamageMultiplier();
-                if (damage > 0.0F && hitEntity.attackEntityFrom(DamageSource.causePlayerDamage(turtlePlayer), damage)) {
-                    placed = true;
+            try {
+                if (hitEntity.canAttackWithItem() && !hitEntity.hitByEntity(turtlePlayer)) {
+                    float damage = (float) turtlePlayer.getEntityAttribute(SharedMonsterAttributes.attackDamage)
+                        .getAttributeValue();
+                    damage *= this.getDamageMultiplier();
+                    if (damage > 0.0F
+                        && hitEntity.attackEntityFrom(DamageSource.causePlayerDamage(turtlePlayer), damage)) {
+                        placed = true;
+                    }
                 }
+            } finally {
+                // Always release the capture. If the attack throws, skipping this would leave the
+                // entity with captureDrops set and a consumer nobody clears, so its drops would
+                // accumulate in capturedDrops and never be delivered.
+                ComputerCraft.clearEntityDropConsumer(hitEntity);
             }
 
-            ComputerCraft.clearEntityDropConsumer(hitEntity);
             if (placed) {
                 turtlePlayer.unloadInventory(turtle);
                 return TurtleCommandResult.success();

@@ -127,19 +127,33 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
 
     @Override
     public void setEntityDropConsumer(Entity entity, IEntityDropConsumer consumer) {
-        if (!this.m_dropConsumers.containsKey(entity)) {
-            // Entity#captureDrops / Entity#capturedDrops are public fields added by Forge,
-            // so this is direct field access; the remapper rewrites the references for
-            // production. While captureDrops is set, entityDropItem() diverts spawned
-            // EntityItems into capturedDrops instead of the world.
-            if (!entity.captureDrops) {
-                entity.captureDrops = true;
-                ArrayList<EntityItem> items = entity.capturedDrops;
-                if (items == null || items.size() == 0) {
-                    this.m_dropConsumers.put(entity, consumer);
-                }
-            }
+        // Entity#captureDrops / Entity#capturedDrops are public fields added by Forge, so this is
+        // direct field access; the remapper rewrites the references for production. While
+        // captureDrops is set, entityDropItem() diverts spawned EntityItems into capturedDrops
+        // instead of the world.
+        if (this.m_dropConsumers.containsKey(entity) || entity.captureDrops) {
+            // Either we already own this entity, or someone else owns the capture. Never take a
+            // capture over: the flag is global to the entity, so claiming it would redirect that
+            // mod's drops.
+            return;
         }
+
+        ArrayList<EntityItem> items = entity.capturedDrops;
+        if (items != null && !items.isEmpty()) {
+            // Capture is off but drops were captured earlier, so they were orphaned by whoever
+            // enabled and then disabled it. They are not ours to deliver, and claiming the entity
+            // would strand them: capture would divert every future drop into a list this consumer
+            // never drains, silently deleting it. Decline and leave the entity alone instead --
+            // its drops simply fall in the world as normal. Note this leaves the entity
+            // uncapturable while the orphaned drops remain; recovering that is a separate
+            // ownership decision, because draining or clearing them could lose or duplicate a
+            // live mod's in-flight drops.
+            return;
+        }
+
+        // Only enable capture once we are the registered consumer that will drain it.
+        entity.captureDrops = true;
+        this.m_dropConsumers.put(entity, consumer);
     }
 
     @Override

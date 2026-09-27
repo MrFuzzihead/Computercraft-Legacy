@@ -140,11 +140,38 @@ class TurtleDropConsumerTest {
     @Test
     void setEntityDropConsumerEnablesCaptureOnAnUnclaimedEntity() {
         Entity entity = newEntity();
+        RecordingConsumer consumer = new RecordingConsumer();
+
+        proxy.setEntityDropConsumer(entity, consumer);
+
+        assertTrue(entity.captureDrops, "ComputerCraft should enable capture on an unclaimed entity");
+        // Enabling the flag is only sound because the consumer is registered to drain it.
+        entity.capturedDrops.add(newDrop(payload(1)));
+        proxy.clearEntityDropConsumer(entity);
+        assertEquals(1, consumer.received.size(), "the registered consumer should receive the drops");
+    }
+
+    @Test
+    void setEntityDropConsumerDoesNotEnableCaptureWhenItDeclinesToClaimOrphanedDrops() {
+        Entity entity = newEntity();
+        RecordingConsumer consumer = new RecordingConsumer();
+        // Capture is off but a drop was orphaned by whoever enabled and then disabled it. If
+        // ComputerCraft enabled capture here without registering a consumer, entityDropItem would
+        // divert every future drop into a list nobody drains and the items would be lost.
         entity.capturedDrops.add(newDrop(payload(1)));
 
-        proxy.setEntityDropConsumer(entity, new RecordingConsumer());
+        proxy.setEntityDropConsumer(entity, consumer);
 
-        assertTrue(entity.captureDrops, "ComputerCraft should enable capture on the entity");
+        assertFalse(entity.captureDrops, "capture must not be enabled for a consumer that was never registered");
+
+        // The entity keeps behaving normally: its drops land in the world rather than vanishing.
+        entity.capturedDrops.add(newDrop(payload(2)));
+        proxy.clearEntityDropConsumer(entity);
+        assertEquals(
+            2,
+            entity.capturedDrops.size(),
+            "declining must leave the entity untouched, so its drops are not silently swallowed");
+        assertTrue(consumer.received.isEmpty());
     }
 
     @Test
