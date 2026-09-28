@@ -12,6 +12,7 @@
             "Aaron Mills"
         ],
         "description" : "ComputerCraft adds Computers, Programming and Robotics to Minecraft.",
+        "license" : "ComputerCraft Public License 1.0.0 (CCPL). Decompiled from ComputerCraft 1.75 for Minecraft 1.7.10; includes CC: Tweaked code under the MPL 2.0. See LICENSE and NOTICE.",
         "logoFile" : "pack.png",
         "updateUrl" : "https://github.com/MrFuzzihead/Computercraft-Legacy/releases/latest",
         "parent" : "",

@@ -1,8 +1,41 @@
-decompiled source.
-
 # AGENTS.md — Computercraft-Legacy (Optimized for Agentic Use)
 
-Decompiled and patched ComputerCraft for Minecraft 1.7.10. All changes are made directly to the decompiled source (no Mixins/Access Transformers).
+Decompiled ComputerCraft 1.75 for Minecraft 1.7.10, with a backport of the 1.8-line
+maintenance work and a set of original additions. All changes are made directly to
+the decompiled source (no Mixins/Access Transformers).
+
+The base is decompiled binary, not upstream source: ComputerCraft's 1.7.10 source
+was closed, and public source only begins with the 1.8 line. Do not assume a
+decompiled file matches a modern CC: Tweaked file, or vice versa. See
+[NOTICE](NOTICE) for the full provenance record.
+
+---
+
+## Licensing (read before adding or copying code)
+
+- The **root `LICENSE` is the CCPL** and must stay that way. Do not add an MIT
+  licence, a `LICENSE.md`, or any per-file licence header asserting a different
+  term. CCPL section 5 requires every distribution of this mod to remain CCPL, and
+  the ComputerCraft code here is Daniel Ratcliffe's.
+- The CCPL is **non-commercial** and restricts reuse to other Minecraft mods.
+  Do not describe the project as MIT/permissive, in the README, `mcmod.info`, or
+  anywhere else.
+- **There are deliberately no per-file licence headers.** Provenance is recorded
+  centrally in `NOTICE`. Do not add SPDX headers to source files; the project
+  owner has considered and declined that, and scattered headers invite
+  contradictory claims. Attribution lives in `NOTICE`.
+- `LICENSE*` and `NOTICE` are **duplicated into `src/main/resources`** so they ship
+  in the jar. If you change a root licence file, copy it to `src/main/resources`
+  too — `LicenseDistributionTest` fails the build if the copies drift, or if a root
+  licence has no copy.
+- When copying code from **CC: Tweaked** or other MPL 2.0 sources, record it in
+  `NOTICE` and keep the file out of any claim of CCPL-only provenance. Note that
+  files under `dan200.computercraft.api` historically carried a stricter ComputerCraft
+  API notice ("may be redistributed unmodified and in full only") whose relationship
+  to MPL 2.0 is unresolved; `NOTICE` tracks this as an open question.
+- Removing an upstream copyright notice is acceptable **only** because `NOTICE`
+  carries that attribution. Never drop a notice without confirming `NOTICE` names
+  the source.
 
 ---
 
@@ -34,7 +67,9 @@ dan200.computercraft
 
 ## Key Conventions (for Agents)
 
-- Use modern Java syntax (Java 11–17 via Jabel; target JVM 8).
+- Use modern Java syntax (Java 11–17 via Jabel; target JVM 8). Note that Jabel
+  permits newer *syntax* only — Java 8 *APIs* are still required (`InputStream`
+  has no `readAllBytes()`, `String` has no `lines()`).
 - Legacy instance fields use `m_` prefix; follow in existing classes.
 - Do not refactor `ComputerCraftAPI` reflection logic.
 - Do not create/edit `dan200.computercraft.Tags` (auto-generated).
@@ -82,14 +117,18 @@ See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for L
 | Dependency | Role |
 |---|---|
 | com.gtnewhorizons.gtnhconvention | Build plugin |
-| org.squiddev:Cobalt:0.6.0 | Lua 5.1 runtime (shadowed) |
-| org.java-websocket:Java-WebSocket:1.5.6 | WebSocket client (shadowed) |
+| org.squiddev:Cobalt:0.6.0 | Lua 5.1/5.2 runtime (shadowed, MIT) |
+| org.java-websocket:Java-WebSocket:1.5.6 | WebSocket client (shadowed, MIT) |
+| org.slf4j:slf4j-api:2.0.6 | Transitive of Java-WebSocket; present in the shipped jar but **undeclared** in `dependencies.gradle` (MIT) |
 | com.github.GTNewHorizons:ForgeMultipart | Multipart peripheral support |
 | com.github.GTNewHorizons:CodeChickenCore | Required by ForgeMultipart |
 | com.github.GTNewHorizons:NotEnoughItems | Dev-only runtime for testing |
 | org.junit.jupiter:junit-jupiter:5.8.2 | Unit testing |
+| org.mockito:mockito-core:4.8.0 | Unit testing |
 
 Cobalt Maven repository: `https://maven.squiddev.cc` (see `repositories.gradle`).
+Shadowed dependencies must stay listed in `NOTICE` section 3, with their licence
+texts present in the repository root.
 
 ---
 
@@ -97,4 +136,6 @@ Cobalt Maven repository: `https://maven.squiddev.cc` (see `repositories.gradle`)
 
 - [TWEAKEDCC_COVERAGE.md](docs/TWEAKEDCC_COVERAGE.md): API/features coverage
 - [COBALT_UPGRADE_PLAN.md](docs/COBALT_UPGRADE_PLAN.md): Lua runtime migration
+- [NOTICE](NOTICE): provenance and licensing record
+- [CODEBASE_ANALYSIS.md](docs/CODEBASE_ANALYSIS.md): decompiler-artifact review
 - For legacy/historical notes and upgrade logs, see `COBALT_UPGRADE_PLAN.md` or project history.

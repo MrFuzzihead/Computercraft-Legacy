@@ -16,13 +16,10 @@ tag in dan200/ComputerCraft is 1.79, which is the Minecraft 1.8.9 build.
 No 1.7.10 source tree has been released by the original authors.
 
 The ComputerCraft code in this project was therefore recovered by decompiling
-the Minecraft 1.7.10 binary distribution of ComputerCraft.
-
-    Decompiled from: ComputerCraft, Minecraft 1.7.10 distribution
-    ComputerCraft build: 1.75
-        ^ TODO(maintainer): confirm this against the distribution that was
-          actually decompiled, and correct it here. It is recorded from the
-          project README and has not been independently verified.
+the Minecraft 1.7.10 binary distribution of ComputerCraft 1.75, which was the
+last ComputerCraft release for Minecraft 1.7.10. This is corroborated by the
+bundled in-game changelog, whose most recent entry is "New Features in
+ComputerCraft 1.75"; no later version appears anywhere in the ROM.
 
 That decompilation is expressly permitted by the license under which
 ComputerCraft was distributed. CCPL section 0 defines a "User" as anybody

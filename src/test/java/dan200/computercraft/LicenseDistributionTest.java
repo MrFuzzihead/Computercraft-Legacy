@@ -49,20 +49,26 @@ class LicenseDistributionTest {
      * not depend on being launched from a particular directory.
      */
     private static Path projectRoot() {
-        Path dir = Paths.get("").toAbsolutePath();
+        Path dir = Paths.get("")
+            .toAbsolutePath();
         while (dir != null) {
-            if (Files.isRegularFile(dir.resolve("settings.gradle.kts")) && Files.isRegularFile(dir.resolve("gradlew"))) {
+            if (Files.isRegularFile(dir.resolve("settings.gradle.kts"))
+                && Files.isRegularFile(dir.resolve("gradlew"))) {
                 return dir;
             }
             dir = dir.getParent();
         }
-        throw new IllegalStateException("Could not locate the project root above " + Paths.get("").toAbsolutePath());
+        throw new IllegalStateException(
+            "Could not locate the project root above " + Paths.get("")
+                .toAbsolutePath());
     }
 
     private static List<String> licenseNamesIn(Path dir) throws IOException {
         try (Stream<Path> entries = Files.list(dir)) {
             return entries.filter(Files::isRegularFile)
-                .map(path -> path.getFileName().toString())
+                .map(
+                    path -> path.getFileName()
+                        .toString())
                 .filter(LicenseDistributionTest::isLicenseName)
                 .sorted()
                 .collect(Collectors.toList());
@@ -80,7 +86,7 @@ class LicenseDistributionTest {
     private static byte[] read(InputStream is) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
-        for (int read; (read = is.read(buffer)) != -1; ) {
+        for (int read; (read = is.read(buffer)) != -1;) {
             out.write(buffer, 0, read);
         }
         return out.toByteArray();
@@ -92,7 +98,10 @@ class LicenseDistributionTest {
     void everyRootLicenseIsCopiedIntoResources() throws IOException {
         Path root = projectRoot();
         List<String> expected = licenseNamesIn(root);
-        List<String> actual = licenseNamesIn(root.resolve("src").resolve("main").resolve("resources"));
+        List<String> actual = licenseNamesIn(
+            root.resolve("src")
+                .resolve("main")
+                .resolve("resources"));
 
         assertFalse(expected.isEmpty(), "no licence files found in " + root + "; the name filter is broken");
         assertEquals(
@@ -105,7 +114,9 @@ class LicenseDistributionTest {
     @Test
     void resourceCopiesAreIdenticalToTheRootOriginals() throws IOException {
         Path root = projectRoot();
-        Path resources = root.resolve("src").resolve("main").resolve("resources");
+        Path resources = root.resolve("src")
+            .resolve("main")
+            .resolve("resources");
 
         for (String name : licenseNamesIn(root)) {
             assertArrayEquals(
@@ -123,7 +134,10 @@ class LicenseDistributionTest {
             byte[] expected = read(root.resolve(name));
             try (InputStream is = LicenseDistributionTest.class.getResourceAsStream("/" + name)) {
                 assertNotNull(is, name + " is not on the test classpath, so it will not reach the jar");
-                assertArrayEquals(expected, read(is), "the packaged copy of " + name + " differs from the root original");
+                assertArrayEquals(
+                    expected,
+                    read(is),
+                    "the packaged copy of " + name + " differs from the root original");
             }
         }
     }
