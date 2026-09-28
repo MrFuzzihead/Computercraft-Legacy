@@ -67,9 +67,18 @@ dan200.computercraft
 
 ## Key Conventions (for Agents)
 
-- Use modern Java syntax (Java 11–17 via Jabel; target JVM 8). Note that Jabel
-  permits newer *syntax* only — Java 8 *APIs* are still required (`InputStream`
-  has no `readAllBytes()`, `String` has no `lines()`).
+- Compiles with a JDK 25 toolchain but ships **Java 8 bytecode**, via JVM Downgrader
+  (`enableModernJavaSyntax = jvmDowngrader`, `downgradeTargetVersion = 8`). Modern syntax
+  *and* newer stdlib APIs are both available, unlike the old Jabel setup. The jar is
+  multi-release: Java 7/8 classes sit at the root (all entries must stay <= class version
+  52) with a `META-INF/versions/21/` overlay that Java 21+ prefers. Java 8 ignores the
+  overlay entirely.
+- **JvmDowngrader's limit:** it rewrites language features (records, sealed types, `indy`
+  string concatenation) and can supply stub *classes* absent from Java 8, but it cannot add
+  *methods* to JDK classes that exist on Java 8 and merely lack them — e.g.
+  `Arrays.mismatch` (Java 9) or `Collection.toArray(T[])` (Java 11). Such calls compile into
+  a clean Java 8 jar and then fail with `NoSuchMethodError` at runtime. This matters most
+  for shaded dependencies, which are downgraded without any source-level fixup available.
 - Legacy instance fields use `m_` prefix; follow in existing classes.
 - Do not refactor `ComputerCraftAPI` reflection logic.
 - Do not create/edit `dan200.computercraft.Tags` (auto-generated).
@@ -104,10 +113,19 @@ Register in `Computer.java` alongside existing APIs.
 - Build: `./gradlew build`
 - Test: `./gradlew test`
 - Run server: `./gradlew runServer`
+- Run on modern Java: `./gradlew runServer25` / `runClient25`. lwjgl3ify and HodgePodge are
+  injected automatically by the convention for these tasks — do **not** add them to
+  `dependencies.gradle`.
 - Format: `./gradlew spotlessApply`
 - Checkstyle: `./gradlew checkstyleMain`
 
 Tests use JUnit 5 (`useJUnitPlatform()`).
+
+**Known papercut:** with `jvmDowngrader`, the first build after `build/tmp` is cleared fails
+in `verifyTestSuiteExecuted` rather than running tests, because `Test`'s `@SkipWhenEmpty`
+input is snapshotted before `downgradeTestClasses` produces its output. Just re-run the
+build. The guard turns what would otherwise be a green build with zero tests executed into
+a loud failure; see the comment in `addon.gradle.kts` for the full explanation.
 See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for Lua runtime migration details.
 
 ---
