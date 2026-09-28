@@ -1,0 +1,171 @@
+Computercraft-Legacy
+===================
+
+This distribution is a modified version of ComputerCraft for Minecraft 1.7.10.
+It is distributed under the ComputerCraft Public License (CCPL); the full text
+is in LICENSE. This file records where the code came from, because that is not
+recoverable from the license files alone.
+
+
+1. Provenance of the ComputerCraft code
+---------------------------------------
+
+The ComputerCraft source code for Minecraft 1.7.10 was never published.
+Public ComputerCraft source begins with the Minecraft 1.8 line: the oldest
+tag in dan200/ComputerCraft is 1.79, which is the Minecraft 1.8.9 build.
+No 1.7.10 source tree has been released by the original authors.
+
+The ComputerCraft code in this project was therefore recovered by decompiling
+the Minecraft 1.7.10 binary distribution of ComputerCraft.
+
+    Decompiled from: ComputerCraft, Minecraft 1.7.10 distribution
+    ComputerCraft build: 1.75
+        ^ TODO(maintainer): confirm this against the distribution that was
+          actually decompiled, and correct it here. It is recorded from the
+          project README and has not been independently verified.
+
+That decompilation is expressly permitted by the license under which
+ComputerCraft was distributed. CCPL section 0 defines a "User" as anybody
+that interacts with the software in one of the following ways, and lists
+"decompile" among them. CCPL section 4 states:
+
+    "The user has the right to decompile the source code, look at either
+     the decompiled version or the original source code, and to modify it."
+
+All recovered ComputerCraft code, and all ComputerCraft assets, remain
+licensed under the CCPL. CCPL section 5 requires this:
+
+    "All distributions of this mod must remain licensed under the CCPL."
+
+Because the ComputerCraft 1.7.10 source was never published, no upstream
+file exists to diff against. Provenance of individual files cannot be
+established by comparison and is instead recorded by convention: files
+carrying no other notice are decompiled ComputerCraft 1.7.10 code under
+the CCPL.
+
+
+2. Code that is not ComputerCraft 1.7.10 code
+--------------------------------------------
+
+This project also incorporates code backported from CC: Tweaked
+(https://github.com/cc-tweaked/CC-Tweaked), the SquidDev-maintained fork
+of ComputerCraft. That backport is substantial, and predates the Minecraft
+1.7.10 code it is layered onto. In outline it covers:
+
+  - the Cobalt Lua runtime integration, in
+    dan200.computercraft.core.lua.lib.cobalt and
+    dan200.computercraft.core.lua.binfs
+  - the extended Lua API surface in dan200.computercraft.api.lua, which
+    includes interfaces that do not exist in ComputerCraft 1.7.10 at all
+    (ILuaAPI, IArguments, ArgumentDelegator, IBinaryHandler, ILuaEnvironment,
+    IExtendedLuaObject, IExtendedLuaTask, ILuaAPIFactory,
+    ILuaObjectWithArguments, IPeripheralWithArguments)
+  - the Lua library and delayed-task runtime in
+    dan200.computercraft.core.lua.lib (DelayedTask, DelayedTasks,
+    LuaEnvironment, LuaHelpers, BinaryConverter)
+  - the computer and peripheral registry architecture in
+    dan200.computercraft.shared.computer.core (ComputerRegistry,
+    ClientComputerRegistry, ServerComputerRegistry, ComputerFamily,
+    TileComputerBase) and its peripherals, which the 1.7.10 code does not
+    use, and which coexist in this tree with the 1.7.10-era
+    ComputerPeripheral / TileWirelessModem / WirelessModemPeripheral code
+  - backported Lua ROM modules under
+    assets/computercraft/lua/rom/modules/main/cc, which carry
+    SPDX-License-Identifier: MPL-2.0 headers
+
+Files sourced from CC: Tweaked are licensed under the Mozilla Public
+License 2.0. The full text is in LICENSE-MPL-2.0. MPL-2.0 is a
+file-level copyleft: those files remain MPL-2.0, and only those files.
+
+    TODO(maintainer): files under dan200.computercraft.api carry a
+    historical ComputerCraft API notice upstream -- "This API may be
+    redistributed unmodified and in full only" -- whose relationship to the
+    MPL-2.0 licensing of the rest of CC: Tweaked has not been resolved.
+    Several such files have been modified in this project. Resolve this
+    before relying on the MPL-2.0 grant for that package, and record the
+    outcome here.
+
+A copy of CC: Tweaked source is kept outside version control under
+migrate/CCTweaksSourceCode (excluded by .gitignore) as a migration
+reference. It is not part of any distribution.
+
+
+3. Bundled third-party libraries
+--------------------------------
+
+The following libraries are shaded into the released jar. All are MIT
+licensed, and are redistributed with their license texts in LICENSE-Cobalt,
+LICENSE-Java-WebSocket and LICENSE-slf4j-api.
+
+  Cobalt 0.6.0               MIT    LICENSE-Cobalt
+      https://github.com/SquidDev/Cobalt
+      A re-entrant fork of LuaJ, used as the Lua 5.1/5.2 runtime.
+      Copyright Luaj.org (2009-2011) and SquidDev (2015-2020).
+
+  Java-WebSocket 1.5.6       MIT    LICENSE-Java-WebSocket
+      https://github.com/TooTallNate/Java-WebSocket
+      Copyright Nathan Rajlich (2010-2020).
+
+  slf4j-api 2.0.6            MIT    LICENSE-slf4j-api
+      https://www.slf4j.org
+      Copyright QOS.ch Sarl, Switzerland (2004-2022).
+      A transitive dependency of Java-WebSocket. It is not declared in
+      dependencies.gradle, but it is present in the released jar.
+
+ComputerCraft 1.7.10 embedded LuaJ 2.0.3. This project does not. The
+previous LICENSE-luaj has therefore been removed, and replaced by
+LICENSE-Cobalt. Cobalt is itself a fork of LuaJ, which is why the LuaJ
+copyright is carried in LICENSE-Cobalt.
+
+
+4. Assets
+---------
+
+Textures, language files, the Lua ROM and the help text are ComputerCraft
+assets and are covered by the CCPL. The in-game licenses listing at
+assets/computercraft/lua/rom/help/licenses/ is retained from ComputerCraft
+and does not describe this project's dependencies.
+
+The demonstration programs under
+assets/computercraft/lua/treasure/ are the work of third-party contributors
+rather than of ComputerCraft's authors: nitrogenfingers, GopherAtl, Lyqyd,
+TheOriginalBIT, fredthead, GravityScore, JTK, vilsol and others. They are
+redistributed here with the rest of the mod, under the CCPL.
+
+
+5. Copyright
+-----------
+
+ComputerCraft is copyright Daniel Ratcliffe, 2011-2017, with additional code
+by Aaron "Cloudy" Mills and contributions from nitrogenfingers, GopherAtl,
+RamiLego and others. See the in-game "help credits" for the full upstream
+credits.
+
+The CC: Tweaked portions are copyright the CC: Tweaked developers, Daniel
+Ratcliffe, and the CC: Tweaked contributors.
+
+The decompilation, the CC: Tweaked backport, the bugfixes and the additional
+features in this project are copyright (c) 2025 Duncan Campbell. These are
+offered under the terms of the ComputerCraft Public License, so that the
+project as distributed is uniformly CCPL. They are not offered under MIT or
+any other permissive license: CCPL section 5 requires every distribution of
+this mod to remain licensed under the CCPL.
+
+
+6. A note on the CCPL's own restrictions
+----------------------------------------
+
+The CCPL is not a permissive license and is not approved by the OSI. Its
+terms that most often surprise downstream users:
+
+  - Section 5 requires all distributions of this mod to remain CCPL.
+  - Section 7 permits reuse of the code and assets only in other Minecraft
+    mods, and only where they are non-commercial. Use in commercial mods,
+    in mods for other games, in other games, and in any commercial or
+    non-game project is not permitted, and the source of anything reused
+    must be made available at no cost and remain CCPL licensed.
+  - Section 5 further requires that dependencies be licensed under
+    conditions comparable to the CCPL, with the exception of the Minecraft
+    code and the mod loading framework.
+
+Redistributors should read LICENSE rather than rely on this summary.
