@@ -54,7 +54,7 @@ class CobaltMachineTest {
         ComputerCraft.bigInteger = true;
         ComputerCraft.bitop = true;
         ComputerCraft.timeoutError = false;
-        CobaltMachine machine = new CobaltMachine(null);
+        CobaltMachine machine = LuaTestMachine.create();
         injectCapture(machine, capture);
         return machine;
     }

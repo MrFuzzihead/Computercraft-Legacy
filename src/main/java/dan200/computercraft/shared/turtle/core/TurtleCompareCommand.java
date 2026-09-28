@@ -1,6 +1,5 @@
 package dan200.computercraft.shared.turtle.core;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -10,7 +9,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
 
-import cpw.mods.fml.relauncher.ReflectionHelper;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
@@ -47,16 +45,7 @@ public class TurtleCompareCommand implements ITurtleCommand {
                 && !lookAtBlock.isAir(world, newPosition.posX, newPosition.posY, newPosition.posZ)) {
                 int lookAtMetadata = world.getBlockMetadata(newPosition.posX, newPosition.posY, newPosition.posZ);
                 if (!lookAtBlock.hasTileEntity(lookAtMetadata)) {
-                    try {
-                        Method method = ReflectionHelper.findMethod(
-                            Block.class,
-                            lookAtBlock,
-                            new String[] { "func_149644_j", "j", "createStackedBlock" },
-                            new Class[] { int.class });
-                        if (method != null) {
-                            lookAtStack = (ItemStack) method.invoke(lookAtBlock, lookAtMetadata);
-                        }
-                    } catch (Exception var14) {}
+                    lookAtStack = createStackedStack(Item.getItemFromBlock(lookAtBlock), lookAtMetadata);
                 }
 
                 for (int i = 0; i < 5 && lookAtStack == null; i++) {
@@ -73,12 +62,7 @@ public class TurtleCompareCommand implements ITurtleCommand {
                 }
 
                 if (lookAtStack == null) {
-                    Item item = Item.getItemFromBlock(lookAtBlock);
-                    if (item != null && item.getHasSubtypes()) {
-                        lookAtStack = new ItemStack(item, 1, lookAtMetadata);
-                    } else {
-                        lookAtStack = new ItemStack(item, 1, 0);
-                    }
+                    lookAtStack = createStackedStack(Item.getItemFromBlock(lookAtBlock), lookAtMetadata);
                 }
             }
         }
@@ -103,5 +87,35 @@ public class TurtleCompareCommand implements ITurtleCommand {
 
             return TurtleCommandResult.failure();
         }
+    }
+
+    /**
+     * Builds the single-item stack a block contributes to a comparison, mirroring
+     * {@code Block#createStackedBlock(int)} — which is protected in vanilla and so cannot be
+     * called from here. Only items with subtypes carry metadata; for everything else the damage
+     * value is pinned to 0.
+     *
+     * <p>
+     * A null {@code item} means the block has no item form at all. That is not hypothetical:
+     * {@code Item.registerItems()} skips an explicit exclusion set when it gives blocks their
+     * item forms, so vanilla blocks such as redstone wire, repeaters, comparators, signs, beds,
+     * doors, skulls, tripwire, brewing stands, cauldrons, flower pots, cake and crops have no
+     * entry at their block id, and {@code Item#getItemFromBlock} returns null for them. Mods can
+     * do the same by passing a null item class to {@code GameRegistry#registerBlock}. Passing
+     * that null into the {@code ItemStack} constructor throws, which used to escape this command
+     * entirely (no try/catch anywhere between here and the world tick). Such a block can never
+     * match a held item, so reporting "no stack" lets the comparison fail normally instead.
+     * </p>
+     *
+     * @param item     the block's item form, or null if it has none
+     * @param metadata the block's metadata
+     * @return the comparison stack, or null when the block has no item form
+     */
+    static ItemStack createStackedStack(Item item, int metadata) {
+        if (item == null) {
+            return null;
+        }
+
+        return new ItemStack(item, 1, item.getHasSubtypes() ? metadata : 0);
     }
 }

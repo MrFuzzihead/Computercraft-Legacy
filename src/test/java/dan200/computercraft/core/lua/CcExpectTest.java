@@ -64,7 +64,7 @@ class CcExpectTest {
         ComputerCraft.bigInteger = false;
         ComputerCraft.bitop = false;
         ComputerCraft.timeoutError = false;
-        CobaltMachine machine = new CobaltMachine(null);
+        CobaltMachine machine = LuaTestMachine.create();
         injectCapture(machine, capture);
         return machine;
     }

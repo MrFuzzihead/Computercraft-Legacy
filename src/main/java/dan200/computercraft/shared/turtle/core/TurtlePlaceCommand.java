@@ -224,16 +224,22 @@ public class TurtlePlaceCommand implements ITurtleCommand {
                 }
             });
             boolean placed = false;
-            if (hitEntity.interactFirst(turtlePlayer)) {
-                placed = true;
-            } else if (hitEntity instanceof EntityLivingBase) {
-                placed = item.itemInteractionForEntity(stackCopy, turtlePlayer, (EntityLivingBase) hitEntity);
-                if (placed) {
-                    turtlePlayer.loadInventory(stackCopy);
+            try {
+                if (hitEntity.interactFirst(turtlePlayer)) {
+                    placed = true;
+                } else if (hitEntity instanceof EntityLivingBase) {
+                    placed = item.itemInteractionForEntity(stackCopy, turtlePlayer, (EntityLivingBase) hitEntity);
+                    if (placed) {
+                        turtlePlayer.loadInventory(stackCopy);
+                    }
                 }
+            } finally {
+                // Always release the capture. If the interaction throws, skipping this would leave
+                // the entity with captureDrops set and a consumer nobody clears, so its drops
+                // would accumulate in capturedDrops and never be delivered.
+                ComputerCraft.clearEntityDropConsumer(hitEntity);
             }
 
-            ComputerCraft.clearEntityDropConsumer(hitEntity);
             ItemStack remainder = turtlePlayer.unloadInventory(turtle);
             if (!placed && remainder != null && ItemStack.areItemStacksEqual(stack, remainder)) {
                 return stack;

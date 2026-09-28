@@ -52,6 +52,16 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
     /** Set on neighbour change; processed in updateEntity on the next server tick. */
     private boolean m_inputDirty = true;
 
+    /**
+     * Bitmask of local sides (0–5) whose output changed and still needs neighbour notification.
+     * Set from {@link #setOutput}/{@link #setBundledOutput}, which run on a computer worker
+     * thread; drained in {@link #updateEntity} on the server main thread.
+     */
+    private int m_outputDirty = 0;
+
+    /** Whether the tile needs {@link #markDirty()} on the next server tick, for the same reason. */
+    private boolean m_needsMarkDirty = false;
+
     /** Cached peripheral instance (one-per-tile singleton). */
     private RedstoneRelayPeripheral m_peripheral = null;
 
@@ -154,25 +164,25 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
 
     // =========================================================================
     // Output setters (called from RedstoneRelayPeripheral.callMethod)
+    //
+    // These run on a computer worker thread, not the server main thread, so they must not touch
+    // the world. They record the new level synchronously — a caller may read it straight back
+    // through getRedstoneOutput/getOutput — and defer every world mutation to updateEntity.
     // =========================================================================
 
     public synchronized void setOutput(int localSide, int level) {
         if (m_output[localSide] != level) {
             m_output[localSide] = level;
-            if (worldObj != null && !worldObj.isRemote) {
-                RedstoneUtil.propogateRedstoneOutput(worldObj, xCoord, yCoord, zCoord, localToWorldSide(localSide));
-            }
-            markDirty();
+            m_outputDirty |= 1 << localSide;
+            m_needsMarkDirty = true;
         }
     }
 
     public synchronized void setBundledOutput(int localSide, int mask) {
         if (m_bundledOutput[localSide] != mask) {
             m_bundledOutput[localSide] = mask;
-            if (worldObj != null && !worldObj.isRemote) {
-                RedstoneUtil.propogateRedstoneOutput(worldObj, xCoord, yCoord, zCoord, localToWorldSide(localSide));
-            }
-            markDirty();
+            m_outputDirty |= 1 << localSide;
+            m_needsMarkDirty = true;
         }
     }
 
@@ -219,8 +229,39 @@ public class TileRedstoneRelay extends TileGeneric implements IPeripheralTile {
 
     @Override
     public void updateEntity() {
-        if (!worldObj.isRemote && m_inputDirty) {
+        if (worldObj.isRemote) {
+            return;
+        }
+
+        int sides;
+        boolean needsMarkDirty;
+        boolean inputDirty;
+        synchronized (this) {
+            sides = m_outputDirty;
+            m_outputDirty = 0;
+            needsMarkDirty = m_needsMarkDirty;
+            m_needsMarkDirty = false;
+            inputDirty = m_inputDirty;
             m_inputDirty = false;
+        }
+
+        // Notify exactly the sides that changed, matching the per-side notification the setters
+        // used to perform inline. Deferred flags are dropped if the tile unloads before its next
+        // tick, which costs nothing: an unloaded chunk's neighbours are not loaded either, so the
+        // notification would have been discarded anyway.
+        if (sides != 0) {
+            for (int localSide = 0; localSide < 6; localSide++) {
+                if ((sides & 1 << localSide) != 0) {
+                    RedstoneUtil.propogateRedstoneOutput(worldObj, xCoord, yCoord, zCoord, localToWorldSide(localSide));
+                }
+            }
+        }
+
+        if (needsMarkDirty) {
+            markDirty();
+        }
+
+        if (inputDirty) {
             updateInput();
         }
     }
