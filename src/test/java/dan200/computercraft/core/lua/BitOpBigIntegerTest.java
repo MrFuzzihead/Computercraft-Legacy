@@ -130,6 +130,63 @@ class BitOpBigIntegerTest {
         assertEquals("true", out.get(16), "blogic_rshift aliases rshift");
     }
 
+    /**
+     * Pins exactly which biginteger operations survive Cobalt 0.9.9 and which do not.
+     *
+     * <p>
+     * The asymmetry is not a coding error in {@code BigIntegerValue}: its arithmetic cases
+     * compute with {@link java.math.BigInteger} and are exact when called as functions. The loss
+     * happens in Cobalt's <em>operator</em> dispatch, which calls {@code toDouble()} on binary
+     * operands and takes a numeric fast path instead of reaching {@code __add}/{@code __sub}/
+     * {@code __mul}/{@code __mod}. {@code BigIntegerValue} has to override {@code toDouble()}
+     * so that {@code tostring}, {@code math.*} and comparisons treat it as a number, so it is
+     * coerced too, and values above 2^53 silently round.
+     *
+     * <p>
+     * There is no way out from this side. Making {@code toDouble()} throw does force the
+     * metamethods, but Cobalt also calls it while stringifying and comparing, so the whole
+     * script dies. {@code LuaValue} exposes no overridable {@code add}/{@code multiply}/{@code mod}
+     * to bypass operator dispatch, and {@code toNumber()} is not consulted on this path. The
+     * only remaining option is a large rewrite to represent biginteger as a table, which would
+     * change {@code type(a)} from {@code userdata} to {@code table}.
+     *
+     * <p>
+     * This is a further argument for leaving {@code bigInteger} defaulted to {@code false}.
+     */
+    @Test
+    void bigintegerOperatorPrecisionIsAsymmetric() throws Exception {
+        List<String> out = run(
+            "local a = biginteger.new('123456789012345678901234567890')\n" + "local b = biginteger.new('1')\n"
+                + "_capture(tostring(a))\n"
+                + "_capture(tostring(biginteger.add(a, b)))\n"
+                + "_capture(tostring(a + b))\n"
+                + "_capture(tostring(biginteger.mod(a, biginteger.new('1000'))))\n"
+                + "_capture(tostring(a % biginteger.new('1000')))\n"
+                + "_capture(tostring(-a))\n"
+                + "_capture(tostring(a == biginteger.new('123456789012345678901234567890')))\n"
+                + "_capture(tostring(a < biginteger.new('999999999999999999999999999999')))\n"
+                + "_capture(tostring(biginteger.band(biginteger.new(12), biginteger.new(10))))\n"
+                + "_capture(tostring(biginteger.shr(biginteger.new(16), biginteger.new(2))))\n"
+                + "_capture(tostring(math.floor(biginteger.new('42'))))\n");
+
+        assertEquals(11, out.size(), "every capture should have run: " + out);
+
+        // Exact: the library functions, and everything that is not a binary operator.
+        assertEquals("123456789012345678901234567890", out.get(0), "tostring is exact");
+        assertEquals("123456789012345678901234567891", out.get(1), "biginteger.add() is exact");
+        assertEquals("890", out.get(3), "biginteger.mod() is exact");
+        assertEquals("-123456789012345678901234567890", out.get(5), "unm is exact -- unary, so no binary coercion");
+        assertEquals("true", out.get(6), "eq is exact");
+        assertEquals("true", out.get(7), "lt is exact");
+        assertEquals("8", out.get(8), "bitwise helpers are exact");
+        assertEquals("4", out.get(9), "shr is exact");
+        assertEquals("42", out.get(10), "math.floor still works, so toDouble() must stay");
+
+        // Lossy: the binary operators only. Same metamethod, different dispatch path.
+        assertEquals("1.2345678901234568e+29", out.get(2), "the + operator is coerced through toDouble()");
+        assertEquals("56", out.get(4), "the % operator is coerced through toDouble()");
+    }
+
     @Test
     void bigIntegerArithmeticAndMetamethods() throws Exception {
         List<String> out = run(
@@ -158,9 +215,9 @@ class BitOpBigIntegerTest {
         assertEquals(21, out.size(), "every capture should have run: " + out);
         assertEquals("true", out.get(0), "the biginteger global must exist");
         assertEquals("123456789012345678901234567890", out.get(1), "tostring round-trips");
-        assertEquals("1.2345678901234568e+29", out.get(2), "add (KNOWN BUG: returns a double)");
-        assertEquals("1.2345678901234568e+29", out.get(3), "sub (KNOWN BUG: returns a double)");
-        assertEquals("2.4691357802469136e+29", out.get(4), "mul (KNOWN BUG: returns a double)");
+        assertEquals("1.2345678901234568e+29", out.get(2), "add via the + operator is coerced through toDouble()");
+        assertEquals("1.2345678901234568e+29", out.get(3), "sub via the - operator is coerced through toDouble()");
+        assertEquals("2.4691357802469136e+29", out.get(4), "mul via the * operator is coerced through toDouble()");
         assertEquals("-123456789012345678901234567890", out.get(5), "unm (metamethod)");
         assertEquals("true", out.get(6), "eq (metamethod)");
         assertEquals("true", out.get(7), "lt (metamethod)");
@@ -176,24 +233,26 @@ class BitOpBigIntegerTest {
         assertEquals("4", out.get(17), "min");
         assertEquals("9", out.get(18), "max");
         // NOTE: __idiv is deliberately not exercised -- Cobalt parses Lua 5.1, which has no "//".
-        // KNOWN BUG: mod returns the wrong remainder.
-        assertEquals("56", out.get(19), "mod (KNOWN BUG: wrong remainder)");
+        // The % operator is coerced through toDouble(), so the remainder is a floating-point
+        // fmod of the rounded doubles rather than a real remainder. See
+        // bigintegerOperatorPrecisionIsAsymmetric() for the full diagnosis.
+        assertEquals("56", out.get(19), "mod via the % operator is coerced through toDouble()");
         assertEquals("1024", out.get(20), "pow (metamethod)");
     }
 
     /**
-     * The correct behaviour, currently {@link Disabled} because {@code BigIntegerValue}'s
-     * {@code __add}/{@code __sub}/{@code __mul}/{@code __mod} do not return exact
-     * {@link java.math.BigInteger} results: they come back as doubles and lose precision above
-     * 2^53. {@code tostring}, {@code unm}, the comparisons and the bitwise helpers are all
-     * exact, so the problem is specific to those four arithmetic metamethods.
+     * The correct behaviour, currently {@link Disabled} because Cobalt 0.9.9's binary operator
+     * dispatch coerces operands with {@code toDouble()} before consulting the arithmetic
+     * metamethods, so {@code a + b} and friends round through a double above 2^53. The
+     * metamethods themselves are exact -- {@link #bigintegerOperatorPrecisionIsAsymmetric()}
+     * shows the same operations returning exact values when called as functions.
      *
      * <p>
      * This is also a strong argument for leaving {@code bigInteger} defaulted to
      * {@code false}: turned on, any program doing big-integer arithmetic on values over 2^53 gets
      * silently wrong answers.
      */
-    @Disabled("BigIntegerValue arithmetic metamethods return doubles and lose precision")
+    @Disabled("Cobalt 0.9.9 coerces binary operands through toDouble(); see the asymmetry test")
     @Test
     void bigIntegerArithmeticShouldBeExact() throws Exception {
         List<String> out = run(
