@@ -8,12 +8,8 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.squiddev.cobalt.LuaTable;
-
-import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.filesystem.FileMount;
@@ -31,15 +27,15 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
  * result the following three defects passed the entire suite and were only found in game:
  * </p>
  * <ul>
- *   <li>the packaged jar contained class files newer than Java 8, which FML 1.7.10's ASM 5.0.3
- *       cannot read, so FML discarded the entire mod;</li>
- *   <li>{@code handleEvent} did not handle {@code LuaThread.run} returning {@code null} when the
- *       coroutine suspends, which is what {@code os.pullEvent} does immediately, so the very
- *       first event threw a {@link NullPointerException} that escaped {@code handleEvent};</li>
- *   <li>the {@code load} override only accepted a function as its first argument and ignored the
- *       trailing mode/environment arguments, so {@code bios.lua}'s own {@code loadfile} —
- *       which calls {@code load(<string>, name, "t", env)} during {@code loadAPI} — died with
- *       "bad argument (function expected, got string)" before the computer ever started.</li>
+ * <li>the packaged jar contained class files newer than Java 8, which FML 1.7.10's ASM 5.0.3
+ * cannot read, so FML discarded the entire mod;</li>
+ * <li>{@code handleEvent} did not handle {@code LuaThread.run} returning {@code null} when the
+ * coroutine suspends, which is what {@code os.pullEvent} does immediately, so the very
+ * first event threw a {@link NullPointerException} that escaped {@code handleEvent};</li>
+ * <li>the {@code load} override only accepted a function as its first argument and ignored the
+ * trailing mode/environment arguments, so {@code bios.lua}'s own {@code loadfile} —
+ * which calls {@code load(<string>, name, "t", env)} during {@code loadAPI} — died with
+ * "bad argument (function expected, got string)" before the computer ever started.</li>
  * </ul>
  * <p>
  * Booting the real BIOS covers all three: it loads the packaged resource, runs to the first
@@ -68,7 +64,8 @@ class BiosBootTest {
         if (fsField.get(computer) == null) {
             File rom = new File("src/main/resources/assets/computercraft/lua/rom");
             assertTrue(rom.isDirectory(), "the Lua ROM must be present at " + rom.getAbsolutePath());
-            File hdd = Files.createTempDirectory("cc-bios-test").toFile();
+            File hdd = Files.createTempDirectory("cc-bios-test")
+                .toFile();
             hdd.deleteOnExit();
             FileSystem fs = new FileSystem("hdd", new FileMount(hdd, 4L * 1024 * 1024));
             fs.mount("rom", "rom", new FileMount(rom, 4L * 1024 * 1024));

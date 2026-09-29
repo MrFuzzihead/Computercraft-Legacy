@@ -1,7 +1,65 @@
+import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.testing.Test
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+// FML 1.7.10's JarDiscoverer feeds every .class entry in a mod jar to ASM 5.0.3
+// (asm-debug-all-5.0.3) via ASMModParser. ASM 5.0.3 rejects any class file version above
+// Java 8 with IllegalArgumentException, after which FML logs "Zip file ... failed to read
+// properly, it will be ignored" and discards the entire mod. The mod then silently does not
+// load at all -- no crash, no other symptom, computers simply never turn on.
+//
+// JVM Downgrader emits a multi-release overlay (META-INF/versions/N) that trips this. The jar
+// root is already fully downgraded to Java 8 by downgradeJar, so the overlay gains nothing for
+// a 1.7.10 mod. jvmDowngraderMultiReleaseVersions = 9 in gradle.properties keeps the build
+// itself satisfied, since the convention rejects values below 9.
+//
+// The overlay is stripped by rewriting the finished archive rather than with a CopySpec
+// exclude, because entries contributed through the JvmDowngrader task chain do not pick the
+// pattern up reliably. The rewrite also asserts the result, so a regression here fails the
+// build rather than silently shipping a mod FML will discard.
+tasks.withType<Jar>().configureEach {
+    doLast {
+        val jarFile = archiveFile.get().asFile
+        val tmpFile = File(jarFile.parentFile, jarFile.name + ".stripped")
+        java.util.zip.ZipFile(jarFile).use { zin ->
+            java.util.zip.ZipOutputStream(tmpFile.outputStream()).use { zout ->
+                zin.entries().asSequence().forEach { entry ->
+                    if (!entry.name.startsWith("META-INF/versions/")) {
+                        zout.putNextEntry(java.util.zip.ZipEntry(entry.name))
+                        if (!entry.isDirectory) {
+                            zin.getInputStream(entry).use { it.copyTo(zout) }
+                        }
+                        zout.closeEntry()
+                    }
+                }
+            }
+        }
+        java.nio.file.Files.move(
+            tmpFile.toPath(), jarFile.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+
+        // Belt and braces: refuse to ship anything FML's ASM 5.0.3 would reject.
+        java.util.zip.ZipFile(jarFile).use { zin ->
+            val tooNew = zin.entries().asSequence()
+                .filter { it.name.endsWith(".class") }
+                .filter { entry ->
+                    val header = ByteArray(8)
+                    zin.getInputStream(entry).use { s -> s.read(header) }
+                    header[0] == 0xCA.toByte() && header[1] == 0xFE.toByte() &&
+                        (header[6].toInt() and 0xFF) > 52
+                }
+                .map { it.name }
+                .toList()
+            check(tooNew.isEmpty()) {
+                "Mod jar contains class files newer than Java 8, which FML 1.7.10's ASM 5.0.3 " +
+                    "cannot read; the mod would be ignored at load time: $tooNew"
+            }
+        }
+    }
 }
 
 // GTNHConvention's JVMDowngraderModule (only active when

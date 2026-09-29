@@ -53,7 +53,8 @@ class BitOpBigIntegerTest {
      * Enables both APIs, builds a machine, runs {@code script}, and returns whatever the script
      * passed to {@code _capture} (stringified, in order).
      *
-     * <p>The flags must be set before the machine is constructed: {@link CobaltMachine}'s
+     * <p>
+     * The flags must be set before the machine is constructed: {@link CobaltMachine}'s
      * constructor is what calls {@code BitOpLib.setup} and {@code BigIntegerValue.setup}.
      */
     private static List<String> run(String script) throws Exception {
@@ -71,7 +72,9 @@ class BitOpBigIntegerTest {
 
             @Override
             public Varargs invoke(LuaState state, Varargs args) {
-                captured.add(args.arg(1).toString());
+                captured.add(
+                    args.arg(1)
+                        .toString());
                 return Constants.NONE;
             }
         });
@@ -87,23 +90,22 @@ class BitOpBigIntegerTest {
     @Test
     void bitOpExposesTheFullSurface() throws Exception {
         List<String> out = run(
-            "_capture(tostring(bitop ~= nil))\n" +
-            "_capture(bitop.band(12, 10))\n" +
-            "_capture(bitop.bor(12, 10))\n" +
-            "_capture(bitop.bxor(12, 10))\n" +
-            "_capture(bitop.lshift(1, 4))\n" +
-            "_capture(bitop.rshift(16, 2))\n" +
-            "_capture(bitop.arshift(-16, 2))\n" +
-            "_capture(bitop.rol(1, 31))\n" +
-            "_capture(bitop.ror(1, 1))\n" +
-            "_capture(bitop.bnot(0))\n" +
-            "_capture(bitop.tobit(-1))\n" +
-            "_capture(bitop.tohex(255))\n" +
-            "_capture(bitop.tohex(255, -1))\n" +
-            "_capture(bitop.bswap(0x12345678))\n" +
-            "_capture(tostring(bitop.blshift == bitop.lshift))\n" +
-            "_capture(tostring(bitop.brshift == bitop.arshift))\n" +
-            "_capture(tostring(bitop.blogic_rshift == bitop.rshift))\n");
+            "_capture(tostring(bitop ~= nil))\n" + "_capture(bitop.band(12, 10))\n"
+                + "_capture(bitop.bor(12, 10))\n"
+                + "_capture(bitop.bxor(12, 10))\n"
+                + "_capture(bitop.lshift(1, 4))\n"
+                + "_capture(bitop.rshift(16, 2))\n"
+                + "_capture(bitop.arshift(-16, 2))\n"
+                + "_capture(bitop.rol(1, 31))\n"
+                + "_capture(bitop.ror(1, 1))\n"
+                + "_capture(bitop.bnot(0))\n"
+                + "_capture(bitop.tobit(-1))\n"
+                + "_capture(bitop.tohex(255))\n"
+                + "_capture(bitop.tohex(255, -1))\n"
+                + "_capture(bitop.bswap(0x12345678))\n"
+                + "_capture(tostring(bitop.blshift == bitop.lshift))\n"
+                + "_capture(tostring(bitop.brshift == bitop.arshift))\n"
+                + "_capture(tostring(bitop.blogic_rshift == bitop.rshift))\n");
 
         assertEquals(17, out.size(), "every capture should have run: " + out);
         assertEquals("true", out.get(0), "the bitop global must exist");
@@ -131,28 +133,27 @@ class BitOpBigIntegerTest {
     @Test
     void bigIntegerArithmeticAndMetamethods() throws Exception {
         List<String> out = run(
-            "_capture(tostring(biginteger ~= nil))\n" +
-            "local a = biginteger.new('123456789012345678901234567890')\n" +
-            "_capture(tostring(a))\n" +
-            "_capture(tostring(a + biginteger.new('1')))\n" +
-            "_capture(tostring(a - biginteger.new('1')))\n" +
-            "_capture(tostring(a * biginteger.new('2')))\n" +
-            "_capture(tostring(-a))\n" +
-            "_capture(tostring(a == biginteger.new('123456789012345678901234567890')))\n" +
-            "_capture(tostring(a < biginteger.new('999999999999999999999999999999')))\n" +
-            "_capture(tostring(a <= a))\n" +
-            "_capture(tostring(biginteger.band(biginteger.new(12), biginteger.new(10))))\n" +
-            "_capture(tostring(biginteger.bor(biginteger.new(12), biginteger.new(10))))\n" +
-            "_capture(tostring(biginteger.bxor(biginteger.new(12), biginteger.new(10))))\n" +
-            "_capture(tostring(biginteger.bnot(biginteger.new(0))))\n" +
-            "_capture(tostring(biginteger.shl(biginteger.new(1), biginteger.new(4))))\n" +
-            "_capture(tostring(biginteger.shr(biginteger.new(16), biginteger.new(2))))\n" +
-            "_capture(tostring(biginteger.gcd(biginteger.new('12'), biginteger.new('18'))))\n" +
-            "_capture(tostring(biginteger.abs(biginteger.new('-5'))))\n" +
-            "_capture(tostring(biginteger.min(biginteger.new('9'), biginteger.new('4'))))\n" +
-            "_capture(tostring(biginteger.max(biginteger.new('9'), biginteger.new('4'))))\n" +
-            "_capture(tostring(a % biginteger.new('1000')))\n" +
-            "_capture(tostring(biginteger.new(2) ^ biginteger.new(10)))\n");
+            "_capture(tostring(biginteger ~= nil))\n" + "local a = biginteger.new('123456789012345678901234567890')\n"
+                + "_capture(tostring(a))\n"
+                + "_capture(tostring(a + biginteger.new('1')))\n"
+                + "_capture(tostring(a - biginteger.new('1')))\n"
+                + "_capture(tostring(a * biginteger.new('2')))\n"
+                + "_capture(tostring(-a))\n"
+                + "_capture(tostring(a == biginteger.new('123456789012345678901234567890')))\n"
+                + "_capture(tostring(a < biginteger.new('999999999999999999999999999999')))\n"
+                + "_capture(tostring(a <= a))\n"
+                + "_capture(tostring(biginteger.band(biginteger.new(12), biginteger.new(10))))\n"
+                + "_capture(tostring(biginteger.bor(biginteger.new(12), biginteger.new(10))))\n"
+                + "_capture(tostring(biginteger.bxor(biginteger.new(12), biginteger.new(10))))\n"
+                + "_capture(tostring(biginteger.bnot(biginteger.new(0))))\n"
+                + "_capture(tostring(biginteger.shl(biginteger.new(1), biginteger.new(4))))\n"
+                + "_capture(tostring(biginteger.shr(biginteger.new(16), biginteger.new(2))))\n"
+                + "_capture(tostring(biginteger.gcd(biginteger.new('12'), biginteger.new('18'))))\n"
+                + "_capture(tostring(biginteger.abs(biginteger.new('-5'))))\n"
+                + "_capture(tostring(biginteger.min(biginteger.new('9'), biginteger.new('4'))))\n"
+                + "_capture(tostring(biginteger.max(biginteger.new('9'), biginteger.new('4'))))\n"
+                + "_capture(tostring(a % biginteger.new('1000')))\n"
+                + "_capture(tostring(biginteger.new(2) ^ biginteger.new(10)))\n");
 
         assertEquals(21, out.size(), "every capture should have run: " + out);
         assertEquals("true", out.get(0), "the biginteger global must exist");
@@ -187,7 +188,8 @@ class BitOpBigIntegerTest {
      * 2^53. {@code tostring}, {@code unm}, the comparisons and the bitwise helpers are all
      * exact, so the problem is specific to those four arithmetic metamethods.
      *
-     * <p>This is also a strong argument for leaving {@code bigInteger} defaulted to
+     * <p>
+     * This is also a strong argument for leaving {@code bigInteger} defaulted to
      * {@code false}: turned on, any program doing big-integer arithmetic on values over 2^53 gets
      * silently wrong answers.
      */
@@ -195,11 +197,11 @@ class BitOpBigIntegerTest {
     @Test
     void bigIntegerArithmeticShouldBeExact() throws Exception {
         List<String> out = run(
-            "local a = biginteger.new('123456789012345678901234567890')\n" +
-            "_capture(tostring(a + biginteger.new('1')))\n" +
-            "_capture(tostring(a - biginteger.new('1')))\n" +
-            "_capture(tostring(a * biginteger.new('2')))\n" +
-            "_capture(tostring(a % biginteger.new('1000')))\n");
+            "local a = biginteger.new('123456789012345678901234567890')\n"
+                + "_capture(tostring(a + biginteger.new('1')))\n"
+                + "_capture(tostring(a - biginteger.new('1')))\n"
+                + "_capture(tostring(a * biginteger.new('2')))\n"
+                + "_capture(tostring(a % biginteger.new('1000')))\n");
 
         assertEquals(4, out.size());
         assertEquals("123456789012345678901234567891", out.get(0), "add must be exact");
