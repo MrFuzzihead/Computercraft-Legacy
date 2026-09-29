@@ -104,7 +104,7 @@ class BitOpBigIntegerTest {
                 + "_capture(bitop.tohex(255, -1))\n"
                 + "_capture(bitop.bswap(0x12345678))\n"
                 + "_capture(tostring(bitop.blshift == bitop.lshift))\n"
-                + "_capture(tostring(bitop.brshift == bitop.arshift))\n"
+                + "_capture(tostring(bitop.brshift == bitop.rshift))\n"
                 + "_capture(tostring(bitop.blogic_rshift == bitop.rshift))\n");
 
         assertEquals(17, out.size(), "every capture should have run: " + out);
@@ -123,10 +123,10 @@ class BitOpBigIntegerTest {
         assertEquals("F", out.get(12), "tohex(255,-1) is upper case and one digit");
         assertEquals("2018915346", out.get(13), "bswap(0x12345678) == 0x78563412");
         assertEquals("true", out.get(14), "blshift aliases lshift");
-        // BUG (pre-existing, faithfully preserved by the port): brshift is bound to
-        // table.rawget("arlshift") -- a misspelling of "arshift" -- so bitop.brshift is nil and
-        // the equality below is false.
-        assertEquals("false", out.get(15), "KNOWN BUG: brshift is nil due to the 'arlshift' typo");
+        // brshift is the logical right shift, so it aliases rshift (and therefore
+        // blogic_rshift). This was previously bound to table.rawget("arlshift") -- a
+        // misspelling of "arshift" -- which made bitop.brshift nil.
+        assertEquals("true", out.get(15), "brshift aliases rshift");
         assertEquals("true", out.get(16), "blogic_rshift aliases rshift");
     }
 

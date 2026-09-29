@@ -141,7 +141,9 @@ public class BitOpLib {
         bindVarArg(table);
 
         table.rawset("blshift", table.rawget("lshift"));
-        table.rawset("brshift", table.rawget("arlshift"));
+        // CC: Tweaked's bitop aliases. "arlshift" was a typo for "arshift" that also used the
+        // wrong target -- brshift is the right shift alias, arshift being the arithmetic one.
+        table.rawset("brshift", table.rawget("rshift"));
         table.rawset("blogic_rshift", table.rawget("rshift"));
 
         env.rawset("bitop", table);

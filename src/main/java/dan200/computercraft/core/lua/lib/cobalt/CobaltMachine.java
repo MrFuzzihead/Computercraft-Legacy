@@ -137,7 +137,11 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
 
         globals.rawset("_CC_VERSION", valueOf(ComputerCraft.getVersion()));
         globals.rawset("_MC_VERSION", valueOf("1.7.10"));
-        globals.rawset("_COBALT_VERSION", valueOf("0.6"));
+        // Must track the cobalt version declared in dependencies.gradle. Cobalt exposes no
+        // runtime version constant and shadowing discards the jar's manifest metadata, so this
+        // is a literal -- CobaltVersionTest reads dependencies.gradle and fails if the two
+        // drift apart, which is how this said "0.6" while the dependency was on 0.9.9.
+        globals.rawset("_COBALT_VERSION", valueOf("0.9.9"));
         if (ComputerCraft.cc_default_settings != null && !ComputerCraft.cc_default_settings.isEmpty()) {
             globals.rawset("_CC_DEFAULT_SETTINGS", valueOf(ComputerCraft.cc_default_settings));
         }
