@@ -1,6 +1,6 @@
 package dan200.computercraft.core.lua.lib.cobalt;
 
-import org.squiddev.cobalt.LuaBaseString;
+import org.squiddev.cobalt.Constants;
 import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaValue;
@@ -35,7 +35,7 @@ public class CobaltArguments implements IArguments {
     @Override
     public boolean getBoolean(int index) throws LuaException {
         LuaValue value = args.arg(index + 1);
-        if (value.isBoolean()) {
+        if (value.type() == Constants.TBOOLEAN) {
             return value.toBoolean();
         } else {
             throw new LuaException("Expected boolean");
@@ -45,7 +45,7 @@ public class CobaltArguments implements IArguments {
     @Override
     public String getString(int index) throws LuaException {
         LuaValue value = args.arg(index + 1);
-        if (value instanceof LuaBaseString) {
+        if (value.isString()) {
             return value.toString();
         } else {
             throw new LuaException("Expected string");
@@ -55,16 +55,10 @@ public class CobaltArguments implements IArguments {
     @Override
     public byte[] getStringBytes(int index) throws LuaException {
         LuaValue value = args.arg(index + 1);
-        if (value instanceof LuaBaseString) {
-            // Resolve LuaRope (and any other LuaBaseString) to a concrete LuaString first.
-            LuaString string = ((LuaBaseString) value).strvalue();
-            if (string.offset == 0 && string.length == string.bytes.length) {
-                return string.bytes;
-            } else {
-                byte[] result = new byte[string.length];
-                System.arraycopy(string.bytes, string.offset, result, 0, string.length);
-                return result;
-            }
+        if (value.isString()) {
+            // LuaString is final and is the only string type, so a TSTRING value is always a
+            // LuaString; its backing array is private.
+            return CobaltConverter.toByteArray((LuaString) value);
         } else {
             throw new LuaException("Expected string");
         }

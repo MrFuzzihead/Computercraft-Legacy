@@ -12,13 +12,12 @@ import java.util.Random;
 import org.squiddev.cobalt.ErrorFactory;
 import org.squiddev.cobalt.LuaDouble;
 import org.squiddev.cobalt.LuaError;
-import org.squiddev.cobalt.LuaInteger;
 import org.squiddev.cobalt.LuaNumber;
 import org.squiddev.cobalt.LuaState;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
 import org.squiddev.cobalt.LuaValue;
-import org.squiddev.cobalt.function.ThreeArgFunction;
+import org.squiddev.cobalt.function.LibFunction;
 
 public final class BigIntegerValue extends LuaValue {
 
@@ -49,48 +48,22 @@ public final class BigIntegerValue extends LuaValue {
     }
 
     @Override
-    public long toLong() {
-        return number.longValue();
-    }
-
-    @Override
     public LuaValue toNumber() {
         return valueOf(number.doubleValue());
     }
 
     @Override
-    public double optDouble(double def) throws LuaError {
+    public double checkDouble() throws LuaError {
+        // optDouble/optInteger/optLong/optNumber are final in Cobalt 0.9 and delegate to the
+        // check* methods. checkInteger/checkLong/checkNumber were already overridden, but
+        // checkDouble was not, and the base implementation always throws -- so without this
+        // a biginteger would stop behaving as a number.
         return number.doubleValue();
-    }
-
-    @Override
-    public int optInteger(int def) throws LuaError {
-        return number.intValue();
-    }
-
-    @Override
-    public LuaInteger optLuaInteger(LuaInteger def) throws LuaError {
-        return valueOf(number.intValue());
-    }
-
-    @Override
-    public long optLong(long def) throws LuaError {
-        return number.longValue();
-    }
-
-    @Override
-    public LuaNumber optNumber(LuaNumber def) throws LuaError {
-        return valueOf(number.doubleValue());
     }
 
     @Override
     public int checkInteger() throws LuaError {
         return number.intValue();
-    }
-
-    @Override
-    public LuaInteger checkLuaInteger() throws LuaError {
-        return valueOf(number.intValue());
     }
 
     @Override
@@ -146,7 +119,10 @@ public final class BigIntegerValue extends LuaValue {
         }
     }
 
-    private static class BigIntegerFunction extends ThreeArgFunction {
+    // ThreeArgFunction is now package-private in Cobalt, as are LibFunction's name/env fields,
+    // so the opcode/metatable are captured per-function and dispatched through a static method,
+    // with the functions themselves built via the public LibFunction.create factory.
+    private static class BigIntegerFunction {
 
         private static final String[] META_NAMES = new String[] { "unm", "add", "sub", "mul", "mod", "pow", "div",
             "idiv", "band", "bor", "bxor", "shl", "shr", "bnot", "eq", "lt", "le", "tostring", "tonumber", };
@@ -154,14 +130,8 @@ public final class BigIntegerValue extends LuaValue {
         private static final String[] MAIN_NAMES = new String[] { "new", "modinv", "gcd", "modpow", "abs", "min", "max",
             "isProbPrime", "nextProbPrime", "newProbPrime" };
 
-        private final LuaTable metatable;
-
-        private BigIntegerFunction(LuaTable metatable) {
-            this.metatable = metatable;
-        }
-
-        @Override
-        public LuaValue call(LuaState state, LuaValue left, LuaValue right, LuaValue third) throws LuaError {
+        private static LuaValue call(LuaState state, LuaTable metatable, int opcode, LuaValue left, LuaValue right,
+            LuaValue third) throws LuaError {
             try {
                 switch (opcode) {
                     case 0: { // unm
@@ -283,7 +253,7 @@ public final class BigIntegerValue extends LuaValue {
                     }
                     case 28: { // newProbPrime
                         int length = left.checkInteger();
-                        Random seed = right.isNil() ? state.random : new Random(right.checkInteger());
+                        Random seed = right.isNil() ? new Random() : new Random(right.checkInteger());
                         return new BigIntegerValue(BigInteger.probablePrime(length, seed), metatable);
                     }
                     default:
@@ -300,19 +270,17 @@ public final class BigIntegerValue extends LuaValue {
             LuaTable table = new LuaTable(0, META_NAMES.length + MAIN_NAMES.length);
 
             for (int i = 0; i < META_NAMES.length; i++) {
-                BigIntegerFunction func = new BigIntegerFunction(meta);
-                func.opcode = i;
-                func.name = META_NAMES[i];
-                func.env = env;
+                final int opcode = i;
+                LuaValue func = LibFunction
+                    .create((state, left, right, third) -> call(state, meta, opcode, left, right, third));
                 table.rawset(META_NAMES[i], func);
                 meta.rawset("__" + META_NAMES[i], func);
             }
 
             for (int i = 0; i < MAIN_NAMES.length; i++) {
-                BigIntegerFunction func = new BigIntegerFunction(meta);
-                func.opcode = i + META_NAMES.length;
-                func.name = MAIN_NAMES[i];
-                func.env = env;
+                final int opcode = i + META_NAMES.length;
+                LuaValue func = LibFunction
+                    .create((state, left, right, third) -> call(state, meta, opcode, left, right, third));
                 table.rawset(MAIN_NAMES[i], func);
             }
 

@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 import org.squiddev.cobalt.LuaError;
-import org.squiddev.cobalt.LuaRope;
 import org.squiddev.cobalt.LuaState;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
@@ -467,56 +466,56 @@ class CobaltMachineTest {
     // -------------------------------------------------------------------------
 
     /**
-     * Cobalt 0.6.0 uses {@code LuaRope} for string concatenation results whose
-     * combined length exceeds {@code SMALL_STRING} (32 chars). {@code LuaRope}
-     * extends {@code LuaBaseString} but is NOT a {@code LuaString}, so a direct
-     * {@code (LuaString) value} cast used to throw {@code ClassCastException}.
-     * These tests guard against that regression.
+     * Cobalt 0.9.9 removed {@code LuaRope}/{@code LuaBaseString}: {@link LuaString} is now final
+     * and concatenation is flattened. The equivalent hazard is a {@code LuaString} that is a
+     * <em>view</em> into a larger backing buffer, which is what {@code substringOfLen} returns.
+     * These tests guard that our string conversions respect the view's bounds rather than
+     * reading the whole backing array.
      */
 
-    /** Builds a LuaRope from two LuaStrings whose combined length is > 32 chars. */
-    private static LuaValue makeLuaRope(String a, String b) {
-        LuaString partA = LuaString.valueOf(a);
-        LuaString partB = LuaString.valueOf(b);
-        int totalLen = a.length() + b.length();
-        // LuaRope.valueOf returns a LuaRope only when strLength > SMALL_STRING (32).
-        assertTrue(totalLen > 32, "Test strings must combine to >32 chars to force a LuaRope");
-        LuaValue rope = LuaRope.valueOf(new LuaValue[] { partA, partB }, 0, 2, totalLen);
-        assertTrue(rope instanceof LuaRope, "Combined length > 32 must produce a LuaRope, not a LuaString");
-        return rope;
+    /**
+     * Builds a {@link LuaString} view over {@code content} inside a strictly longer backing
+     * string, so the view never spans the whole buffer.
+     */
+    private static LuaValue makeStringView(String content) {
+        String prefix = "<<PREFIX>>";
+        String backing = prefix + content + "<<SUFFIX>>";
+        LuaString view = LuaString.valueOf(backing)
+            .substringOfLen(prefix.length(), content.length());
+        // The view must report the slice length, not the backing length.
+        assertEquals(content.length(), view.length(), "View must expose the slice length");
+        return view;
     }
 
     @Test
-    void testCobaltConverterHandlesLuaRopeInBinaryMode() throws LuaError {
-        // Before the fix, toObject(rope, true) threw ClassCastException.
-        LuaValue rope = makeLuaRope("abcdefghijklmnopqrstuvwxyz", "0123456789AB"); // 26+12=38
-        Object result = CobaltConverter.toObject(rope, true);
-        assertTrue(result instanceof byte[], "Binary conversion of LuaRope must return byte[]");
+    void testCobaltConverterHandlesStringViewInBinaryMode() throws LuaError {
+        // Binary conversion must return only the bytes the view spans.
+        LuaValue view = makeStringView("abcdefghijklmnopqrstuvwxyz0123456789AB"); // 38
+        Object result = CobaltConverter.toObject(view, true);
+        assertTrue(result instanceof byte[], "Binary conversion of a string view must return byte[]");
         assertArrayEquals(
             "abcdefghijklmnopqrstuvwxyz0123456789AB".getBytes(StandardCharsets.ISO_8859_1),
             (byte[]) result);
     }
 
     @Test
-    void testCobaltConverterHandlesLuaRopeInNonBinaryMode() throws LuaError {
-        LuaValue rope = makeLuaRope("Hello, ", "World! This is a long enough string!"); // 7+36=43
-        Object result = CobaltConverter.toObject(rope, false);
+    void testCobaltConverterHandlesStringViewInNonBinaryMode() throws LuaError {
+        LuaValue view = makeStringView("Hello, World! This is a long enough string!"); // 43
+        Object result = CobaltConverter.toObject(view, false);
         assertEquals("Hello, World! This is a long enough string!", result);
     }
 
     @Test
-    void testCobaltArgumentsGetStringHandlesLuaRope() throws LuaException {
-        LuaValue rope = makeLuaRope("first part of the string --", "second part of the string"); // 27+25=52
-        CobaltArguments args = new CobaltArguments(varargsOf(new LuaValue[] { rope }));
-        // getString must not throw ClassCastException
+    void testCobaltArgumentsGetStringHandlesStringView() throws LuaException {
+        LuaValue view = makeStringView("first part of the string --second part of the string"); // 52
+        CobaltArguments args = new CobaltArguments(varargsOf(new LuaValue[] { view }));
         assertEquals("first part of the string --second part of the string", args.getString(0));
     }
 
     @Test
-    void testCobaltArgumentsGetStringBytesHandlesLuaRope() throws LuaException {
-        LuaValue rope = makeLuaRope("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJ"); // 26+10=36
-        CobaltArguments args = new CobaltArguments(varargsOf(new LuaValue[] { rope }));
-        // getStringBytes must not throw ClassCastException
+    void testCobaltArgumentsGetStringBytesHandlesStringView() throws LuaException {
+        LuaValue view = makeStringView("abcdefghijklmnopqrstuvwxyzABCDEFGHIJ"); // 36
+        CobaltArguments args = new CobaltArguments(varargsOf(new LuaValue[] { view }));
         byte[] bytes = args.getStringBytes(0);
         assertNotNull(bytes);
         assertEquals(36, bytes.length);
