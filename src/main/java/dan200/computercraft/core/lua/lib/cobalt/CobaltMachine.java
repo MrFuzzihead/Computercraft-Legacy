@@ -161,7 +161,10 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
             LuaFunction value = LoadState.load(state, bios, "@bios.lua", globals);
             mainThread = new LuaThread(state, value);
         } catch (CompileException | LuaError e) {
-            // LoadState.load no longer throws IOException in Cobalt 0.9.
+            // LoadState.load no longer throws IOException in Cobalt 0.9. The bios failing to
+            // load leaves mainThread null, so isFinished() is true and the computer silently
+            // refuses to start -- so this must not be swallowed.
+            ComputerCraft.logger.error("Failed to load bios", e);
             if (mainThread != null) {
                 close();
                 mainThread = null;
@@ -192,6 +195,15 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
                     throw new HardAbortError();
                 }
 
+                // LuaThread.run returns null when the coroutine suspended rather than finished --
+                // which is what os.pullEvent (coroutine.yield in bios.lua) does on the very first
+                // event. CC: Tweaked checks for this and treats it as a pause. Without the check
+                // the following results.first() throws NPE, which escapes handleEvent entirely
+                // and leaves the computer dead on arrival.
+                if (results == null) {
+                    return;
+                }
+
                 LuaValue filter = results.first();
                 if (filter.isString()) {
                     eventFilter = filter.toString();
@@ -202,7 +214,14 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
                 if (!mainThread.isAlive()) {
                     mainThread = null;
                 }
-            } catch (LuaError | HardAbortError e) {
+            } catch (HardAbortError e) {
+                // Expected when a computer is force-aborted or unloaded; not an error.
+                close();
+                mainThread = null;
+            } catch (LuaError e) {
+                // The only other signal is "Error resuming bios.lua" on the computer screen, which
+                // is invisible from the log, so record it here too.
+                ComputerCraft.logger.error("Error resuming bios.lua", e);
                 close();
                 mainThread = null;
             } finally {
@@ -498,18 +517,28 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
 
         static LuaValue create(final int opcode, final LuaValue env) {
             return LibFunction.createV((state, args) -> {
+                // Standard Lua semantics are load(chunk [, chunkname [, mode [, env]]]) and
+                // loadstring(string [, chunkname]), where chunk is a function OR a string.
+                // bios.lua's loadfile calls load(<string>, name, "t", env), so both the string
+                // form and the trailing mode/env arguments have to be accepted here.
+                LuaValue chunk = args.arg(1);
+                LuaValue target = opcode == 0 && args.arg(4)
+                    .type() == Constants.TTABLE ? args.arg(4) : env;
+
                 switch (opcode) {
-                    case 0: // "load", // ( func [,chunkname] ) -> chunk | nil, msg
+                    case 0: // "load", // ( func|string [,chunkname [,mode [,env]]] ) -> chunk | nil, msg
                     {
-                        LuaValue func = args.arg(1)
-                            .checkFunction();
                         LuaString chunkname = args.arg(2)
-                            .optLuaString(FUNCTION_STR);
+                            .isNil() ? FUNCTION_STR
+                                : args.arg(2)
+                                    .optLuaString(FUNCTION_STR);
                         if (!chunkname.startsWith(AT_PREFIX) && !chunkname.startsWith(EQ_PREFIX)) {
                             chunkname = prefixEquals(chunkname);
                         }
                         try {
-                            return LoadState.load(state, new StringInputStream(state, func), chunkname, env);
+                            InputStream stream = chunk.isString() ? chunk.checkLuaString()
+                                .toInputStream() : new StringInputStream(state, chunk.checkFunction());
+                            return LoadState.load(state, stream, chunkname, target);
                         } catch (Exception e) {
                             return varargsOf(NIL, valueOf(e.getMessage()));
                         }
