@@ -1,87 +1,121 @@
 package dan200.computercraft.api.lua;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for {@link MethodResult#matches}, which decides whether a queued event is the one a
- * suspended peripheral call is waiting for.
+ * Unit tests for {@link MethodResult}'s event factories and for the callback protocol they are
+ * built on.
  *
  * <p>
- * This exists because the corresponding test surface was missing entirely: every other test stubs
- * {@link ILuaContext} and so never executes the bridge's inbound path. A single off-by-one there
- * (Cobalt's {@code Varargs#arg(int)} is 1-based) silently made every event fail to match, so
- * turtles hung forever with no error anywhere.
+ * The factories are sugar over {@link ILuaCallback}: a matching event produces values, and
+ * anything else produces {@code null}, meaning "keep waiting". These tests pin that contract
+ * directly, because in game a mismatch is silent -- the call simply parks forever.
  */
 class MethodResultMatchTest {
 
+    /** One call through a suspending result, feeding it {@code event}. */
+    private static MethodResult feed(MethodResult pending, Object... event) throws LuaException {
+        return pending.resumeWith(event);
+    }
+
     @Test
-    @DisplayName("an event with the right name and correlation id matches")
-    void matchesExactEvent() {
-        MethodResult pending = MethodResult.event("turtle_response", 1, 2);
-        assertTrue(pending.matches(new Object[] { "turtle_response", 1.0, Boolean.TRUE }));
+    @DisplayName("a matching event produces the values from the given offset")
+    void eventTakesValuesFromOffset() throws Exception {
+        MethodResult pending = MethodResult.event("turtle_response", 1, 3);
+        MethodResult answer = feed(pending, "turtle_response", 1.0, Boolean.TRUE, "payload");
+
+        assertNotNull(answer, "a matching event should finish the call");
+        assertTrue(answer.isImmediate());
+        assertEquals("payload", answer.getResults()[0]);
     }
 
     @Test
     @DisplayName("the correlation id may arrive as any Number width")
-    void matchesNumericIdWidths() {
-        MethodResult pending = MethodResult.event("turtle_response", 1, 2);
-        assertTrue(pending.matches(new Object[] { "turtle_response", Integer.valueOf(1), Boolean.TRUE }));
-        assertTrue(pending.matches(new Object[] { "turtle_response", Long.valueOf(1L), Boolean.TRUE }));
-        assertTrue(pending.matches(new Object[] { "turtle_response", Double.valueOf(1.0), Boolean.TRUE }));
+    void correlationIdMatchesAcrossWidths() throws Exception {
+        for (Object id : new Object[] { Integer.valueOf(1), Long.valueOf(1L), Double.valueOf(1.0) }) {
+            MethodResult answer = feed(MethodResult.event("turtle_response", 1, 2), "turtle_response", id, true);
+            assertNotNull(
+                answer,
+                "id " + id
+                    + " ("
+                    + id.getClass()
+                        .getSimpleName()
+                    + ") should have matched");
+        }
     }
 
     @Test
-    @DisplayName("a different correlation id does not match")
-    void rejectsDifferentId() {
+    @DisplayName("a different name or correlation id keeps waiting")
+    void nonMatchingEventsKeepWaiting() throws Exception {
         MethodResult pending = MethodResult.event("turtle_response", 1, 2);
-        assertFalse(pending.matches(new Object[] { "turtle_response", 2.0, Boolean.TRUE }));
+        assertNull(feed(pending, "key_up", 1.0), "wrong name should keep waiting");
+        assertNull(feed(pending, "turtle_response", 2.0), "wrong id should keep waiting");
+        assertNull(feed(pending, "turtle_response"), "short event should keep waiting");
+        assertNull(feed(pending), "null event should keep waiting");
+        assertNull(
+            feed(pending, null, "turtle_response", 1.0),
+            "a leading null means the event was shifted, so it should keep waiting");
+        assertNull(feed(pending, "turtle_response", "one"), "non-numeric id should keep waiting");
     }
 
     @Test
-    @DisplayName("a different event name does not match")
-    void rejectsDifferentName() {
-        MethodResult pending = MethodResult.event("turtle_response", 1, 2);
-        assertFalse(pending.matches(new Object[] { "key_up", 1.0 }));
+    @DisplayName("a task success yields the values after the success flag")
+    void taskSuccessYieldsValues() throws Exception {
+        MethodResult answer = feed(MethodResult.task("task_complete", 7), "task_complete", 7.0, Boolean.TRUE, "ok");
+
+        assertNotNull(answer);
+        assertTrue(answer.isImmediate());
+        assertEquals(1, answer.getResults().length);
+        assertEquals("ok", answer.getResults()[0]);
     }
 
     @Test
-    @DisplayName("short, null and non-string first elements do not match")
-    void rejectsMalformedEvents() {
-        MethodResult pending = MethodResult.event("turtle_response", 1, 2);
-        assertFalse(pending.matches(null));
-        assertFalse(pending.matches(new Object[0]));
-        assertFalse(pending.matches(new Object[] { "turtle_response" }));
-        // The symptom of the 1-based Varargs#arg(int) bug: a leading null where the name
-        // belonged shifted every field by one.
-        assertFalse(pending.matches(new Object[] { null, "turtle_response", 1.0, Boolean.TRUE }));
-        assertFalse(pending.matches(new Object[] { "turtle_response" }));
-    }
-
-    @Test
-    @DisplayName("a non-numeric correlation id does not match")
-    void rejectsNonNumericId() {
-        MethodResult pending = MethodResult.event("turtle_response", 1, 2);
-        assertFalse(pending.matches(new Object[] { "turtle_response", "one" }));
-    }
-
-    @Test
-    @DisplayName("task results match on name and id, ignoring the success flag")
-    void taskResultMatches() {
+    @DisplayName("a task failure raises a Lua error carrying its message")
+    void taskFailureRaisesLuaError() {
         MethodResult pending = MethodResult.task("task_complete", 7);
-        assertTrue(pending.matches(new Object[] { "task_complete", 7.0, Boolean.TRUE, "ok" }));
-        assertTrue(pending.matches(new Object[] { "task_complete", 7.0, Boolean.FALSE, "boom" }));
-        assertFalse(pending.matches(new Object[] { "task_complete", 8.0, Boolean.TRUE }));
+        LuaException thrown = org.junit.jupiter.api.Assertions
+            .assertThrows(LuaException.class, () -> feed(pending, "task_complete", 7.0, Boolean.FALSE, "it broke"));
+
+        assertEquals("it broke", thrown.getMessage());
     }
 
     @Test
-    @DisplayName("an immediate result never matches")
-    void immediateNeverMatches() {
+    @DisplayName("an immediate result returns its values and never waits")
+    void immediateReturnsValues() throws Exception {
         MethodResult immediate = MethodResult.of("a", "b");
+
         assertTrue(immediate.isImmediate());
-        assertFalse(immediate.matches(new Object[] { "anything", 1.0 }));
+        assertEquals(2, immediate.getResults().length);
+        assertNull(immediate.getCallback());
+        assertNull(
+            immediate.resumeWith(new Object[] { "anything", 1.0 }),
+            "an immediate result has no callback, so offering it an event does nothing");
+    }
+
+    @Test
+    @DisplayName("pullEvent hands every event to the callback, and null means keep waiting")
+    void pullEventDelegatesEveryEvent() throws Exception {
+        MethodResult stop = MethodResult.of("stopped");
+        MethodResult waiting = MethodResult.pullEvent(event -> "stop".equals(event[0]) ? stop : null);
+
+        // Returning null is how a callback says "not mine": the bridge keeps the call suspended
+        // and offers it the next event.
+        assertNull(waiting.resumeWith(new Object[] { "other" }), "an unmatched event keeps waiting");
+        assertSame(stop, waiting.resumeWith(new Object[] { "stop" }), "a matching event finishes the call");
+    }
+
+    @Test
+    @DisplayName("of() with no values still returns immediately")
+    void immediateWithNoValues() {
+        MethodResult empty = MethodResult.of();
+        assertTrue(empty.isImmediate());
+        assertEquals(0, empty.getResults().length);
     }
 }

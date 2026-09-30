@@ -194,19 +194,12 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         // resumption point in the debug frame -- so delivery is just the ordinary run path. We only
         // need to decide whether this event is the one the peripheral is waiting for.
         if (pendingSuspend != null) {
-            if (!pendingSuspend.matches(toObjectArray(args))) {
-                // An unrelated event. Computers routinely have events queued that a parked
-                // peripheral does not want, so this is not an error and is not logged.
-                return;
-            }
-            // Do NOT clear pendingSuspend here. runThread -> LuaThread.run synchronously re-enters
-            // CobaltCallback.resume, which reads this field to know what it was waiting for and
-            // clears it itself. Clearing it first made resume() see null and return NONE, so every
-            // resumed call handed Lua an empty result -- turtle.detect() yielded nil and
-            // turtle.forward() moved the turtle but returned no value.
+            // A peripheral is parked waiting for an event. It gets every event, including
+            // unrelated ones, and its MethodResult callback decides whether this is the one it
+            // wanted -- if not, the call simply yields again. Filtering here rather than in the
+            // callback would mean reimplementing the match, and the callback is what allows
+            // cleanup (cancelling a timer, closing a resource) to run when the wait ends.
             runThread(args);
-            // If runThread did not re-enter the parked call it is still parked, and pendingSuspend
-            // is deliberately left set so the next matching event resumes it.
             return;
         }
 
@@ -426,33 +419,34 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         }
 
         @Override
-        public Varargs resume(LuaState state, Object token, Varargs value) {
+        public Varargs resume(LuaState state, Object token, Varargs value) throws LuaError, UnwindThrowable {
             MethodResult pending = pendingSuspend;
-            pendingSuspend = null;
             if (pending == null) {
                 return NONE;
             }
 
-            Object[] event = toObjectArray(value);
-            int offset = pending.getValueOffset();
-            if (event.length < offset) {
-                return NONE;
+            // The callback decides: an immediate result finishes the call, another suspend means
+            // this event was not the one it was waiting for and we keep waiting.
+            MethodResult next;
+            try {
+                next = pending.resumeWith(toObjectArray(value));
+            } catch (LuaException e) {
+                pendingSuspend = null;
+                throw new LuaError(e.getMessage(), e.getLevel());
             }
 
-            if (pending.isCheckSuccess()) {
-                if (!(event[2] instanceof Boolean)) {
-                    return NONE;
-                }
-                if (!(Boolean) event[2]) {
-                    // A task failure surfaces as a Lua error, exactly as it did when the
-                    // peripheral's own retry loop raised it.
-                    String message = event.length > 3 && event[3] instanceof String ? (String) event[3]
-                        : "Java Exception Thrown";
-                    return varargsOf(NIL, valueOf(message));
-                }
+            if (next == null) {
+                // Not for us. pendingSuspend is deliberately left set.
+                return LuaThread.yield(state, NONE);
             }
 
-            return toValues(java.util.Arrays.copyOfRange(event, offset, event.length));
+            if (next.isImmediate()) {
+                pendingSuspend = null;
+                return toValues(next.getResults());
+            }
+
+            pendingSuspend = next;
+            return LuaThread.yield(state, NONE);
         }
 
         @Override

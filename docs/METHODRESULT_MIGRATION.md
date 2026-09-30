@@ -21,7 +21,9 @@ public interface ILuaContext {
 }
 ```
 
-New type: `dan200.computercraft.api.lua.MethodResult`.
+New types:
+- `dan200.computercraft.api.lua.MethodResult`
+- `dan200.computercraft.api.lua.ILuaCallback`
 
 ## Why
 
@@ -76,6 +78,7 @@ else is returned to Lua as ordinary values.
 | `MethodResult.of(Object... values)` | No waiting. Lets a method return uniformly. |
 | `MethodResult.task(String event, long id)` | The event is `(event, id, success, ...values)`. A `false` success flag becomes a Lua error carrying `values[0]`. This is the shape `executeMainThreadTask` uses. |
 | `MethodResult.event(String event, long id, int offset)` | The event is `(event, id, ...values)` with no success flag; everything from `offset` onwards is returned. |
+| `MethodResult.pullEvent(ILuaCallback callback)` | The general form. The callback is handed **every** event and decides what ends the wait. |
 
 ## Do I need to change anything?
 
@@ -98,13 +101,61 @@ result:
 Object[] result = LuaResults.unwrap(peripheral.callMethod(computer, context, METHOD, args));
 ```
 
-`unwrap` returns the values for an immediate `MethodResult`, and fails the test with a clear
-message for a suspending one — a unit test has no event loop to resume it.
+`unwrap` handles an immediate result. For a suspending one, use `LuaResults.drive(results, events)`,
+which plays the bridge's part: it offers queued events to the callback until the call finishes, and
+fails the test if the events run out while it is still parked.
+
+## Waiting for arbitrary events: `pullEvent` and `ILuaCallback`
+
+`task()` and `event()` cover "wait for one specific event with this correlation id". When you need
+anything else -- matching on a URL, racing a timeout, cleaning up a resource -- use
+`MethodResult.pullEvent` with an `ILuaCallback`:
+
+```java
+@Override
+public Object[] callMethod(ILuaContext context, int method, Object[] args) {
+    final long timeoutId = startTimeout();
+    return new Object[] { new ReceiveCallback(timeoutId).pull };
+}
+
+private final class ReceiveCallback implements ILuaCallback {
+
+    /** Returned again to keep waiting. */
+    final MethodResult pull = MethodResult.pullEvent(this);
+
+    @Override
+    public MethodResult resume(Object[] event) {
+        if (matchesMyMessage(event)) {
+            cancelTimeout();               // cleanup runs exactly when the wait ends
+            return MethodResult.of(event[2], event[3]);
+        }
+        if (matchesMyClose(event)) {
+            cancelTimeout();
+            return MethodResult.of(null, "Connection closed");
+        }
+        if (matchesMyTimeout(event)) {
+            return MethodResult.of(null, "Timeout");
+        }
+        return pull;      // not mine, keep waiting
+    }
+}
+```
+
+The callback is given **every** event the computer receives while suspended, including unrelated
+ones. Returning `pull` (or `null`) means "not mine, keep waiting"; returning `MethodResult.of(...)`
+finishes the call and hands those values to Lua.
+
+This is what makes `WebsocketHandle.receive` work: it filters on event name *and* URL, races a
+timeout, and must cancel the scheduled timeout when the wait ends. A `finally` block cannot survive
+a coroutine suspension, so the cancellation lives in `resume` instead. This mirrors CC: Tweaked's
+`WebsocketHandle.ReceiveCallback` exactly.
 
 ## Known limitations in this stage
 
-- **One wait per call.** A peripheral can suspend at most once per invocation. Chained waits — sleep
-  then act, or a wait with a `finally` that must run on completion — are not yet expressible. This
-  is why `WebSocketHandle.receive`, which races a timeout and cancels a timer in a `finally`,
-  still throws `UnsupportedOperationException`.
+- **One wait per call.** A peripheral can suspend at most once per invocation. Chained waits -- sleep
+  then act -- are not yet expressible, though a callback may yield repeatedly, which covers the
+  wait-and-filter case above.
 - **`DelayedTasks.cancel(id)` on a failed task** is not called; the bridge raises the error instead.
+- **`callMethod` still returns `Object[]`** rather than upstream's `Object`, so a suspension is
+  signalled by a single-element array rather than the result being a `MethodResult` directly. The
+  runtime behaviour matches upstream; only the signature differs.

@@ -43,44 +43,25 @@ package dan200.computercraft.api.lua;
  */
 public final class MethodResult {
 
-    /** Values to return to Lua immediately, no waiting. */
+    /** Values to return to Lua immediately, or null when this result suspends. */
     private final Object[] results;
 
-    /** Name of the event to wait for, or null when {@link #results} should be returned as-is. */
-    private final String eventName;
+    /** Invoked with each event while suspended, or null when {@link #results} should be returned. */
+    private final ILuaCallback callback;
 
-    /** Correlation ID the event must carry. */
-    private final long taskId;
-
-    /** Index of the first value in the event, i.e. how much of the event to strip. */
-    private final int valueOffset;
-
-    /**
-     * Whether the event is {@code (name, id, success, ...values)} rather than
-     * {@code (name, id, ...values)}. When true a false success flag becomes a {@link LuaException}.
-     */
-    private final boolean checkSuccess;
-
-    private MethodResult(Object[] results, String eventName, long taskId, int valueOffset, boolean checkSuccess) {
+    private MethodResult(Object[] results, ILuaCallback callback) {
         this.results = results;
-        this.eventName = eventName;
-        this.taskId = taskId;
-        this.valueOffset = valueOffset;
-        this.checkSuccess = checkSuccess;
+        this.callback = callback;
     }
 
     /**
      * Return values to Lua immediately, without waiting.
      *
-     * <p>
-     * This exists so an API method can return a {@code MethodResult} uniformly, letting it wait in
-     * some branches and not others.
-     *
-     * @param results The values to return.
-     * @return A result carrying {@code results}.
+     * @param values The values to return.
+     * @return A result carrying {@code values}.
      */
-    public static MethodResult of(Object... results) {
-        return new MethodResult(results, null, 0L, 0, false);
+    public static MethodResult of(Object... values) {
+        return new MethodResult(values == null || values.length == 0 ? new Object[0] : values, null);
     }
 
     /**
@@ -88,15 +69,30 @@ public final class MethodResult {
      *
      * <p>
      * This is the shape produced by {@link ILuaContext#executeMainThreadTask}. A {@code false}
-     * success flag is turned into a {@link LuaException} carrying the event's message, matching how
-     * a task failure surfaces today.
+     * success flag becomes a {@link LuaException} carrying the event's message, matching how a task
+     * failure surfaced before the port.
+     *
+     * <p>
+     * Events that do not match are ignored and the call keeps waiting; a computer routinely has
+     * unrelated events queued.
      *
      * @param eventName The event to wait for.
      * @param taskId    The correlation ID the event must carry.
      * @return A result that waits for {@code eventName} with {@code taskId}.
      */
     public static MethodResult task(String eventName, long taskId) {
-        return new MethodResult(null, eventName, taskId, 3, true);
+        return pullEvent(event -> {
+            if (!matches(event, eventName, taskId)) {
+                return null;
+            }
+            // The success flag lives at index 2, before the values -- test it before slicing.
+            if (event.length > 2 && event[2] instanceof Boolean && !(Boolean) event[2]) {
+                String message = event.length > 3 && event[3] instanceof String ? (String) event[3]
+                    : "Java Exception Thrown";
+                throw new LuaException(message, 0);
+            }
+            return of(java.util.Arrays.copyOfRange(event, 3, event.length));
+        });
     }
 
     /**
@@ -104,9 +100,10 @@ public final class MethodResult {
      * from {@code valueOffset} onwards.
      *
      * <p>
-     * Unlike {@link #task}, the event carries no success flag; the values are passed through as-is
-     * and any error is the event's own business. This is the shape the turtle uses, where the event
-     * is {@code ("turtle_response", commandId, ...returnValues)}.
+     * Unlike {@link #task}, the event carries no success flag; the values are passed through as-is.
+     * This is the shape the turtle uses, where the event is
+     * {@code ("turtle_response", commandId, ...returnValues)} -- note the success flag at index 2 is
+     * part of the returned values, exactly as it was before the port.
      *
      * @param eventName   The event to wait for.
      * @param eventId     The correlation ID the event must carry.
@@ -114,12 +111,41 @@ public final class MethodResult {
      * @return A result that waits for {@code eventName} with {@code eventId}.
      */
     public static MethodResult event(String eventName, long eventId, int valueOffset) {
-        return new MethodResult(null, eventName, eventId, valueOffset, false);
+        return pullEvent(
+            event -> matches(event, eventName, eventId)
+                ? of(java.util.Arrays.copyOfRange(event, valueOffset, event.length))
+                : null);
     }
 
-    /** Whether this result should be returned immediately rather than waited for. */
+    /**
+     * Wait for any event, deferring the decision to {@code callback}.
+     *
+     * <p>
+     * The callback is given every event the computer receives while suspended, including unrelated
+     * ones. Returning {@code null} from a callback means "not mine, keep waiting", which is how
+     * {@link #event} and {@link #task} are implemented.
+     *
+     * @param callback Invoked with each event until it decides to finish.
+     * @return A result that suspends and delegates to {@code callback}.
+     */
+    public static MethodResult pullEvent(ILuaCallback callback) {
+        return new MethodResult(null, callback);
+    }
+
+    /**
+     * Offer {@code event} to this result's callback.
+     *
+     * @param event The event, with its name at index 0.
+     * @return The callback's answer, or {@code null} to keep waiting.
+     * @throws LuaException If the callback raised one.
+     */
+    public MethodResult resumeWith(Object[] event) throws LuaException {
+        return callback == null ? null : callback.resume(event);
+    }
+
+    /** Whether this result returns immediately rather than waiting. */
     public boolean isImmediate() {
-        return eventName == null;
+        return callback == null;
     }
 
     /** @return The values to return, when {@link #isImmediate()}. */
@@ -127,42 +153,25 @@ public final class MethodResult {
         return results;
     }
 
-    /** @return The name of the event to wait for, or null if this result is immediate. */
-    public String getEventName() {
-        return eventName;
-    }
-
-    /** @return The correlation ID the event must carry. */
-    public long getTaskId() {
-        return taskId;
-    }
-
-    /** @return The index of the first value in the event. */
-    public int getValueOffset() {
-        return valueOffset;
-    }
-
-    /** @return Whether a false success flag in the event should raise a {@link LuaException}. */
-    public boolean isCheckSuccess() {
-        return checkSuccess;
+    /** @return The callback that receives events, or null when {@link #isImmediate()}. */
+    public ILuaCallback getCallback() {
+        return callback;
     }
 
     /**
-     * Whether {@code event} satisfies this result's filter.
+     * Whether {@code event} has the given name and correlation ID.
      *
      * <p>
-     * Mismatched events are not an error -- a computer routinely has unrelated events queued -- so
-     * the bridge simply suspends again until one matches.
+     * Non-matching events are not an error -- a computer routinely has unrelated events queued --
+     * so a false result simply means "keep waiting".
      *
-     * @param event The event values, with the event name at index 0.
+     * @param event     The event values, with the event name at index 0.
+     * @param eventName The name to require.
+     * @param eventId   The correlation ID to require.
      * @return Whether the event matches.
      */
-    public boolean matches(Object[] event) {
+    public static boolean matches(Object[] event, String eventName, long eventId) {
         if (event == null || event.length < 2) {
-            return false;
-        }
-        if (eventName == null) {
-            // An immediate result is never waiting for anything.
             return false;
         }
         if (!(event[0] instanceof String) || !eventName.equals(event[0])) {
@@ -171,11 +180,11 @@ public final class MethodResult {
         if (!(event[1] instanceof Number)) {
             return false;
         }
-        return ((Number) event[1]).longValue() == taskId;
+        return ((Number) event[1]).longValue() == eventId;
     }
 
     @Override
     public String toString() {
-        return isImmediate() ? "MethodResult[immediate]" : "MethodResult[await " + eventName + "#" + taskId + "]";
+        return isImmediate() ? "MethodResult[immediate]" : "MethodResult[suspended]";
     }
 }

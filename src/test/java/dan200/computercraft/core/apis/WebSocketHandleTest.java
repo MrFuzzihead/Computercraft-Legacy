@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import dan200.computercraft.api.lua.ILuaContext;
@@ -30,6 +30,7 @@ import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.IComputerEnvironment;
 import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.terminal.Terminal;
+import dan200.computercraft.testsupport.LuaResults;
 
 /**
  * Unit tests for {@link WebSocketHandle}.
@@ -96,7 +97,11 @@ class WebSocketHandleTest {
      * the queue is empty.
      */
     private static ILuaContext makeContext(Object[]... events) {
-        Queue<Object[]> queue = new ArrayDeque<>(Arrays.asList(events));
+        return makeContext(Arrays.asList(events));
+    }
+
+    private static ILuaContext makeContext(java.util.List<Object[]> eventList) {
+        Queue<Object[]> queue = new ArrayDeque<>(eventList);
         return new ILuaContext() {
 
             @Override
@@ -326,15 +331,14 @@ class WebSocketHandleTest {
     // receive — message events
     // =========================================================================
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsTextMessage() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(new Object[] { "websocket_message", "ws://example.com", "hello", false });
+        java.util.List<Object[]> events = java.util.Arrays
+            .<Object[]>asList(new Object[] { "websocket_message", "ws://example.com", "hello", false });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertEquals(2, result.length);
@@ -342,16 +346,15 @@ class WebSocketHandleTest {
         assertEquals(false, result[1]);
     }
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsBinaryMessage() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
         byte[] data = "data".getBytes(StandardCharsets.UTF_8);
-        ILuaContext ctx = makeContext(new Object[] { "websocket_message", "ws://example.com", data, true });
+        java.util.List<Object[]> events = java.util.Arrays
+            .<Object[]>asList(new Object[] { "websocket_message", "ws://example.com", data, true });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertArrayEquals(data, (byte[]) result[0]);
@@ -362,15 +365,14 @@ class WebSocketHandleTest {
     // receive — closed event
     // =========================================================================
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsNullOnWebsocketClosed() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(new Object[] { "websocket_closed", "ws://example.com" });
+        java.util.List<Object[]> events = java.util.Arrays
+            .<Object[]>asList(new Object[] { "websocket_closed", "ws://example.com" });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         // 1.117.0: returns {nil, nil, reason} instead of bare nil
         assertNotNull(result, "result array must not be null");
@@ -384,35 +386,31 @@ class WebSocketHandleTest {
     // receive — URL filtering
     // =========================================================================
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveIgnoresMessagesForDifferentUrl() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(
+        java.util.List<Object[]> events = java.util.Arrays.<Object[]>asList(
             // Different URL — must be skipped
             new Object[] { "websocket_message", "ws://other.com", "not-for-us", false },
             // Correct URL — must be returned
             new Object[] { "websocket_message", "ws://example.com", "hello", false });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertEquals("hello", result[0]);
     }
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveIgnoresUnrelatedEvents() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(
+        java.util.List<Object[]> events = java.util.Arrays.<Object[]>asList(
             new Object[] { "http_success", "ws://example.com", "not-ws" },
             new Object[] { "websocket_message", "ws://example.com", "target", false });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertEquals("target", result[0]);
@@ -422,9 +420,6 @@ class WebSocketHandleTest {
     // receive — timeout
     // =========================================================================
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsNullAfterTimeoutExpires() throws LuaException, InterruptedException {
         // timeout = 0 → the scheduler fires immediately, calling StubEnvironment.queueEvent
@@ -434,7 +429,9 @@ class WebSocketHandleTest {
         WebSocketHandle h = new WebSocketHandle("ws://example.com", new StubConnection(), env);
         ILuaContext ctx = makeContextFromQueue(sharedQueue);
 
-        Object[] result = h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 0.0 });
+        Object[] result = LuaResults.drive(
+            h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 0.0 }),
+            java.util.Collections.singletonList((Object[]) sharedQueue.poll(5, TimeUnit.SECONDS)));
 
         // 1.117.0: returns {nil, nil, "Timeout"} instead of bare nil
         assertNotNull(result, "result array must not be null");
@@ -444,9 +441,6 @@ class WebSocketHandleTest {
         assertEquals("Timeout", result[2], "reason must be 'Timeout'");
     }
 
-    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
-        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
-        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveWithTimeoutStillReturnsMessageBeforeDeadline() throws LuaException, InterruptedException {
         // Pre-populate the queue with a websocket_message so receive returns
@@ -457,7 +451,9 @@ class WebSocketHandleTest {
         WebSocketHandle h = new WebSocketHandle("ws://example.com", new StubConnection(), env);
         ILuaContext ctx = makeContextFromQueue(sharedQueue);
 
-        Object[] result = h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 60.0 });
+        Object[] result = LuaResults.drive(
+            h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 60.0 }),
+            java.util.Collections.singletonList((Object[]) sharedQueue.poll(5, TimeUnit.SECONDS)));
 
         assertNotNull(result);
         assertEquals("hi", result[0]);

@@ -1,5 +1,6 @@
 package dan200.computercraft.testsupport;
 
+import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.MethodResult;
 
 /**
@@ -33,5 +34,43 @@ public final class LuaResults {
             throw new AssertionError("peripheral suspended (" + pending + "); no event loop in a unit test");
         }
         return results;
+    }
+
+    /**
+     * Drive a suspending {@link MethodResult} to completion, mimicking what the Lua bridge does.
+     *
+     * <p>
+     * {@code callMethod} returns the sentinel rather than values when a peripheral waits, because
+     * only the bridge can supply the event that resumes it. A unit test calls {@code callMethod}
+     * directly, so it has to play the bridge's part: offer queued events until the callback decides
+     * the wait is over.
+     *
+     * @param results The raw return value of {@code callMethod}.
+     * @param events  Events to offer, in order, until one ends the wait.
+     * @return The values the call ultimately returned to Lua.
+     * @throws LuaException   If the callback raised one.
+     * @throws AssertionError If the events run out before the call finishes.
+     */
+    public static Object[] drive(Object[] results, java.util.List<Object[]> events) throws LuaException {
+        if (results == null || results.length != 1 || !(results[0] instanceof MethodResult)) {
+            return unwrap(results);
+        }
+
+        MethodResult pending = (MethodResult) results[0];
+        for (Object[] event : events) {
+            if (pending.isImmediate()) {
+                break;
+            }
+            MethodResult next = pending.resumeWith(event);
+            if (next != null) {
+                pending = next;
+            }
+        }
+
+        if (!pending.isImmediate()) {
+            throw new AssertionError(
+                "ran out of events while the call was still suspended; offered " + events.size() + " event(s)");
+        }
+        return pending.getResults();
     }
 }
