@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
+import dan200.computercraft.testsupport.LuaResults;
 
 /**
  * Unit tests for {@link PocketAPI}.
@@ -63,28 +65,13 @@ class PocketAPITest {
     private static final ILuaContext SYNC_CONTEXT = new ILuaContext() {
 
         @Override
-        public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-            return task.execute();
+        public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+            return MethodResult.of(task.execute());
         }
 
         @Override
         public long issueMainThreadTask(ILuaTask task) throws LuaException {
             return 0;
-        }
-
-        @Override
-        public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] pullEventRaw(String filter) throws InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] yield(Object[] args) throws InterruptedException {
-            return null;
         }
     };
 
@@ -154,7 +141,7 @@ class PocketAPITest {
     @Test
     void isEquippedReturnsFalseWhenNoStackSet() throws LuaException, InterruptedException {
         // m_stack is null from setUp() — no ItemStack needed.
-        Object[] result = api.callMethod(null, METHOD_IS_EQUIPPED, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(null, METHOD_IS_EQUIPPED, new Object[0]));
 
         assertNotNull(result);
         assertEquals(1, result.length);
@@ -165,7 +152,7 @@ class PocketAPITest {
     void isEquippedReturnsFalseAfterExplicitUpdateWithNullStack() throws LuaException, InterruptedException {
         api.update(null, null, null);
 
-        Object[] result = api.callMethod(null, METHOD_IS_EQUIPPED, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(null, METHOD_IS_EQUIPPED, new Object[0]));
 
         assertEquals(Boolean.FALSE, result[0]);
     }
@@ -176,7 +163,7 @@ class PocketAPITest {
 
     @Test
     void equipBackReturnsTwoValueResultWhenNoPlayer() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]));
 
         assertNotNull(result);
         assertEquals(2, result.length, "equipBack() should return [false, errorMessage] when no player is set");
@@ -184,14 +171,14 @@ class PocketAPITest {
 
     @Test
     void equipBackFirstValueIsFalseWhenNoPlayer() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]));
 
         assertEquals(Boolean.FALSE, result[0]);
     }
 
     @Test
     void equipBackSecondValueIsErrorStringWhenNoPlayer() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]));
 
         assertInstanceOf(String.class, result[1], "second return value of equipBack() should be an error string");
         assertFalse(((String) result[1]).isEmpty(), "error string from equipBack() must not be empty");
@@ -201,7 +188,7 @@ class PocketAPITest {
     void equipBackReturnsFalseAfterUpdateWithNullPlayer() throws LuaException, InterruptedException {
         api.update(null, null, null);
 
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EQUIP_BACK, new Object[0]));
 
         assertEquals(Boolean.FALSE, result[0]);
     }
@@ -212,7 +199,7 @@ class PocketAPITest {
 
     @Test
     void unequipBackReturnsTwoValueResultWhenNoPlayer() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]));
 
         assertNotNull(result);
         assertEquals(2, result.length, "unequipBack() should return [false, errorMessage] when no player is set");
@@ -220,14 +207,14 @@ class PocketAPITest {
 
     @Test
     void unequipBackFirstValueIsFalseWhenNoPlayer() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]));
 
         assertEquals(Boolean.FALSE, result[0]);
     }
 
     @Test
     void unequipBackSecondValueIsErrorStringWhenNoPlayer() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]));
 
         assertInstanceOf(String.class, result[1], "second return value of unequipBack() should be an error string");
         assertFalse(((String) result[1]).isEmpty(), "error string from unequipBack() must not be empty");
@@ -237,7 +224,7 @@ class PocketAPITest {
     void unequipBackReturnsFalseAfterUpdateWithNullPlayer() throws LuaException, InterruptedException {
         api.update(null, null, null);
 
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_UNEQUIP_BACK, new Object[0]));
 
         assertEquals(Boolean.FALSE, result[0]);
     }

@@ -105,7 +105,7 @@ public class GenericFluidPeripheral implements IFluidHandlerPeripheral {
         throws LuaException, InterruptedException {
         switch (method) {
             case TANKS: {
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -127,7 +127,7 @@ public class GenericFluidPeripheral implements IFluidHandlerPeripheral {
                         }
                         return new Object[] { result };
                     }
-                });
+                }) };
             }
 
             case PUSH_FLUID: {
@@ -135,7 +135,7 @@ public class GenericFluidPeripheral implements IFluidHandlerPeripheral {
                 final int limit = parseOptionalLimit(arguments, 1);
                 final String fluidName = parseOptionalString(arguments, 2, "fluid name");
 
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -151,7 +151,7 @@ public class GenericFluidPeripheral implements IFluidHandlerPeripheral {
                         int moved = FluidUtil.moveFluid(m_handler, m_face, dest, destFace, limit, fluidName);
                         return new Object[] { (double) moved };
                     }
-                });
+                }) };
             }
 
             case PULL_FLUID: {
@@ -159,7 +159,7 @@ public class GenericFluidPeripheral implements IFluidHandlerPeripheral {
                 final int limit = parseOptionalLimit(arguments, 1);
                 final String fluidName = parseOptionalString(arguments, 2, "fluid name");
 
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -175,7 +175,7 @@ public class GenericFluidPeripheral implements IFluidHandlerPeripheral {
                         int moved = FluidUtil.moveFluid(src, srcFace, m_handler, m_face, limit, fluidName);
                         return new Object[] { (double) moved };
                     }
-                });
+                }) };
             }
 
             default:

@@ -102,21 +102,21 @@ public class PocketAPI implements ILuaAPI {
         throws LuaException, InterruptedException {
         switch (method) {
             case EQUIP_BACK:
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
                         return doEquipBack();
                     }
-                });
+                }) };
             case UNEQUIP_BACK:
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
                         return doUnequipBack();
                     }
-                });
+                }) };
             case IS_EQUIPPED:
                 return doIsEquipped();
             default:

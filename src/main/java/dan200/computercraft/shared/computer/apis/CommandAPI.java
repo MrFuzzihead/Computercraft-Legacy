@@ -137,13 +137,13 @@ public class CommandAPI implements ILuaAPI {
             case 0:
                 if (arguments.length >= 1 && arguments[0] instanceof String) {
                     final String command = (String) arguments[0];
-                    return context.executeMainThreadTask(new ILuaTask() {
+                    return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                         @Override
                         public Object[] execute() throws LuaException {
                             return CommandAPI.this.doCommand(command);
                         }
-                    });
+                    }) };
                 }
 
                 throw new LuaException("Expected string");
@@ -166,7 +166,7 @@ public class CommandAPI implements ILuaAPI {
                 for (Object arg : arguments) {
                     if (arg instanceof String) listPrefixes.add((String) arg);
                 }
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -195,7 +195,7 @@ public class CommandAPI implements ILuaAPI {
 
                         return new Object[] { result };
                     }
-                });
+                }) };
             }
             case 3:
                 return new Object[] { this.m_computer.xCoord, this.m_computer.yCoord, this.m_computer.zCoord };
@@ -215,7 +215,7 @@ public class CommandAPI implements ILuaAPI {
                         infoDim4 = 0;
                         infoHasDim4 = false;
                     }
-                    return context.executeMainThreadTask(new ILuaTask() {
+                    return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                         @Override
                         public Object[] execute() throws LuaException {
@@ -234,7 +234,7 @@ public class CommandAPI implements ILuaAPI {
                             }
                             return new Object[] { CommandAPI.this.buildBlockInfo(world, x, y, z) };
                         }
-                    });
+                    }) };
                 }
 
                 throw new LuaException("Expected number, number, number");
@@ -266,7 +266,7 @@ public class CommandAPI implements ILuaAPI {
                     infoDim5 = 0;
                     infoHasDim5 = false;
                 }
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -290,7 +290,7 @@ public class CommandAPI implements ILuaAPI {
                         }
                         return new Object[] { result };
                     }
-                });
+                }) };
             }
             default:
                 return null;

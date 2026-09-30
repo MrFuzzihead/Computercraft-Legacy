@@ -17,6 +17,7 @@ import dan200.computercraft.api.lua.ILuaEnvironment;
 import dan200.computercraft.api.lua.ILuaObjectWithArguments;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.core.apis.IAPIEnvironment;
 import dan200.computercraft.core.apis.ILuaAPI;
@@ -60,33 +61,10 @@ public class LuaEnvironment implements ILuaEnvironment {
     public Object[] executeTask(IComputerAccess access, ILuaContext context, ILuaTask task, int delay)
         throws LuaException, InterruptedException {
         long id = issueTask(access, task, delay);
-
-        Object[] response;
-        try {
-            do {
-                response = context.pullEvent(ILuaEnvironment.EVENT_NAME);
-            } while (response.length < 3 || !(response[1] instanceof Number)
-                || !(response[2] instanceof Boolean)
-                || (long) ((Number) response[1]).intValue() != id);
-        } catch (InterruptedException e) {
-            DelayedTasks.cancel(id);
-            throw e;
-        } catch (LuaException e) {
-            DelayedTasks.cancel(id);
-            throw e;
-        }
-
-        Object[] returnValues = new Object[response.length - 3];
-        if (!(Boolean) response[2]) {
-            if (response.length >= 4 && response[3] instanceof String) {
-                throw new LuaException((String) response[3]);
-            } else {
-                throw new LuaException();
-            }
-        } else {
-            System.arraycopy(response, 3, returnValues, 0, returnValues.length);
-            return returnValues;
-        }
+        // The bridge now owns the retry loop that used to live here. A failure surfaces as a
+        // Lua error, as before. TODO(stage 2): the DelayedTasks.cancel(id) calls on the failure
+        // path are lost, because the bridge raises the error rather than this method.
+        return new Object[] { MethodResult.task(ILuaEnvironment.EVENT_NAME, id) };
     }
 
     @Override

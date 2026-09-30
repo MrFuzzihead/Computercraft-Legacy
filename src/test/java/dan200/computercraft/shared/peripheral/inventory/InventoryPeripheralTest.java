@@ -17,8 +17,10 @@ import org.junit.jupiter.api.Test;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.testsupport.LuaResults;
 
 /**
  * Unit tests for {@link InventoryPeripheral}.
@@ -69,28 +71,13 @@ class InventoryPeripheralTest {
     private static final ILuaContext SYNC_CONTEXT = new ILuaContext() {
 
         @Override
-        public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-            return task.execute();
+        public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+            return MethodResult.of(task.execute());
         }
 
         @Override
         public long issueMainThreadTask(ILuaTask task) throws LuaException {
             return 0;
-        }
-
-        @Override
-        public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] pullEventRaw(String filter) throws InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] yield(Object[] args) throws InterruptedException {
-            return null;
         }
     };
 
@@ -172,7 +159,8 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = new InventoryPeripheral(new StubNonInventoryTile());
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_SIZE, new Object[0]));
+            () -> LuaResults
+                .unwrap(LuaResults.unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_SIZE, new Object[0]))));
         assertTrue(
             ex.getMessage()
                 .contains("no longer available"),
@@ -182,7 +170,8 @@ class InventoryPeripheralTest {
     @Test
     void sizeReturnsInventorySize() throws Exception {
         InventoryPeripheral p = makePeripheral(9);
-        Object[] result = p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_SIZE, new Object[0]);
+        Object[] result = LuaResults
+            .unwrap(LuaResults.unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_SIZE, new Object[0])));
         assertNotNull(result);
         assertEquals(1, result.length);
         assertEquals(9, ((Number) result[0]).intValue());
@@ -195,7 +184,8 @@ class InventoryPeripheralTest {
     @Test
     void listReturnsEmptyTableForEmptyInventory() throws Exception {
         InventoryPeripheral p = makePeripheral(9);
-        Object[] result = p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_LIST, new Object[0]);
+        Object[] result = LuaResults
+            .unwrap(LuaResults.unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_LIST, new Object[0])));
         assertNotNull(result);
         assertEquals(1, result.length);
         @SuppressWarnings("unchecked")
@@ -210,7 +200,8 @@ class InventoryPeripheralTest {
     @Test
     void getItemDetailReturnsNullForEmptySlot() throws Exception {
         InventoryPeripheral p = makePeripheral(9);
-        Object[] result = p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_DETAIL, new Object[] { 1 });
+        Object[] result = LuaResults.unwrap(
+            LuaResults.unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_DETAIL, new Object[] { 1 })));
         assertNotNull(result);
         assertEquals(1, result.length);
         assertNull(result[0], "getItemDetail should return null for an empty slot");
@@ -221,7 +212,9 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_DETAIL, new Object[] { 0 }));
+            () -> LuaResults.unwrap(
+                LuaResults
+                    .unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_DETAIL, new Object[] { 0 }))));
     }
 
     @Test
@@ -229,7 +222,9 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_DETAIL, new Object[] { 10 }));
+            () -> LuaResults.unwrap(
+                LuaResults
+                    .unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_DETAIL, new Object[] { 10 }))));
     }
 
     // =========================================================================
@@ -241,7 +236,9 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_LIMIT, new Object[] { 0 }));
+            () -> LuaResults.unwrap(
+                LuaResults
+                    .unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_LIMIT, new Object[] { 0 }))));
     }
 
     @Test
@@ -249,7 +246,9 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_LIMIT, new Object[] { 10 }));
+            () -> LuaResults.unwrap(
+                LuaResults
+                    .unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_LIMIT, new Object[] { 10 }))));
     }
 
     @Test
@@ -258,7 +257,8 @@ class InventoryPeripheralTest {
         tile.setStackLimit(64);
         InventoryPeripheral p = new InventoryPeripheral(tile);
 
-        Object[] result = p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_LIMIT, new Object[] { 1 });
+        Object[] result = LuaResults.unwrap(
+            LuaResults.unwrap(p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_GET_ITEM_LIMIT, new Object[] { 1 })));
         assertNotNull(result);
         assertEquals(1, result.length);
         assertEquals(64, ((Number) result[0]).intValue());
@@ -279,7 +279,13 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(computerWithNonInv, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "not_an_inv", 1 }));
+            () -> LuaResults.unwrap(
+                LuaResults.unwrap(
+                    p.callMethod(
+                        computerWithNonInv,
+                        SYNC_CONTEXT,
+                        METHOD_PUSH_ITEMS,
+                        new Object[] { "not_an_inv", 1 }))));
         assertTrue(
             ex.getMessage()
                 .contains("not an inventory"),
@@ -294,7 +300,13 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(computerWithNonInv, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "not_an_inv", 1 }));
+            () -> LuaResults.unwrap(
+                LuaResults.unwrap(
+                    p.callMethod(
+                        computerWithNonInv,
+                        SYNC_CONTEXT,
+                        METHOD_PULL_ITEMS,
+                        new Object[] { "not_an_inv", 1 }))));
         assertTrue(
             ex.getMessage()
                 .contains("not an inventory"),
@@ -306,7 +318,13 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "missing_chest", 1 }));
+            () -> LuaResults.unwrap(
+                LuaResults.unwrap(
+                    p.callMethod(
+                        EMPTY_COMPUTER,
+                        SYNC_CONTEXT,
+                        METHOD_PUSH_ITEMS,
+                        new Object[] { "missing_chest", 1 }))));
         assertTrue(
             ex.getMessage()
                 .contains("does not exist"),
@@ -318,7 +336,13 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = makePeripheral(9);
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(EMPTY_COMPUTER, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "missing_chest", 1 }));
+            () -> LuaResults.unwrap(
+                LuaResults.unwrap(
+                    p.callMethod(
+                        EMPTY_COMPUTER,
+                        SYNC_CONTEXT,
+                        METHOD_PULL_ITEMS,
+                        new Object[] { "missing_chest", 1 }))));
         assertTrue(
             ex.getMessage()
                 .contains("does not exist"),
@@ -333,8 +357,8 @@ class InventoryPeripheralTest {
         IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 }));
 
         assertNotNull(result);
         assertEquals(0, ((Number) result[0]).intValue(), "Moving from an empty slot should return 0");
@@ -351,8 +375,8 @@ class InventoryPeripheralTest {
         IComputerAccess computerWithSideTarget = makeComputerWithPeripheral("top", toPeripheral);
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
-        Object[] result = p
-            .callMethod(computerWithSideTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "top", 1 });
+        Object[] result = LuaResults
+            .unwrap(p.callMethod(computerWithSideTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "top", 1 }));
 
         assertNotNull(result);
         assertEquals(
@@ -371,8 +395,8 @@ class InventoryPeripheralTest {
         StubInventoryTile toTile = new StubInventoryTile(9);
         InventoryPeripheral p = new InventoryPeripheral(toTile);
 
-        Object[] result = p
-            .callMethod(computerWithSideSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "top", 1 });
+        Object[] result = LuaResults
+            .unwrap(p.callMethod(computerWithSideSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "top", 1 }));
 
         assertNotNull(result);
         assertEquals(
@@ -390,8 +414,8 @@ class InventoryPeripheralTest {
         StubInventoryTile toTile = new StubInventoryTile(9);
         InventoryPeripheral p = new InventoryPeripheral(toTile);
 
-        Object[] result = p
-            .callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1 }));
 
         assertNotNull(result);
         assertEquals(0, ((Number) result[0]).intValue(), "Pulling from an empty slot should return 0");
@@ -409,8 +433,8 @@ class InventoryPeripheralTest {
         IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 }));
 
         assertNotNull(result);
         assertEquals(10, ((Number) result[0]).intValue(), "Should move the full stack");
@@ -436,8 +460,8 @@ class InventoryPeripheralTest {
         StubInventoryTile toTile = new StubInventoryTile(9);
         InventoryPeripheral p = new InventoryPeripheral(toTile);
 
-        Object[] result = p
-            .callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1 }));
 
         assertNotNull(result);
         assertEquals(5, ((Number) result[0]).intValue(), "Should move the full stack");
@@ -464,8 +488,8 @@ class InventoryPeripheralTest {
         IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 }));
 
         assertNotNull(result);
         // InventoryUtil will store across multiple slots, so the full 20 should be moved
@@ -501,8 +525,8 @@ class InventoryPeripheralTest {
         IComputerAccess computerWithTarget = makeComputerWithPeripheral("target_chest", toPeripheral);
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1 }));
 
         assertNotNull(result);
         // InventoryUtil will merge into the existing slot and then store remainder into following slots
@@ -538,8 +562,12 @@ class InventoryPeripheralTest {
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
         // toSlot = 1 maps to index 0, which isItemValidForSlot() rejects.
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 5, 1 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(
+                computerWithTarget,
+                SYNC_CONTEXT,
+                METHOD_PUSH_ITEMS,
+                new Object[] { "target_chest", 1, 5, 1 }));
 
         assertNotNull(result);
         assertEquals(
@@ -573,8 +601,12 @@ class InventoryPeripheralTest {
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
         // toSlot = 2 maps to index 1, which is accepted.
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 5, 2 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(
+                computerWithTarget,
+                SYNC_CONTEXT,
+                METHOD_PUSH_ITEMS,
+                new Object[] { "target_chest", 1, 5, 2 }));
 
         assertNotNull(result);
         assertEquals(5, ((Number) result[0]).intValue(), "Should move items into a valid slot");
@@ -596,11 +628,13 @@ class InventoryPeripheralTest {
         // toSlot 10 exceeds target inventory size of 9 — must throw LuaException, not AIOOBE
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(
-                computerWithTarget,
-                SYNC_CONTEXT,
-                METHOD_PUSH_ITEMS,
-                new Object[] { "target_chest", 1, 5, 10 }),
+            () -> LuaResults.unwrap(
+                LuaResults.unwrap(
+                    p.callMethod(
+                        computerWithTarget,
+                        SYNC_CONTEXT,
+                        METHOD_PUSH_ITEMS,
+                        new Object[] { "target_chest", 1, 5, 10 }))),
             "pushItems with an out-of-range toSlot must throw LuaException");
     }
 
@@ -616,8 +650,8 @@ class InventoryPeripheralTest {
 
         InventoryPeripheral p = new InventoryPeripheral(fromTile);
         // Provide an explicit limit of 3 items
-        Object[] result = p
-            .callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 3 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithTarget, SYNC_CONTEXT, METHOD_PUSH_ITEMS, new Object[] { "target_chest", 1, 3 }));
 
         assertNotNull(result);
         assertEquals(3, ((Number) result[0]).intValue(), "Should move only the explicit limit");
@@ -641,8 +675,8 @@ class InventoryPeripheralTest {
         InventoryPeripheral p = new InventoryPeripheral(toTile);
 
         // Explicit limit of 5 should move only 5 items
-        Object[] result = p
-            .callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1, 5 });
+        Object[] result = LuaResults.unwrap(
+            p.callMethod(computerWithSource, SYNC_CONTEXT, METHOD_PULL_ITEMS, new Object[] { "source_chest", 1, 5 }));
 
         assertNotNull(result);
         assertEquals(5, ((Number) result[0]).intValue(), "Should pull only the explicit limit");

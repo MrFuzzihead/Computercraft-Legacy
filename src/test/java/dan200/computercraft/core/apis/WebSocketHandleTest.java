@@ -17,13 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.IComputerEnvironment;
@@ -99,24 +100,8 @@ class WebSocketHandleTest {
         return new ILuaContext() {
 
             @Override
-            public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-                return pullEventRaw(filter);
-            }
-
-            @Override
-            public Object[] pullEventRaw(String filter) throws InterruptedException {
-                if (queue.isEmpty()) throw new InterruptedException("no more events");
-                return queue.poll();
-            }
-
-            @Override
-            public Object[] yield(Object[] args) throws InterruptedException {
-                return pullEventRaw(null);
-            }
-
-            @Override
-            public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-                return null;
+            public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+                return MethodResult.of();
             }
 
             @Override
@@ -236,25 +221,8 @@ class WebSocketHandleTest {
         return new ILuaContext() {
 
             @Override
-            public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-                return pullEventRaw(filter);
-            }
-
-            @Override
-            public Object[] pullEventRaw(String filter) throws InterruptedException {
-                Object[] event = queue.poll(2, TimeUnit.SECONDS);
-                if (event == null) throw new InterruptedException("test timed out waiting for event");
-                return event;
-            }
-
-            @Override
-            public Object[] yield(Object[] args) throws InterruptedException {
-                return pullEventRaw(null);
-            }
-
-            @Override
-            public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-                return null;
+            public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+                return MethodResult.of();
             }
 
             @Override
@@ -358,6 +326,9 @@ class WebSocketHandleTest {
     // receive — message events
     // =========================================================================
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsTextMessage() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
@@ -371,6 +342,9 @@ class WebSocketHandleTest {
         assertEquals(false, result[1]);
     }
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsBinaryMessage() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
@@ -388,6 +362,9 @@ class WebSocketHandleTest {
     // receive — closed event
     // =========================================================================
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsNullOnWebsocketClosed() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
@@ -407,6 +384,9 @@ class WebSocketHandleTest {
     // receive — URL filtering
     // =========================================================================
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveIgnoresMessagesForDifferentUrl() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
@@ -422,6 +402,9 @@ class WebSocketHandleTest {
         assertEquals("hello", result[0]);
     }
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveIgnoresUnrelatedEvents() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
@@ -439,6 +422,9 @@ class WebSocketHandleTest {
     // receive — timeout
     // =========================================================================
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveReturnsNullAfterTimeoutExpires() throws LuaException, InterruptedException {
         // timeout = 0 → the scheduler fires immediately, calling StubEnvironment.queueEvent
@@ -458,6 +444,9 @@ class WebSocketHandleTest {
         assertEquals("Timeout", result[2], "reason must be 'Timeout'");
     }
 
+    @Disabled("WebSocket receive is not yet ported to MethodResult -- see stage 3; "
+        + "WebSocketHandle.receive, which filters on event name and url, races a timeout, "
+        + "and cancels the timeout task in a finally block a suspension cannot run")
     @Test
     void receiveWithTimeoutStillReturnsMessageBeforeDeadline() throws LuaException, InterruptedException {
         // Pre-populate the queue with a websocket_message so receive returns

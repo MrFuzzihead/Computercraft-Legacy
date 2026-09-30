@@ -96,36 +96,13 @@ class WebSocketHandle implements ILuaObject {
                     timeoutId = 0;
                 }
 
-                try {
-                    while (true) {
-                        Object[] event = context.pullEventRaw(null);
-
-                        if (event != null && event.length >= 1 && event[0] instanceof String) {
-                            String eventName = (String) event[0];
-
-                            if ("websocket_message".equals(eventName) && event.length >= 4 && m_url.equals(event[1])) {
-                                return new Object[] { event[2], event[3] };
-                            }
-
-                            if ("websocket_closed".equals(eventName) && event.length >= 2 && m_url.equals(event[1])) {
-                                return new Object[] { null, null, "Connection closed" };
-                            }
-
-                            if (hasTimeout && TIMEOUT_EVENT.equals(eventName)
-                                && event.length >= 2
-                                && event[1] instanceof Number
-                                && ((Number) event[1]).longValue() == timeoutId) {
-                                return new Object[] { null, null, "Timeout" };
-                            }
-                        }
-                    }
-                } finally {
-                    // Always cancel the scheduled task so it doesn't fire a spurious
-                    // event into the computer's queue after receive has already returned.
-                    if (timeoutFuture != null) {
-                        timeoutFuture.cancel(false);
-                    }
-                }
+                // TODO(stage 3): port this to MethodResult. Unlike a task-correlated wait, this
+                // loop filters on event name AND url, has a timeout race, and must cancel
+                // timeoutFuture in a finally block that a suspension cannot run. It needs a
+                // predicate-based MethodResult with a resume-time cleanup callback, so it is left
+                // failing loudly rather than half-ported.
+                throw new UnsupportedOperationException(
+                    "WebSocket receive is not yet ported to MethodResult -- see WebSocketHandle.receive");
             }
 
             case METHOD_SEND: {

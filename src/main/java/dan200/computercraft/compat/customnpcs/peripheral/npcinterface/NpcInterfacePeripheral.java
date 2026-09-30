@@ -132,7 +132,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
             // display name from loaded entities (best-effort). Always succeeds.
             case 0: {
                 String uuid = requireString(args, 0, "uuid");
-                return context.executeMainThreadTask(() -> {
+                return new Object[] { context.executeMainThreadTask(() -> {
                     String name = null;
                     try {
                         ICustomNpc<?> npc = resolveByUUID(uuid);
@@ -140,7 +140,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
                     } catch (Throwable ignored) {}
                     m_holder.setLink(uuid, name);
                     return new Object[] { true };
-                });
+                }) };
             }
 
             // ---- 1: linkByName(name [, radius]) ----
@@ -423,7 +423,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
         final String targetUUID = (args.length > uuidArgIdx && args[uuidArgIdx] instanceof String)
             ? (String) args[uuidArgIdx]
             : null;
-        return ctx.executeMainThreadTask(() -> {
+        return new Object[] { ctx.executeMainThreadTask(() -> {
             ICustomNpc<?> npc;
             if (targetUUID != null) {
                 npc = resolveByUUID(targetUUID);
@@ -440,7 +440,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
                 if (npc == null) throw new LuaException("NPC not found — is it currently loaded?");
             }
             return action.run(npc);
-        });
+        }) };
     }
 
     /**
@@ -450,7 +450,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
      */
     private Object[] mainThreadAll(ILuaContext ctx, String targetUUID, NpcAction action)
         throws LuaException, InterruptedException {
-        return ctx.executeMainThreadTask(() -> {
+        return new Object[] { ctx.executeMainThreadTask(() -> {
             if (targetUUID != null) {
                 ICustomNpc<?> npc = resolveByUUID(targetUUID);
                 if (npc == null) {
@@ -465,7 +465,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
                 }
             }
             return null;
-        });
+        }) };
     }
 
     /** Resolves a loaded NPC entity by UUID. Must be called on the main thread. */
@@ -484,7 +484,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
         String name = requireString(args, 0, "npcName");
         double radius = optionalRadius(args, 1);
         final double rSq = radius * radius;
-        return context.executeMainThreadTask(() -> {
+        return new Object[] { context.executeMainThreadTask(() -> {
             AbstractNpcAPI api = AbstractNpcAPI.Instance();
             if (api == null) return new Object[] { false };
             for (IEntity<?> entity : api.getLoadedEntities()) {
@@ -500,7 +500,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
                 }
             }
             return new Object[] { false };
-        });
+        }) };
     }
 
     /**
@@ -511,7 +511,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
         String name = requireString(args, 0, "npcName");
         double radius = optionalRadius(args, 1);
         final double rSq = radius * radius;
-        return context.executeMainThreadTask(() -> {
+        return new Object[] { context.executeMainThreadTask(() -> {
             AbstractNpcAPI api = AbstractNpcAPI.Instance();
             if (api == null) return new Object[] { 0 };
             m_holder.clearLinks();
@@ -529,7 +529,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
                 }
             }
             return new Object[] { count };
-        });
+        }) };
     }
 
     /**
@@ -539,7 +539,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
     private Object[] methodLinkNearest(ILuaContext context, Object[] args) throws LuaException, InterruptedException {
         double radius = optionalRadius(args, 0);
         final double rSq = radius * radius;
-        return context.executeMainThreadTask(() -> {
+        return new Object[] { context.executeMainThreadTask(() -> {
             AbstractNpcAPI api = AbstractNpcAPI.Instance();
             if (api == null) return new Object[] { false };
             ICustomNpc<?> best = null;
@@ -559,7 +559,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
             if (best == null) return new Object[] { false };
             m_holder.setLink(best.getUniqueID(), best.getName());
             return new Object[] { true, best.getUniqueID() };
-        });
+        }) };
     }
 
     /**
@@ -569,7 +569,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
     private Object[] methodScanNpcs(ILuaContext context, Object[] args) throws LuaException, InterruptedException {
         double radius = optionalRadius(args, 0);
         final double rSq = radius * radius;
-        return context.executeMainThreadTask(() -> {
+        return new Object[] { context.executeMainThreadTask(() -> {
             AbstractNpcAPI api = AbstractNpcAPI.Instance();
             if (api == null) return new Object[] { new Object[0] };
             List<Map<String, Object>> entries = new ArrayList<>();
@@ -590,7 +590,7 @@ public class NpcInterfacePeripheral implements IPeripheral {
             }
             entries.sort((a, b) -> Double.compare((Double) a.get("distance"), (Double) b.get("distance")));
             return new Object[] { entries.toArray() };
-        });
+        }) };
     }
 
     // ---- Argument utilities -------------------------------------------------

@@ -25,6 +25,7 @@ import com.google.common.base.Objects;
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.api.turtle.IExtendedTurtleUpgrade;
 import dan200.computercraft.api.turtle.ITurtleAccess;
@@ -49,6 +50,24 @@ public class TurtleBrain implements ITurtleAccess {
     private static Map<Integer, WeakReference<TurtleBrain>> s_allClientBrains = new HashMap<>();
     private static final int ANIM_DURATION = 8;
     private TileTurtle m_owner;
+
+    /**
+     * The turtle's computer family, cached so that off-thread callers need not read the world.
+     *
+     * <p>
+     * {@link #getFamily()} resolves the family by reading the world block, and peripheral methods
+     * run on a ComputerThread worker rather than the server thread. Calling it from a peripheral --
+     * as {@link #getFuelLimit()} did -- therefore touched {@code World.getBlock} off-thread, which
+     * HodgePodge's ServerThreadLongHashMap detects and throws on.
+     *
+     * <p>
+     * The cache is primed by {@link #setFamily} from {@code TileTurtle.createComputer}, which runs
+     * on the main thread. It is deliberately not resolved in the constructor: a {@code TileEntity}
+     * is instantiated before {@code setWorldObj} is called, so the world is null at that point and
+     * any value read there would be wrong. Until it is primed the family is read through, which is
+     * correct but only safe on the main thread.
+     */
+    private volatile ComputerFamily m_family;
     private LinkedList<TurtleCommandQueueEntry> m_commandQueue;
     private int m_commandsIssued;
     private Map<TurtleSide, ITurtleUpgrade> m_upgrades;
@@ -142,6 +161,9 @@ public class TurtleBrain implements ITurtleAccess {
 
     public void setOwner(TileTurtle owner) {
         this.m_owner = owner;
+        // Re-prime in case the brain was moved to a tile of a different family (block copy).
+        // This runs on the main thread, which is what makes reading the world block safe here.
+        this.m_family = owner.getFamily();
     }
 
     public TileTurtle getOwner() {
@@ -149,7 +171,17 @@ public class TurtleBrain implements ITurtleAccess {
     }
 
     public ComputerFamily getFamily() {
-        return this.m_owner.getFamily();
+        // The family cannot change for the lifetime of a turtle, so once it has been read on the
+        // main thread it is served from the cache and never touches the world again.
+        ComputerFamily family = this.m_family;
+        return family != null ? family : this.m_owner.getFamily();
+    }
+
+    /**
+     * Prime the family cache. Must only be called from the main thread.
+     */
+    public void setFamily(ComputerFamily family) {
+        this.m_family = family;
     }
 
     public void setupComputer(ServerComputer computer) {
@@ -559,22 +591,11 @@ public class TurtleBrain implements ITurtleAccess {
         if (this.getWorld().isRemote) {
             throw new UnsupportedOperationException();
         } else {
-            int commandID = this.issueCommand(command);
-
-            Object[] response;
-            do {
-                response = context.pullEvent("turtle_response");
-            } while (response.length < 3 || !(response[1] instanceof Number)
-                || !(response[2] instanceof Boolean)
-                || ((Number) response[1]).intValue() != commandID);
-
-            Object[] returnValues = new Object[response.length - 2];
-
-            for (int i = 0; i < returnValues.length; i++) {
-                returnValues[i] = response[i + 2];
-            }
-
-            return returnValues;
+            long commandID = this.issueCommand(command);
+            // The bridge owns the retry loop that used to live here. A turtle_response event is
+            // ("turtle_response", commandId, ...returnValues), with no success flag, so offset 2
+            // and no success check.
+            return new Object[] { MethodResult.event("turtle_response", commandID, 2) };
         }
     }
 
