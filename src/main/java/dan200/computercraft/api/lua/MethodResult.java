@@ -81,12 +81,33 @@ public final class MethodResult {
      * @return A result that waits for {@code eventName} with {@code taskId}.
      */
     public static MethodResult task(String eventName, long taskId) {
+        return task(eventName, taskId, null);
+    }
+
+    /**
+     * Wait for a task result event, running {@code onFailure} if the task reports failure.
+     *
+     * <p>
+     * This exists because the error is raised here, inside the callback, rather than by the
+     * method that queued the task. A caller that needs to clean up something it allocated for the
+     * task -- cancelling the task's own queue entry, say -- used to do that in a catch block
+     * around the wait, and that no longer runs.
+     *
+     * @param eventName The event to wait for.
+     * @param taskId    The correlation ID the event must carry.
+     * @param onFailure Run just before the Lua error is raised. May be null.
+     * @return A result that waits for {@code eventName} with {@code taskId}.
+     */
+    public static MethodResult task(String eventName, long taskId, Runnable onFailure) {
         return pullEvent(event -> {
             if (!matches(event, eventName, taskId)) {
                 return null;
             }
             // The success flag lives at index 2, before the values -- test it before slicing.
             if (event.length > 2 && event[2] instanceof Boolean && !(Boolean) event[2]) {
+                if (onFailure != null) {
+                    onFailure.run();
+                }
                 String message = event.length > 3 && event[3] instanceof String ? (String) event[3]
                     : "Java Exception Thrown";
                 throw new LuaException(message, 0);

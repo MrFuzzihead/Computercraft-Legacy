@@ -118,4 +118,40 @@ class MethodResultMatchTest {
         assertTrue(empty.isImmediate());
         assertEquals(0, empty.getResults().length);
     }
+
+    @Test
+    @DisplayName("a task failure runs the failure hook before raising")
+    void taskFailureRunsHookThenThrows() {
+        boolean[] ran = new boolean[1];
+        MethodResult pending = MethodResult.task("task_complete", 7, () -> ran[0] = true);
+
+        LuaException thrown = org.junit.jupiter.api.Assertions
+            .assertThrows(LuaException.class, () -> feed(pending, "task_complete", 7.0, Boolean.FALSE, "it broke"));
+
+        assertTrue(ran[0], "the failure hook must run before the error is raised");
+        assertEquals("it broke", thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a task success does not run the failure hook")
+    void taskSuccessSkipsHook() throws Exception {
+        boolean[] ran = new boolean[1];
+        MethodResult pending = MethodResult.task("task_complete", 7, () -> ran[0] = true);
+
+        MethodResult answer = feed(pending, "task_complete", 7.0, Boolean.TRUE, "ok");
+
+        assertNotNull(answer);
+        assertTrue(answer.isImmediate());
+        assertTrue(!ran[0], "a successful task must not run the failure hook");
+    }
+
+    @Test
+    @DisplayName("a non-matching event does not run the failure hook")
+    void nonMatchingEventSkipsHook() throws Exception {
+        boolean[] ran = new boolean[1];
+        MethodResult pending = MethodResult.task("task_complete", 7, () -> ran[0] = true);
+
+        assertNull(feed(pending, "key_up", 7.0));
+        assertTrue(!ran[0], "an unrelated event must not run the failure hook");
+    }
 }

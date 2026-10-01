@@ -61,10 +61,11 @@ public class LuaEnvironment implements ILuaEnvironment {
     public Object[] executeTask(IComputerAccess access, ILuaContext context, ILuaTask task, int delay)
         throws LuaException, InterruptedException {
         long id = issueTask(access, task, delay);
-        // The bridge now owns the retry loop that used to live here. A failure surfaces as a
-        // Lua error, as before. TODO(stage 2): the DelayedTasks.cancel(id) calls on the failure
-        // path are lost, because the bridge raises the error rather than this method.
-        return new Object[] { MethodResult.task(ILuaEnvironment.EVENT_NAME, id) };
+        // The bridge owns the retry loop that used to live here, and the Lua error is raised from
+        // inside its callback -- so the catch blocks that used to cancel the queued task never
+        // run. The cancellation is handed over as a failure hook instead, so a task that fails is
+        // still removed from the queue rather than lingering until its delay elapses.
+        return new Object[] { MethodResult.task(ILuaEnvironment.EVENT_NAME, id, () -> DelayedTasks.cancel(id)) };
     }
 
     @Override
