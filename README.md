@@ -1,7 +1,10 @@
 # Computercraft-Legacy
 
 [![](https://jitpack.io/v/MrFuzzihead/Computercraft-Legacy.svg)](https://jitpack.io/#MrFuzzihead/Computercraft-Legacy)
-[![](https://github.com/MrFuzzihead/Computercraft-Legacy/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/MrFuzzihead/Computercraft-Legacy/actions/workflows/build-and-test.yml)
+[![Build status](https://github.com/MrFuzzihead/Computercraft-Legacy/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/MrFuzzihead/Computercraft-Legacy/actions/workflows/build-and-test.yml)
+[![Latest release](https://img.shields.io/github/v/release/MrFuzzihead/Computercraft-Legacy?include_prereleases&sort=semver)](https://github.com/MrFuzzihead/Computercraft-Legacy/releases/latest)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.7.10-62a34a)](https://minecraft.wiki/w/Java_Edition_1.7.10)
+[![Forge](https://img.shields.io/badge/Forge-10.13.4.1614-1e2b4f)](https://files.minecraftforge.net/net/minecraftforge/forge/index_1.7.10.html)
 
 ComputerCraft for Minecraft 1.7.10, maintained for modern Forge, GTNH and custom servers.
 
@@ -40,22 +43,22 @@ Bugfixes:
   the underlying issue traces to a
   [SpongeCommon change](https://github.com/SpongePowered/SpongeCommon/commit/6a15cf8f9114efacc818edd7bbd0e9ef9d2405b2).
 - Reflection has been removed from `ComputerCraftAPI` and the peripheral
-  registration path, in favour of direct calls.
+  registration path, in favor of direct calls.
 
 Backported from the 1.8 line:
 
-- The **Cobalt** Lua runtime replaces LuaJ, fixing re-entrancy and bringing the
-  runtime closer to reference Lua 5.1/5.2 behaviour.
+- The **Cobalt** Lua runtime replaces LuaJ, fixing re-entrance and bringing the
+  runtime closer to reference Lua 5.1/5.2 behavior.
 - The extended Lua API surface (`IArguments`, `ILuaAPI`, `ArgumentDelegator`,
   `ILuaEnvironment`, and friends) and the peripheral argument model.
 - The computer and peripheral registry architecture.
-- Terminal colour palette support, persisted as the packed `int[16]` NBT key
+- Terminal color palette support, persisted as the packed `int[16]` NBT key
   `term_palette`.
 
 Original additions:
 
 - **`websocket` API** — WebSocket client support for Computers.
-- **Redstone relay** peripheral, including bundled-colour handling.
+- **Redstone relay** peripheral, including bundled-color handling.
 - **ChatBox** peripheral integration.
 - **Speaker** peripheral with a `cc.audio.tts` text-to-speech helper.
 - **CustomNPCs** peripherals: NPC interface, NPC detector and trader role.
