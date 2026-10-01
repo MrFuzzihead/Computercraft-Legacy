@@ -133,7 +133,7 @@ The WebSocket handle returned by `websocket_success` is a Java `ILuaObject` (`We
 
 | Method | Notes |
 |---|---|
-| `handle.receive([timeout])` | Loops on `ILuaContext.pullEventRaw` filtering for `websocket_message(url, msg, isBinary)` and `websocket_closed(url)` events. Returns `(message, isBinary)` on success (1.80pr1.13). Optional wall-clock deadline (1.87.0). On connection close returns `nil, nil, "Connection closed"`; on timeout returns `nil, nil, "Timeout"` (1.117.0). |
+| `handle.receive([timeout])` | Suspends the Lua call via `MethodResult.pullEvent` and a `ReceiveCallback`, which is handed every event while parked. Matches `websocket_message(url, msg, isBinary)` and `websocket_closed(url)`; returns `(message, isBinary)` on success (1.80pr1.13). Optional wall-clock deadline (1.87.0). On connection close returns `nil, nil, "Connection closed"`; on timeout returns `nil, nil, "Timeout"` (1.117.0). The scheduled timeout is cancelled inside the callback, since a `finally` cannot survive a coroutine suspension. Mirrors CC: Tweaked's `WebsocketHandle.ReceiveCallback`. |
 | `handle.send(message [, binary])` | Sends a text frame by default; `binary = true` sends a binary frame (`ByteBuffer`) (1.81.0). Throws `LuaException` if the connection is closed. |
 | `handle.close()` | Initiates a WebSocket close handshake. Safe to call multiple times. |
 | `handle.getResponseHeaders()` | ✅ Returns a flat `{string: string}` map of the HTTP response headers received during the WebSocket opening handshake. Headers are captured in `WebSocketRequest.onOpen` from the `ServerHandshake` object provided by the Java-WebSocket library. |

@@ -128,7 +128,7 @@ See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for L
 | Dependency | Role |
 |---|---|
 | com.gtnewhorizons.gtnhconvention | Build plugin |
-| org.squiddev:Cobalt:0.6.0 | Lua 5.1/5.2 runtime (shadowed, MIT) |
+| cc.tweaked:cobalt:0.9.9 | Lua 5.1/5.2 runtime (shadowed, MIT; published as org.squiddev:Cobalt before the rename) |
 | org.java-websocket:Java-WebSocket:1.5.6 | WebSocket client (shadowed, MIT) |
 | org.slf4j:slf4j-api:2.0.6 | Transitive of Java-WebSocket; present in the shipped jar but **undeclared** in `dependencies.gradle` (MIT) |
 | com.github.GTNewHorizons:ForgeMultipart | Multipart peripheral support |

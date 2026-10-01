@@ -45,8 +45,9 @@ the CCPL.
 --------------------------------------------
 
 This project also incorporates code backported from CC: Tweaked
-(https://github.com/cc-tweaked/CC-Tweaked), the SquidDev-maintained fork
-of ComputerCraft. That backport is substantial, and predates the Minecraft
+(https://github.com/cc-tweaked/CC-Tweaked), a fork of ComputerCraft
+originally maintained by SquidDev and now under the cc-tweaked organisation.
+That backport is substantial, and predates the Minecraft
 1.7.10 code it is layered onto. In outline it covers:
 
   - the Cobalt Lua runtime integration, in
@@ -56,7 +57,8 @@ of ComputerCraft. That backport is substantial, and predates the Minecraft
     includes interfaces that do not exist in ComputerCraft 1.7.10 at all
     (ILuaAPI, IArguments, ArgumentDelegator, IBinaryHandler, ILuaEnvironment,
     IExtendedLuaObject, IExtendedLuaTask, ILuaAPIFactory,
-    ILuaObjectWithArguments, IPeripheralWithArguments)
+    ILuaObjectWithArguments, IPeripheralWithArguments, MethodResult,
+    ILuaCallback)
   - the Lua library and delayed-task runtime in
     dan200.computercraft.core.lua.lib (DelayedTask, DelayedTasks,
     LuaEnvironment, LuaHelpers, BinaryConverter)
@@ -94,9 +96,11 @@ The following libraries are shaded into the released jar. All are MIT
 licensed, and are redistributed with their license texts in LICENSE-Cobalt,
 LICENSE-Java-WebSocket and LICENSE-slf4j-api.
 
-  Cobalt 0.6.0               MIT    LICENSE-Cobalt
-      https://github.com/SquidDev/Cobalt
-      A re-entrant fork of LuaJ, used as the Lua 5.1/5.2 runtime.
+  Cobalt 0.9.9               MIT    LICENSE-Cobalt
+      https://github.com/cc-tweaked/Cobalt
+      A re-entrant fork of LuaJ, used as the Lua 5.1/5.2 runtime. Published
+      under the cc.tweaked Maven coordinate; earlier releases were published
+      as org.squiddev:Cobalt.
       Copyright Luaj.org (2009-2011) and SquidDev (2015-2020).
 
   Java-WebSocket 1.5.6       MIT    LICENSE-Java-WebSocket
