@@ -188,6 +188,7 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         // peripheral is waiting for -- a computer that is mid turtle.forward() must still see
         // turtle_response even though the Lua filter is set to something else entirely.
         Varargs args = buildEventArgs(eventName, arguments);
+        Object[] raw = rawEventArgs(eventName, arguments);
 
         // A peripheral parked on a MethodResult is waiting for an event. Cobalt already knows how
         // to route an event to a suspended ResumableVarArgFunction -- the suspension recorded its
@@ -199,6 +200,15 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
             // wanted -- if not, the call simply yields again. Filtering here rather than in the
             // callback would mean reimplementing the match, and the callback is what allows
             // cleanup (cancelling a timer, closing a resource) to run when the wait ends.
+            //
+            // The callback is handed the ORIGINAL Object[] arguments, with the event name
+            // prepended, rather than being round-tripped through Cobalt values. Converting to
+            // LuaValues and back loses anything toValue does not understand: a Map in an event
+            // became a LuaTable, which converted back to NIL, so peripheral.getItemDetail
+            // returned an empty result for a slot holding an item.
+            // Hand the callback the queued arguments themselves, not a round trip
+            // through LuaValues: see rawEventArgs.
+            pendingRaw = raw;
             runThread(args);
             return;
         }
@@ -358,6 +368,17 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     private MethodResult pendingSuspend;
 
     /**
+     * The raw event the pending suspension is being offered, as {@code queueEvent} produced
+     * it: the event name at index 0 followed by the arguments unchanged.
+     *
+     * <p>
+     * Held separately from the Cobalt varargs because a peripheral's callback should see
+     * the values the event was queued with. Converting them through LuaValues and back loses
+     * anything {@code toValue} does not handle -- a Map became a LuaTable, then NIL.
+     */
+    private Object[] pendingRaw;
+
+    /**
      * Wraps one API method so it can suspend and be resumed.
      *
      * <p>
@@ -424,14 +445,16 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
             if (pending == null) {
                 return NONE;
             }
+            Object[] raw = pendingRaw;
 
             // The callback decides: an immediate result finishes the call, another suspend means
             // this event was not the one it was waiting for and we keep waiting.
             MethodResult next;
             try {
-                next = pending.resumeWith(toObjectArray(value));
+                next = pending.resumeWith(raw);
             } catch (LuaException e) {
                 pendingSuspend = null;
+                pendingRaw = null;
                 throw new LuaError(e.getMessage(), e.getLevel());
             }
 
@@ -442,6 +465,7 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
 
             if (next.isImmediate()) {
                 pendingSuspend = null;
+                pendingRaw = null;
                 return toValues(next.getResults());
             }
 
@@ -452,6 +476,7 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         @Override
         public Varargs resumeError(LuaState state, Object token, LuaError error) throws LuaError, UnwindThrowable {
             pendingSuspend = null;
+            pendingRaw = null;
             throw error;
         }
     }
@@ -543,54 +568,26 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     }
 
     /**
-     * Convert a Cobalt {@link Varargs} into plain Java objects.
+     * Build the event as an {@link Object[]}: the event name at index 0, then the arguments
+     * exactly as {@code queueEvent} received them.
      *
      * <p>
-     * Two things matter here, and both were bugs first:
-     * <ul>
-     * <li>{@link Varargs#arg(int)} is <b>1-based</b>. Using {@code arg(i)} with a 0-based loop
-     * shifts every event by one, so index 0 comes back nil and the event name lands at index 1 --
-     * which made every correlation check fail.</li>
-     * <li>The LuaValues must be unwrapped to {@link String}/{@link Number}/{@link Boolean}, not
-     * passed through: {@link MethodResult#matches(Object[])} compares against those Java types,
-     * so a raw {@code LuaString} would never equal a {@code String}.</li>
-     * </ul>
+     * Deliberately not derived from the Cobalt {@link Varargs}. Round-tripping arguments through
+     * Lua values loses anything {@code toValue} does not handle: a {@link java.util.Map} becomes a
+     * LuaTable and converts straight back to NIL, which silently emptied
+     * {@code peripheral.getItemDetail}'s result.
      */
-    private static Object[] toObjectArray(Varargs args) {
-        int count = args == null ? 0 : args.count();
-        Object[] values = new Object[count];
-        for (int i = 0; i < count; i++) {
-            values[i] = toObject(args.arg(i + 1));
+    private static Object[] rawEventArgs(String eventName, Object[] arguments) {
+        int args = arguments == null ? 0 : arguments.length;
+        Object[] values = new Object[(eventName == null ? 0 : 1) + args];
+        int i = 0;
+        if (eventName != null) {
+            values[i++] = eventName;
+        }
+        if (args > 0) {
+            System.arraycopy(arguments, 0, values, i, args);
         }
         return values;
-    }
-
-    /**
-     * Convert a Cobalt {@link LuaValue} into a plain Java object.
-     *
-     * <p>
-     * This must test {@link LuaValue#type()} rather than {@link LuaValue#isString()}. Cobalt's
-     * {@code isString()} is {@code type == TSTRING || type == TNUMBER} -- it answers "can this be
-     * coerced to a string", which is true for numbers too. Checking it first turned every numeric
-     * correlation id into the String {@code "1"}, which is not a {@link Number}, so every event
-     * failed to match and suspended calls hung forever.
-     */
-    private static Object toObject(LuaValue value) {
-        if (value == null || value.isNil()) {
-            return null;
-        }
-        switch (value.type()) {
-            case Constants.TNUMBER:
-                return value.toDouble();
-            case Constants.TSTRING:
-                return value.toString();
-            case Constants.TBOOLEAN:
-                // LuaBoolean only exposes checkBoolean(), which throws on a non-boolean; the
-                // type() check above already guarantees the type, so the rendered form is safe.
-                return Boolean.valueOf(value.toString());
-            default:
-                return value;
-        }
     }
 
     @Override

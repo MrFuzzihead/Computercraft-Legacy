@@ -362,4 +362,76 @@ class MethodResultSuspendResumeTest {
             return new Object[] { MethodResult.of(null, null, "Timeout") };
         }
     }
+
+    /** Suspends on a task event, so its result travels the {@link MethodResult#task} path. */
+    private static final class TaskAPI implements ILuaAPI {
+
+        @Override
+        public String[] getNames() {
+            return new String[] { "task" };
+        }
+
+        @Override
+        public String[] getMethodNames() {
+            return new String[] { "run" };
+        }
+
+        @Override
+        public Object[] callMethod(ILuaContext context, int method, Object[] args) {
+            return new Object[] { MethodResult.task("test_task", 1) };
+        }
+
+        @Override
+        public void startup() {}
+
+        @Override
+        public void advance(double dt) {}
+
+        @Override
+        public void shutdown() {}
+    }
+
+    @Test
+    @DisplayName("a Map carried by an event survives the round trip to Lua")
+    void eventMapBecomesALuaTable() throws Exception {
+        CobaltMachine machine = LuaTestMachine.create();
+        machine.addAPI(new TaskAPI());
+
+        LuaTable globals = run(machine, """
+            local ok, detail = task.run()
+            kind = type(ok)
+            name = ok and ok.name or "MISSING"
+            cnt  = ok and ok.count or "MISSING"
+            """);
+
+        machine.handleEvent(null, new Object[0]);
+
+        java.util.Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("name", "minecraft:stone");
+        detail.put("count", 64);
+        machine.handleEvent("test_task", new Object[] { 1.0, Boolean.TRUE, detail });
+        // Let the coroutine run on past the resumed call and finish.
+        for (int i = 0; i < 5 && !machine.isFinished(); i++) {
+            machine.handleEvent(null, new Object[0]);
+        }
+
+        // Before this was fixed the callback was handed the event after a round trip through
+        // LuaValues, where the Map became a LuaTable and then converted back to NIL -- so
+        // peripheral.getItemDetail() returned an empty result for a slot holding an item.
+        assertEquals(
+            "table",
+            globals.rawget("kind")
+                .toString(),
+            "the Map should arrive as a Lua table");
+        assertEquals(
+            "minecraft:stone",
+            globals.rawget("name")
+                .toString());
+        // Cobalt renders an integral double Lua-style, so 64.0 prints as "64".
+        assertEquals(
+            "64",
+            globals.rawget("cnt")
+                .toString());
+        machine.unload();
+    }
 }
