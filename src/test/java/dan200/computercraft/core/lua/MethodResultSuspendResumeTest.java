@@ -97,7 +97,7 @@ class MethodResultSuspendResumeTest {
     }
 
     /** A peripheral that returns a value directly, with no waiting involved. */
-    private static final class PlainAPI implements ILuaAPI {
+    private static class PlainAPI implements ILuaAPI {
 
         @Override
         public String[] getNames() {
@@ -307,5 +307,59 @@ class MethodResultSuspendResumeTest {
             globals.rawget("got")
                 .toString());
         machine.unload();
+    }
+
+    @Test
+    @DisplayName("an immediate result may return leading nils")
+    void immediateResultWithLeadingNils() throws Exception {
+        CobaltMachine machine = LuaTestMachine.create();
+        machine.addAPI(new NilResultAPI());
+
+        LuaTable globals = run(machine, """
+            local a, b, c = nilresult.values()
+            ga, gb, gc = tostring(a), tostring(b), tostring(c)
+            gn = select('#', nilresult.values())
+            """);
+        for (int i = 0; i < 10 && !machine.isFinished(); i++) {
+            machine.handleEvent(null, new Object[0]);
+        }
+
+        assertEquals(
+            "3",
+            globals.rawget("gn")
+                .toString(),
+            "all three values should be returned");
+        assertEquals(
+            "nil",
+            globals.rawget("ga")
+                .toString());
+        assertEquals(
+            "nil",
+            globals.rawget("gb")
+                .toString());
+        assertEquals(
+            "Timeout",
+            globals.rawget("gc")
+                .toString());
+        machine.unload();
+    }
+
+    /** Returns {@code (nil, nil, "Timeout")} immediately, as the websocket timeout path does. */
+    private static final class NilResultAPI extends PlainAPI {
+
+        @Override
+        public String[] getNames() {
+            return new String[] { "nilresult" };
+        }
+
+        @Override
+        public String[] getMethodNames() {
+            return new String[] { "values" };
+        }
+
+        @Override
+        public Object[] callMethod(ILuaContext context, int method, Object[] args) {
+            return new Object[] { MethodResult.of(null, null, "Timeout") };
+        }
     }
 }
