@@ -18,23 +18,21 @@ import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
 import org.squiddev.cobalt.LuaThread;
 import org.squiddev.cobalt.LuaValue;
-import org.squiddev.cobalt.OperationHelper;
 import org.squiddev.cobalt.UnwindThrowable;
 import org.squiddev.cobalt.Varargs;
 import org.squiddev.cobalt.compiler.CompileException;
 import org.squiddev.cobalt.compiler.LoadState;
 import org.squiddev.cobalt.debug.DebugFrame;
-import org.squiddev.cobalt.debug.DebugHandler;
-import org.squiddev.cobalt.debug.DebugState;
+import org.squiddev.cobalt.function.Dispatch;
 import org.squiddev.cobalt.function.LibFunction;
 import org.squiddev.cobalt.function.LuaFunction;
-import org.squiddev.cobalt.function.VarArgFunction;
+import org.squiddev.cobalt.function.ResumableVarArgFunction;
+import org.squiddev.cobalt.interrupt.InterruptAction;
 import org.squiddev.cobalt.lib.BaseLib;
 import org.squiddev.cobalt.lib.CoroutineLib;
 import org.squiddev.cobalt.lib.MathLib;
 import org.squiddev.cobalt.lib.StringLib;
 import org.squiddev.cobalt.lib.TableLib;
-import org.squiddev.cobalt.lib.platform.VoidResourceManipulator;
 
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.lua.ArgumentDelegator;
@@ -42,6 +40,7 @@ import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.ITask;
@@ -61,68 +60,64 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     private LuaThread mainThread;
 
     private String eventFilter = null;
-    private String hardAbort = null;
-    private String softAbort = null;
+
+    /**
+     * Written by the computer thread and read by the VM thread, so both must be volatile --
+     * this mirrors the {@code volatile} hard-abort flag in CC: Tweaked's TimeoutState.
+     */
+    private volatile String hardAbort = null;
+    private volatile String softAbort = null;
+
+    /** Whether the current soft abort has already been delivered, as a catchable LuaError. */
+    private boolean thrownSoftAbort;
+
+    /**
+     * Set when the machine is being closed. Mirrors CC: Tweaked's {@code isDisposed}: the
+     * interrupt handler turns it into a {@link HardAbortError} which unwinds the VM, replacing
+     * Cobalt 0.6's {@code state.abandon()}.
+     */
+    private volatile boolean isDisposed;
 
     public CobaltMachine(Computer computer) {
         this.computer = computer;
 
         final LuaState state = this.state = LuaState.builder()
-            .resourceManipulator(new VoidResourceManipulator())
-            .debug(new DebugHandler() {
-
-                private int count = 0;
-                private boolean hasSoftAbort;
-
-                @Override
-                public void onInstruction(DebugState ds, DebugFrame di, int pc) throws LuaError, UnwindThrowable {
-                    int count = ++this.count;
-                    if (count > 100000) {
-                        if (hardAbort != null) LuaThread.yield(CobaltMachine.this.state, NONE);
-                        this.count = 0;
-                    } else if (ComputerCraft.timeoutError) {
-                        handleSoftAbort();
-                    }
-
-                    super.onInstruction(ds, di, pc);
+            .interruptHandler(() -> {
+                // Mirrors CC: Tweaked's CobaltLuaMachine interrupt handler. A hard abort is an
+                // Error so Lua cannot pcall its way out of it; the soft abort is a catchable
+                // LuaError, delivered at most once per abort.
+                if (hardAbort != null || isDisposed) throw new HardAbortError();
+                if (ComputerCraft.timeoutError && softAbort != null && !thrownSoftAbort) {
+                    thrownSoftAbort = true;
+                    throw new LuaError(softAbort);
                 }
-
-                @Override
-                public void poll() throws LuaError {
-                    if (hardAbort != null) throw new LuaError(hardAbort);
-                    if (ComputerCraft.timeoutError) handleSoftAbort();
-                }
-
-                public void handleSoftAbort() throws LuaError {
-                    // If the soft abort has been cleared then we can reset our flags and continue.
-                    String message = softAbort;
-                    if (message == null) {
-                        hasSoftAbort = false;
-                        return;
-                    }
-
-                    if (hasSoftAbort && hardAbort == null) {
-                        // If we have been soft aborted but not hard aborted then everything is OK.
-                        return;
-                    }
-
-                    hasSoftAbort = true;
-                    throw new LuaError(message);
-                }
+                // We have no compute-throttling concept, so there is never a reason to suspend.
+                return InterruptAction.CONTINUE;
             })
             .build();
 
-        LuaTable globals = this.globals = new LuaTable();
-        state.setupThread(globals);
+        // The state owns its global environment in Cobalt 0.9.
+        LuaTable globals = this.globals = state.globals();
 
-        // Add basic libraries
-        globals.load(state, new BaseLib());
-        globals.load(state, new TableLib());
-        globals.load(state, new StringLib());
-        globals.load(state, new MathLib());
-        globals.load(state, new CoroutineLib());
+        // Add basic libraries. CC: Tweaked uses CoreLibraries.debugGlobals(state) here, but that
+        // also installs DebugLib and Bit32Lib. ComputerCraft has always exposed just these five
+        // and supplies its own bitop, so the individual add() methods keep behaviour identical.
+        // These declare LuaError in Cobalt 0.9, but they cannot fail on a freshly built state.
+        try {
+            BaseLib.add(state);
+            TableLib.add(state);
+            StringLib.add(state);
+            MathLib.add(state);
+            CoroutineLib.add(state);
+        } catch (LuaError e) {
+            throw new RuntimeException("Failed to install standard libraries", e);
+        }
 
-        LibFunction.bind(globals, PrefixLoader::new, new String[] { "load", "loadstring" });
+        // LibFunction.bind and the VarArgFunction subclassing used by the old PrefixLoader are
+        // both gone in Cobalt 0.9, so the two load variants are created through the public
+        // LibFunction.createV factory and installed over the library versions.
+        globals.rawset("load", PrefixLoader.create(0, globals));
+        globals.rawset("loadstring", PrefixLoader.create(1, globals));
 
         // if (Config.APIs.debug) globals.load(state, new DebugLib());
         // if (Config.APIs.profiler) globals.load(state, new ProfilerLib());
@@ -144,7 +139,11 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
 
         globals.rawset("_CC_VERSION", valueOf(ComputerCraft.getVersion()));
         globals.rawset("_MC_VERSION", valueOf("1.7.10"));
-        globals.rawset("_COBALT_VERSION", valueOf("0.6"));
+        // Must track the cobalt version declared in dependencies.gradle. Cobalt exposes no
+        // runtime version constant and shadowing discards the jar's manifest metadata, so this
+        // is a literal -- CobaltVersionTest reads dependencies.gradle and fails if the two
+        // drift apart, which is how this said "0.6" while the dependency was on 0.9.9.
+        globals.rawset("_COBALT_VERSION", valueOf("0.9.9"));
         if (ComputerCraft.cc_default_settings != null && !ComputerCraft.cc_default_settings.isEmpty()) {
             globals.rawset("_CC_DEFAULT_SETTINGS", valueOf(ComputerCraft.cc_default_settings));
         }
@@ -166,15 +165,14 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         if (mainThread != null) return;
         try {
             LuaFunction value = LoadState.load(state, bios, "@bios.lua", globals);
-            mainThread = new LuaThread(state, value, globals);
-        } catch (CompileException e) {
+            mainThread = new LuaThread(state, value);
+        } catch (CompileException | LuaError e) {
+            // LoadState.load no longer throws IOException in Cobalt 0.9. The bios failing to
+            // load leaves mainThread null, so isFinished() is true and the computer silently
+            // refuses to start -- so this must not be swallowed.
+            ComputerCraft.logger.error("Failed to load bios", e);
             if (mainThread != null) {
-                state.abandon();
-                mainThread = null;
-            }
-        } catch (IOException e) {
-            if (mainThread != null) {
-                state.abandon();
+                close();
                 mainThread = null;
             }
         }
@@ -184,55 +182,127 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     public void handleEvent(String eventName, Object[] arguments) {
         if (mainThread == null) return;
 
+        // An API method parked on a MethodResult (a turtle movement, a scheduled task) is waiting
+        // for exactly this kind of event, and this must be checked BEFORE the event filter below.
+        // The filter is the Lua program's os.pullEvent filter and has no bearing on events a
+        // peripheral is waiting for -- a computer that is mid turtle.forward() must still see
+        // turtle_response even though the Lua filter is set to something else entirely.
+        Varargs args = buildEventArgs(eventName, arguments);
+        Object[] raw = rawEventArgs(eventName, arguments);
+
+        // A peripheral parked on a MethodResult is waiting for an event. Cobalt already knows how
+        // to route an event to a suspended ResumableVarArgFunction -- the suspension recorded its
+        // resumption point in the debug frame -- so delivery is just the ordinary run path. We only
+        // need to decide whether this event is the one the peripheral is waiting for.
+        if (pendingSuspend != null) {
+            // A peripheral is parked waiting for an event. It gets every event, including
+            // unrelated ones, and its MethodResult callback decides whether this is the one it
+            // wanted -- if not, the call simply yields again. Filtering here rather than in the
+            // callback would mean reimplementing the match, and the callback is what allows
+            // cleanup (cancelling a timer, closing a resource) to run when the wait ends.
+            //
+            // The callback is handed the ORIGINAL Object[] arguments, with the event name
+            // prepended, rather than being round-tripped through Cobalt values. Converting to
+            // LuaValues and back loses anything toValue does not understand: a Map in an event
+            // became a LuaTable, which converted back to NIL, so peripheral.getItemDetail
+            // returned an empty result for a slot holding an item.
+            // Hand the callback the queued arguments themselves, not a round trip
+            // through LuaValues: see rawEventArgs.
+            pendingRaw = raw;
+            runThread(args);
+            return;
+        }
+
         if (eventFilter == null || eventName == null
             || eventName.equals(eventFilter)
             || eventName.equals("terminate")) {
-            try {
-                Varargs args = Constants.NONE;
-                if (eventName != null) {
-                    Varargs params = toValues(arguments);
-                    if (params.count() == 0) {
-                        args = valueOf(eventName);
-                    } else {
-                        args = varargsOf(valueOf(eventName), params);
-                    }
-                }
+            runThread(args);
+        }
+    }
 
-                Varargs results = LuaThread.run(mainThread, args);
-                if (hardAbort != null) {
-                    throw new LuaError(hardAbort);
-                }
-
-                LuaValue filter = results.first();
-                if (filter.isString()) {
-                    eventFilter = filter.toString();
-                } else {
-                    eventFilter = null;
-                }
-
-                if (!mainThread.isAlive()) {
-                    mainThread = null;
-                }
-            } catch (LuaError | InterruptedException e) {
-                state.abandon();
-                mainThread = null;
-            } finally {
-                softAbort = null;
-                hardAbort = null;
+    /**
+     * Run (or resume) the main thread with {@code args}, then apply the result to the machine.
+     *
+     * <p>
+     * Mirrors CC: Tweaked's {@code CobaltLuaMachine.handleEvent}: the entry point is always
+     * {@link LuaThread#run}, never {@link LuaThread#resume}. Cobalt records a suspension's
+     * resumption point in the function's debug frame, so running a thread that is parked inside a
+     * {@link ResumableVarArgFunction} delivers {@code args} straight to its {@code resume}. Using
+     * resume() here instead makes Cobalt throw "cannot resume from a suspended thread".
+     *
+     * <p>
+     * A null result means the thread suspended rather than finished, which is a pause.
+     */
+    private void runThread(Varargs args) {
+        try {
+            Varargs results = LuaThread.run(mainThread, args);
+            if (hardAbort != null) {
+                throw new HardAbortError();
             }
 
+            // LuaThread.run returns null when the coroutine suspended rather than finished --
+            // which is what os.pullEvent (coroutine.yield in bios.lua) does on the very first
+            // event, and what a peripheral waiting on a MethodResult does. CC: Tweaked checks for
+            // this and treats it as a pause. Without the check the following results.first()
+            // throws NPE, which escapes handleEvent entirely and leaves the computer dead.
+            if (results == null) {
+                return;
+            }
+
+            LuaValue filter = results.first();
+            if (filter.isString()) {
+                eventFilter = filter.toString();
+            } else {
+                eventFilter = null;
+            }
+
+            if (!mainThread.isAlive()) {
+                mainThread = null;
+            }
+        } catch (HardAbortError e) {
+            // Expected when a computer is force-aborted or unloaded; not an error.
+            close();
+            mainThread = null;
+        } catch (LuaError e) {
+            // The only other signal is "Error resuming bios.lua" on the computer screen, which
+            // is invisible from the log, so record it here too.
+            ComputerCraft.logger.error("Error resuming bios.lua", e);
+            close();
+            mainThread = null;
+        } finally {
+            softAbort = null;
+            hardAbort = null;
+            // Allows a subsequent soft abort to be delivered again, mirroring the
+            // thrownSoftAbort reset in CC: Tweaked's updateTimeout().
+            thrownSoftAbort = false;
         }
     }
 
     @Override
     public void softAbort(String message) {
         softAbort = message;
+        // Wake the VM so the abort is picked up at the next instruction boundary.
+        state.interrupt();
     }
 
     @Override
     public void hardAbort(String message) {
         softAbort = message;
         hardAbort = message;
+        state.interrupt();
+    }
+
+    /**
+     * Forcibly stops a computer. Extends {@link Error} so that it cannot be caught by Lua's
+     * {@code pcall}, mirroring CC: Tweaked's {@code HardAbortError}.
+     */
+    private static final class HardAbortError extends Error {
+
+        private static final long serialVersionUID = 1L;
+
+        private HardAbortError() {
+            super("Hard Abort");
+        }
     }
 
     @Override
@@ -253,8 +323,165 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     @Override
     public void unload() {
         if (this.mainThread == null) return;
-        state.abandon();
+        close();
         mainThread = null;
+    }
+
+    /**
+     * Mirrors CC: Tweaked's {@code close()}: flag the machine as disposed and interrupt the VM
+     * so the interrupt handler raises a {@link HardAbortError} and unwinds the thread.
+     */
+    private void close() {
+        isDisposed = true;
+        state.interrupt();
+    }
+
+    // ==========================================================================
+    // Coroutine suspension, replacing the old blocking ILuaContext#yield / #pullEvent.
+    //
+    // A peripheral that must wait (a turtle movement, a scheduled task) returns a
+    // MethodResult from its callMethod. The wrapper below recognises that sentinel, records
+    // what it is waiting for, and suspends the coroutine via LuaThread.yield -- which unwinds
+    // to LuaThread.run in handleEvent and releases the computer's worker thread. When a
+    // matching event arrives, handleEvent calls LuaThread.resume, which delivers the event to
+    // CobaltCallback.resume below, and the original Lua call continues.
+    //
+    // This is a coroutine suspension, not a thread block. The old blocking design cannot work:
+    // ComputerThread runs a computer's tasks serially on a shared worker pool, so a blocked
+    // peripheral would block the very task that delivers the event it waits for.
+    // ==========================================================================
+
+    /**
+     * The event {@link #issueMainThreadTask} results arrive on, as {@code (name, id, ok, ...)}.
+     */
+    private static final String TASK_COMPLETE_EVENT = "task_complete";
+
+    /**
+     * The suspension a waiting API method is currently parked on, or null.
+     *
+     * <p>
+     * Only one API call can be outstanding per computer at a time: a Lua call is blocked inside
+     * it, so it cannot have started another. Written by the computer thread while running the
+     * machine and read by it again on the next event, so it does not need to be volatile -- the
+     * lane is serial.
+     */
+    private MethodResult pendingSuspend;
+
+    /**
+     * The raw event the pending suspension is being offered, as {@code queueEvent} produced
+     * it: the event name at index 0 followed by the arguments unchanged.
+     *
+     * <p>
+     * Held separately from the Cobalt varargs because a peripheral's callback should see
+     * the values the event was queued with. Converting them through LuaValues and back loses
+     * anything {@code toValue} does not handle -- a Map became a LuaTable, then NIL.
+     */
+    private Object[] pendingRaw;
+
+    /**
+     * Wraps one API method so it can suspend and be resumed.
+     *
+     * <p>
+     * Cobalt treats every {@link ResumableVarArgFunction} as a potential suspension point, so the
+     * retry loop that used to live in each peripheral is written once, here.
+     */
+    private final class CobaltCallback extends ResumableVarArgFunction<Object> {
+
+        private final ILuaObject object;
+        private final int method;
+
+        CobaltCallback(ILuaObject object, int method) {
+            this.object = object;
+            this.method = method;
+        }
+
+        @Override
+        protected Varargs invoke(LuaState state, DebugFrame frame, Varargs args) throws LuaError, UnwindThrowable {
+            Object raw;
+            try {
+                if (ComputerCraft.timeoutError) {
+                    String message = softAbort;
+                    if (message != null) {
+                        softAbort = null;
+                        hardAbort = null;
+                        throw new LuaError(message);
+                    }
+                }
+
+                raw = ArgumentDelegator
+                    .delegateLuaObject(object, CobaltMachine.this, method, new CobaltArguments(args));
+            } catch (LuaException e) {
+                throw new LuaError(e.getMessage(), e.getLevel());
+            } catch (InterruptedException e) {
+                throw new LuaError("Interrupted");
+            } catch (Throwable e) {
+                throw new LuaError("Java Exception Thrown: " + e.toString(), 0);
+            }
+
+            // A peripheral signals a suspension either by returning a MethodResult directly (the
+            // form callMethodResult invites) or, for implementations still using the legacy
+            // single-element sentinel array, by returning one holding a MethodResult.
+            Object[] results = raw instanceof Object[] ? (Object[]) raw : null;
+            if (raw instanceof MethodResult
+                || results != null && results.length == 1 && results[0] instanceof MethodResult) {
+                MethodResult pending = raw instanceof MethodResult ? (MethodResult) raw : (MethodResult) results[0];
+                if (!pending.isImmediate()) {
+                    if (pendingSuspend != null) {
+                        // Two concurrent waits on one machine is not representable; treat it as
+                        // a programming error rather than silently dropping one of them.
+                        throw new LuaError("Attempted to wait twice on the same computer");
+                    }
+                    pendingSuspend = pending;
+                    // Suspends. handleEvent will either resume us with the matching event or
+                    // leave us parked until one arrives.
+                    return LuaThread.yield(state, NONE);
+                }
+                results = pending.getResults();
+            }
+
+            return toValues(results);
+        }
+
+        @Override
+        public Varargs resume(LuaState state, Object token, Varargs value) throws LuaError, UnwindThrowable {
+            MethodResult pending = pendingSuspend;
+            if (pending == null) {
+                return NONE;
+            }
+            Object[] raw = pendingRaw;
+
+            // The callback decides: an immediate result finishes the call, another suspend means
+            // this event was not the one it was waiting for and we keep waiting.
+            MethodResult next;
+            try {
+                next = pending.resumeWith(raw);
+            } catch (LuaException e) {
+                pendingSuspend = null;
+                pendingRaw = null;
+                throw new LuaError(e.getMessage(), e.getLevel());
+            }
+
+            if (next == null) {
+                // Not for us. pendingSuspend is deliberately left set.
+                return LuaThread.yield(state, NONE);
+            }
+
+            if (next.isImmediate()) {
+                pendingSuspend = null;
+                pendingRaw = null;
+                return toValues(next.getResults());
+            }
+
+            pendingSuspend = next;
+            return LuaThread.yield(state, NONE);
+        }
+
+        @Override
+        public Varargs resumeError(LuaState state, Object token, LuaError error) throws LuaError, UnwindThrowable {
+            pendingSuspend = null;
+            pendingRaw = null;
+            throw error;
+        }
     }
 
     private LuaValue wrapLuaObject(final ILuaObject object) {
@@ -262,33 +489,7 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         LuaTable result = new LuaTable(0, methods.length);
 
         for (int i = 0; i < methods.length; i++) {
-            final int method = i;
-            result.rawset(methods[i], new VarArgFunction() {
-
-                @Override
-                public Varargs invoke(LuaState state, Varargs args) throws LuaError {
-                    if (ComputerCraft.timeoutError) {
-                        String message = softAbort;
-                        if (message != null) {
-                            softAbort = null;
-                            hardAbort = null;
-                            throw new LuaError(message);
-                        }
-                    }
-
-                    try {
-                        Object[] results = ArgumentDelegator
-                            .delegateLuaObject(object, CobaltMachine.this, method, new CobaltArguments(args));
-                        return toValues(results);
-                    } catch (LuaException e) {
-                        throw new LuaError(e.getMessage(), e.getLevel());
-                    } catch (InterruptedException e) {
-                        throw new LuaError("Interrupted");
-                    } catch (Throwable e) {
-                        throw new LuaError("Java Exception Thrown: " + e.toString(), 0);
-                    }
-                }
-            });
+            result.rawset(methods[i], new CobaltCallback(object, i));
         }
 
         return result;
@@ -321,7 +522,13 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
                 LuaValue key = toValue(pair.getKey(), tables);
                 LuaValue value = toValue(pair.getValue(), tables);
                 if (!key.isNil() && !value.isNil()) {
-                    table.rawset(key, value);
+                    try {
+                        table.rawset(key, value);
+                    } catch (LuaError e) {
+                        // LuaTable.rawset(LuaValue, LuaValue) is checked in Cobalt 0.9; with
+                        // non-nil, non-NaN keys it cannot fail here.
+                        throw new RuntimeException(e);
+                    }
                 }
             }
 
@@ -349,58 +556,47 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
     }
     // endregion
 
-    @Override
-    public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-        Object[] results = pullEventRaw(filter);
-        if (results.length >= 1 && results[0].equals("terminate")) {
-            throw new LuaException("Terminated", 0);
-        } else {
-            return results;
+    /**
+     * Build the Cobalt varargs for an event, with the event name at index 0.
+     */
+    private Varargs buildEventArgs(String eventName, Object[] arguments) {
+        if (eventName == null) {
+            return Constants.NONE;
         }
-    }
-
-    @Override
-    public Object[] pullEventRaw(String filter) throws InterruptedException {
-        return this.yield(new Object[] { filter });
-    }
-
-    @Override
-    public Object[] yield(Object[] objects) throws InterruptedException {
-        try {
-            Varargs results = LuaThread.yieldBlocking(state, toValues(objects));
-            return CobaltConverter.toObjects(results, 1, false);
-        } catch (InterruptedException e) {
-            throw e;
-        } catch (LuaError e) {
-            throw new RuntimeException(e);
-        } catch (Throwable e) {
-            throw new RuntimeException(e);
+        Varargs params = toValues(arguments);
+        if (params.count() == 0) {
+            return valueOf(eventName);
         }
+        return varargsOf(valueOf(eventName), params);
+    }
+
+    /**
+     * Build the event as an {@link Object[]}: the event name at index 0, then the arguments
+     * exactly as {@code queueEvent} received them.
+     *
+     * <p>
+     * Deliberately not derived from the Cobalt {@link Varargs}. Round-tripping arguments through
+     * Lua values loses anything {@code toValue} does not handle: a {@link java.util.Map} becomes a
+     * LuaTable and converts straight back to NIL, which silently emptied
+     * {@code peripheral.getItemDetail}'s result.
+     */
+    private static Object[] rawEventArgs(String eventName, Object[] arguments) {
+        int args = arguments == null ? 0 : arguments.length;
+        Object[] values = new Object[(eventName == null ? 0 : 1) + args];
+        int i = 0;
+        if (eventName != null) {
+            values[i++] = eventName;
+        }
+        if (args > 0) {
+            System.arraycopy(arguments, 0, values, i, args);
+        }
+        return values;
     }
 
     @Override
-    public Object[] executeMainThreadTask(final ILuaTask task) throws LuaException, InterruptedException {
+    public MethodResult executeMainThreadTask(final ILuaTask task) throws LuaException {
         long taskID = issueMainThreadTask(task);
-
-        Object[] response;
-        do {
-            do {
-                response = this.pullEvent("task_complete");
-            } while (response.length < 3);
-        } while (!(response[1] instanceof Number) || !(response[2] instanceof Boolean)
-            || (long) ((Number) response[1]).intValue() != taskID);
-
-        if (!(Boolean) response[2]) {
-            if (response.length >= 4 && response[3] instanceof String) {
-                throw new LuaException((String) response[3]);
-            } else {
-                throw new LuaException();
-            }
-        } else {
-            Object[] returnValues = new Object[response.length - 3];
-            System.arraycopy(response, 3, returnValues, 0, returnValues.length);
-            return returnValues;
-        }
+        return MethodResult.task(TASK_COMPLETE_EVENT, taskID);
     }
 
     @Override
@@ -443,47 +639,72 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         }
     }
 
-    private static class PrefixLoader extends VarArgFunction {
+    private static class PrefixLoader {
 
         private static final LuaString FUNCTION_STR = valueOf("function");
-        private static final LuaString EQ_STR = valueOf("=");
+        private static final byte EQ_PREFIX = (byte) '=';
+        private static final byte AT_PREFIX = (byte) '@';
 
-        @Override
-        public Varargs invoke(LuaState state, Varargs args) throws LuaError {
-            switch (opcode) {
-                case 0: // "load", // ( func [,chunkname] ) -> chunk | nil, msg
-                {
-                    LuaValue func = args.arg(1)
-                        .checkFunction();
-                    LuaString chunkname = args.arg(2)
-                        .optLuaString(FUNCTION_STR);
-                    if (!chunkname.startsWith('@') && !chunkname.startsWith('=')) {
-                        chunkname = OperationHelper.concat(EQ_STR, chunkname);
-                    }
-                    try {
-                        return LoadState.load(state, new StringInputStream(state, func), chunkname, (LuaTable) env);
-                    } catch (Exception e) {
-                        return varargsOf(NIL, valueOf(e.getMessage()));
-                    }
-                }
-                case 1: // "loadstring", // ( string [,chunkname] ) -> chunk | nil, msg
-                {
-                    LuaString script = args.arg(1)
-                        .checkLuaString();
-                    LuaString chunkname = args.arg(2)
-                        .optLuaString(script);
-                    if (!chunkname.startsWith('@') && !chunkname.startsWith('=')) {
-                        chunkname = OperationHelper.concat(EQ_STR, chunkname);
-                    }
-                    try {
-                        return LoadState.load(state, script.toInputStream(), chunkname, (LuaTable) env);
-                    } catch (Exception e) {
-                        return varargsOf(NIL, valueOf(e.getMessage()));
-                    }
-                }
+        private PrefixLoader() {}
+
+        /** OperationHelper.concat is gone, so the "=" prefix is prepended byte-wise. */
+        private static LuaString prefixEquals(LuaString chunkname) {
+            int length = chunkname.length();
+            byte[] joined = new byte[length + 1];
+            joined[0] = EQ_PREFIX;
+            for (int i = 0; i < length; i++) {
+                joined[i + 1] = chunkname.byteAt(i);
             }
+            return valueOf(joined);
+        }
 
-            return NONE;
+        static LuaValue create(final int opcode, final LuaValue env) {
+            return LibFunction.createV((state, args) -> {
+                // Standard Lua semantics are load(chunk [, chunkname [, mode [, env]]]) and
+                // loadstring(string [, chunkname]), where chunk is a function OR a string.
+                // bios.lua's loadfile calls load(<string>, name, "t", env), so both the string
+                // form and the trailing mode/env arguments have to be accepted here.
+                LuaValue chunk = args.arg(1);
+                LuaValue target = opcode == 0 && args.arg(4)
+                    .type() == Constants.TTABLE ? args.arg(4) : env;
+
+                switch (opcode) {
+                    case 0: // "load", // ( func|string [,chunkname [,mode [,env]]] ) -> chunk | nil, msg
+                    {
+                        LuaString chunkname = args.arg(2)
+                            .isNil() ? FUNCTION_STR
+                                : args.arg(2)
+                                    .optLuaString(FUNCTION_STR);
+                        if (!chunkname.startsWith(AT_PREFIX) && !chunkname.startsWith(EQ_PREFIX)) {
+                            chunkname = prefixEquals(chunkname);
+                        }
+                        try {
+                            InputStream stream = chunk.isString() ? chunk.checkLuaString()
+                                .toInputStream() : new StringInputStream(state, chunk.checkFunction());
+                            return LoadState.load(state, stream, chunkname, target);
+                        } catch (Exception e) {
+                            return varargsOf(NIL, valueOf(e.getMessage()));
+                        }
+                    }
+                    case 1: // "loadstring", // ( string [,chunkname] ) -> chunk | nil, msg
+                    {
+                        LuaString script = args.arg(1)
+                            .checkLuaString();
+                        LuaString chunkname = args.arg(2)
+                            .optLuaString(script);
+                        if (!chunkname.startsWith(AT_PREFIX) && !chunkname.startsWith(EQ_PREFIX)) {
+                            chunkname = prefixEquals(chunkname);
+                        }
+                        try {
+                            return LoadState.load(state, script.toInputStream(), chunkname, env);
+                        } catch (Exception e) {
+                            return varargsOf(NIL, valueOf(e.getMessage()));
+                        }
+                    }
+                    default:
+                        return NONE;
+                }
+            });
         }
     }
 
@@ -504,7 +725,9 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
             if (remaining <= 0) {
                 LuaValue s;
                 try {
-                    s = OperationHelper.call(state, func);
+                    // OperationHelper.call is gone; Dispatch is the public call entry point.
+                    s = Dispatch.invoke(state, func, Constants.NONE)
+                        .first();
                 } catch (LuaError | UnwindThrowable e) {
                     throw new IOException(e.getMessage());
                 }
@@ -513,13 +736,14 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
                 }
                 LuaString ls;
                 try {
-                    ls = s.strvalue();
+                    ls = s.checkLuaString();
                 } catch (LuaError e) {
                     throw new IOException(e.getMessage());
                 }
-                bytes = ls.bytes;
-                offset = ls.offset;
-                remaining = ls.length;
+                // LuaString's backing array is private in Cobalt 0.9.
+                bytes = CobaltConverter.toByteArray(ls);
+                offset = 0;
+                remaining = bytes.length;
                 if (remaining <= 0) {
                     return -1;
                 }

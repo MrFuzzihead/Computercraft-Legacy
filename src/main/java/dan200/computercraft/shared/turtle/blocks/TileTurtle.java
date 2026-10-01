@@ -67,16 +67,20 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
     }
 
     protected final ServerComputer createComputer(int instanceID, int id, int termWidth, int termHeight) {
+        // Resolved once here, on the main thread, and cached on the brain. Peripheral methods run
+        // on a ComputerThread worker and must not read the world block; see TurtleBrain#getFamily.
+        ComputerFamily family = this.getFamily();
         ServerComputer computer = new ServerComputer(
             this.worldObj,
             id,
             this.m_label,
             instanceID,
-            this.getFamily(),
+            family,
             termWidth,
             termHeight);
         computer.setPosition(this.xCoord, this.yCoord, this.zCoord);
         computer.addAPI(new TurtleAPI(computer.getAPIEnvironment(), this.getAccess()));
+        this.m_brain.setFamily(family);
         this.m_brain.setupComputer(computer);
         return computer;
     }

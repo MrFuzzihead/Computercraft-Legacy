@@ -24,11 +24,13 @@ import org.junit.jupiter.api.Test;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.IComputerEnvironment;
 import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.terminal.Terminal;
+import dan200.computercraft.testsupport.LuaResults;
 
 /**
  * Unit tests for {@link WebSocketHandle}.
@@ -95,28 +97,16 @@ class WebSocketHandleTest {
      * the queue is empty.
      */
     private static ILuaContext makeContext(Object[]... events) {
-        Queue<Object[]> queue = new ArrayDeque<>(Arrays.asList(events));
+        return makeContext(Arrays.asList(events));
+    }
+
+    private static ILuaContext makeContext(java.util.List<Object[]> eventList) {
+        Queue<Object[]> queue = new ArrayDeque<>(eventList);
         return new ILuaContext() {
 
             @Override
-            public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-                return pullEventRaw(filter);
-            }
-
-            @Override
-            public Object[] pullEventRaw(String filter) throws InterruptedException {
-                if (queue.isEmpty()) throw new InterruptedException("no more events");
-                return queue.poll();
-            }
-
-            @Override
-            public Object[] yield(Object[] args) throws InterruptedException {
-                return pullEventRaw(null);
-            }
-
-            @Override
-            public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-                return null;
+            public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+                return MethodResult.of();
             }
 
             @Override
@@ -236,25 +226,8 @@ class WebSocketHandleTest {
         return new ILuaContext() {
 
             @Override
-            public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-                return pullEventRaw(filter);
-            }
-
-            @Override
-            public Object[] pullEventRaw(String filter) throws InterruptedException {
-                Object[] event = queue.poll(2, TimeUnit.SECONDS);
-                if (event == null) throw new InterruptedException("test timed out waiting for event");
-                return event;
-            }
-
-            @Override
-            public Object[] yield(Object[] args) throws InterruptedException {
-                return pullEventRaw(null);
-            }
-
-            @Override
-            public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-                return null;
+            public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+                return MethodResult.of();
             }
 
             @Override
@@ -361,9 +334,11 @@ class WebSocketHandleTest {
     @Test
     void receiveReturnsTextMessage() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(new Object[] { "websocket_message", "ws://example.com", "hello", false });
+        java.util.List<Object[]> events = java.util.Arrays
+            .<Object[]>asList(new Object[] { "websocket_message", "ws://example.com", "hello", false });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertEquals(2, result.length);
@@ -375,9 +350,11 @@ class WebSocketHandleTest {
     void receiveReturnsBinaryMessage() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
         byte[] data = "data".getBytes(StandardCharsets.UTF_8);
-        ILuaContext ctx = makeContext(new Object[] { "websocket_message", "ws://example.com", data, true });
+        java.util.List<Object[]> events = java.util.Arrays
+            .<Object[]>asList(new Object[] { "websocket_message", "ws://example.com", data, true });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertArrayEquals(data, (byte[]) result[0]);
@@ -391,9 +368,11 @@ class WebSocketHandleTest {
     @Test
     void receiveReturnsNullOnWebsocketClosed() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(new Object[] { "websocket_closed", "ws://example.com" });
+        java.util.List<Object[]> events = java.util.Arrays
+            .<Object[]>asList(new Object[] { "websocket_closed", "ws://example.com" });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         // 1.117.0: returns {nil, nil, reason} instead of bare nil
         assertNotNull(result, "result array must not be null");
@@ -410,13 +389,14 @@ class WebSocketHandleTest {
     @Test
     void receiveIgnoresMessagesForDifferentUrl() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(
+        java.util.List<Object[]> events = java.util.Arrays.<Object[]>asList(
             // Different URL — must be skipped
             new Object[] { "websocket_message", "ws://other.com", "not-for-us", false },
             // Correct URL — must be returned
             new Object[] { "websocket_message", "ws://example.com", "hello", false });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertEquals("hello", result[0]);
@@ -425,11 +405,12 @@ class WebSocketHandleTest {
     @Test
     void receiveIgnoresUnrelatedEvents() throws LuaException, InterruptedException {
         StubConnection conn = new StubConnection();
-        ILuaContext ctx = makeContext(
+        java.util.List<Object[]> events = java.util.Arrays.<Object[]>asList(
             new Object[] { "http_success", "ws://example.com", "not-ws" },
             new Object[] { "websocket_message", "ws://example.com", "target", false });
+        ILuaContext ctx = makeContext(events);
 
-        Object[] result = handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]);
+        Object[] result = LuaResults.drive(handle(conn).callMethod(ctx, METHOD_RECEIVE, new Object[0]), events);
 
         assertNotNull(result);
         assertEquals("target", result[0]);
@@ -448,7 +429,9 @@ class WebSocketHandleTest {
         WebSocketHandle h = new WebSocketHandle("ws://example.com", new StubConnection(), env);
         ILuaContext ctx = makeContextFromQueue(sharedQueue);
 
-        Object[] result = h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 0.0 });
+        Object[] result = LuaResults.drive(
+            h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 0.0 }),
+            java.util.Collections.singletonList((Object[]) sharedQueue.poll(5, TimeUnit.SECONDS)));
 
         // 1.117.0: returns {nil, nil, "Timeout"} instead of bare nil
         assertNotNull(result, "result array must not be null");
@@ -468,7 +451,9 @@ class WebSocketHandleTest {
         WebSocketHandle h = new WebSocketHandle("ws://example.com", new StubConnection(), env);
         ILuaContext ctx = makeContextFromQueue(sharedQueue);
 
-        Object[] result = h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 60.0 });
+        Object[] result = LuaResults.drive(
+            h.callMethod(ctx, METHOD_RECEIVE, new Object[] { 60.0 }),
+            java.util.Collections.singletonList((Object[]) sharedQueue.poll(5, TimeUnit.SECONDS)));
 
         assertNotNull(result);
         assertEquals("hi", result[0]);

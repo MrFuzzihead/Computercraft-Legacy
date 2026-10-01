@@ -7,9 +7,11 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import dan200.computercraft.api.lua.ILuaCallback;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 
 /**
  * The Lua-visible WebSocket handle returned by {@code websocket_success}.
@@ -77,55 +79,26 @@ class WebSocketHandle implements ILuaObject {
         switch (method) {
             case METHOD_RECEIVE: {
                 // receive([timeout])
+                //
+                // This cannot block: the caller's thread is the one that has to deliver the
+                // websocket event. Instead we suspend the Lua call and get handed every event by
+                // ReceiveCallback, which picks the message, the close, or the timeout. Cancelling
+                // the scheduled timeout happens in the callback, which is the only place it can be
+                // correct -- a finally block cannot survive a coroutine suspension.
                 boolean hasTimeout = args != null && args.length > 0 && args[0] instanceof Number;
-
-                // Schedule a wakeup event so pullEventRaw is guaranteed to return even on
-                // an idle computer (one with no queued events). Without this, pullEventRaw
-                // would block indefinitely and the timeout would never be observed.
-                ScheduledFuture<?> timeoutFuture = null;
-                final long timeoutId;
+                final double timeoutId;
                 if (hasTimeout) {
-                    double seconds = ((Number) args[0]).doubleValue();
                     timeoutId = NEXT_TIMEOUT_ID.incrementAndGet();
-                    long millis = Math.max(0, (long) (seconds * 1000));
-                    timeoutFuture = TIMEOUT_SCHEDULER.schedule(
-                        () -> m_environment.queueEvent(TIMEOUT_EVENT, new Object[] { (double) timeoutId }),
-                        millis,
-                        TimeUnit.MILLISECONDS);
                 } else {
                     timeoutId = 0;
                 }
 
-                try {
-                    while (true) {
-                        Object[] event = context.pullEventRaw(null);
+                ScheduledFuture<?> timeoutFuture = hasTimeout ? TIMEOUT_SCHEDULER.schedule(
+                    () -> m_environment.queueEvent(TIMEOUT_EVENT, new Object[] { timeoutId }),
+                    Math.max(0, (long) ((((Number) args[0]).doubleValue()) * 1000)),
+                    TimeUnit.MILLISECONDS) : null;
 
-                        if (event != null && event.length >= 1 && event[0] instanceof String) {
-                            String eventName = (String) event[0];
-
-                            if ("websocket_message".equals(eventName) && event.length >= 4 && m_url.equals(event[1])) {
-                                return new Object[] { event[2], event[3] };
-                            }
-
-                            if ("websocket_closed".equals(eventName) && event.length >= 2 && m_url.equals(event[1])) {
-                                return new Object[] { null, null, "Connection closed" };
-                            }
-
-                            if (hasTimeout && TIMEOUT_EVENT.equals(eventName)
-                                && event.length >= 2
-                                && event[1] instanceof Number
-                                && ((Number) event[1]).longValue() == timeoutId) {
-                                return new Object[] { null, null, "Timeout" };
-                            }
-                        }
-                    }
-                } finally {
-                    // Always cancel the scheduled task so it doesn't fire a spurious
-                    // event into the computer's queue after receive has already returned.
-                    if (timeoutFuture != null) {
-                        timeoutFuture.cancel(false);
-                    }
-                }
+                return new Object[] { new ReceiveCallback(hasTimeout, timeoutId, timeoutFuture).pull };
             }
 
             case METHOD_SEND: {
@@ -163,6 +136,62 @@ class WebSocketHandle implements ILuaObject {
 
             default:
                 return null;
+        }
+    }
+
+    /**
+     * Handles a suspended {@code ws.receive}, deciding which event ends the wait.
+     *
+     * <p>
+     * Mirrors CC: Tweaked's {@code WebsocketHandle.ReceiveCallback}: it is handed every event the
+     * computer receives while the call is parked, and returns {@code pull} again for anything that
+     * is not its own so the call keeps waiting.
+     */
+    private final class ReceiveCallback implements ILuaCallback {
+
+        /** The suspending result handed to Lua; returned again to keep waiting. */
+        final MethodResult pull = MethodResult.pullEvent(this);
+
+        private final boolean hasTimeout;
+
+        private final double timeoutId;
+
+        private final ScheduledFuture<?> timeoutFuture;
+
+        ReceiveCallback(boolean hasTimeout, double timeoutId, ScheduledFuture<?> timeoutFuture) {
+            this.hasTimeout = hasTimeout;
+            this.timeoutId = timeoutId;
+            this.timeoutFuture = timeoutFuture;
+        }
+
+        /** Cancel the scheduled timeout, so it cannot fire into the computer after we are done. */
+        private void cancelTimeout() {
+            if (timeoutFuture != null) {
+                timeoutFuture.cancel(false);
+            }
+        }
+
+        @Override
+        public MethodResult resume(Object[] event) {
+            if (event.length >= 4 && "websocket_message".equals(event[0]) && m_url.equals(event[1])) {
+                cancelTimeout();
+                return MethodResult.of(event[2], event[3]);
+            }
+
+            if (event.length >= 2 && "websocket_closed".equals(event[0]) && m_url.equals(event[1])) {
+                cancelTimeout();
+                return MethodResult.of(null, null, "Connection closed");
+            }
+
+            if (hasTimeout && event.length >= 2
+                && TIMEOUT_EVENT.equals(event[0])
+                && event[1] instanceof Number
+                && ((Number) event[1]).doubleValue() == timeoutId) {
+                return MethodResult.of(null, null, "Timeout");
+            }
+
+            // Not ours: keep waiting.
+            return pull;
         }
     }
 }

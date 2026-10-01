@@ -22,8 +22,10 @@ import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.testsupport.LuaResults;
 
 /**
  * Unit tests for {@link GenericFluidPeripheral}.
@@ -69,28 +71,13 @@ class GenericFluidPeripheralTest {
     private static final ILuaContext SYNC_CONTEXT = new ILuaContext() {
 
         @Override
-        public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-            return task.execute();
+        public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+            return MethodResult.of(task.execute());
         }
 
         @Override
         public long issueMainThreadTask(ILuaTask task) throws LuaException {
             return 0L;
-        }
-
-        @Override
-        public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] pullEventRaw(String filter) throws InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] yield(Object[] args) throws InterruptedException {
-            return null;
         }
     };
 
@@ -277,7 +264,7 @@ class GenericFluidPeripheralTest {
     void tanksEmptyHandlerReturnsCapacityOnly() throws LuaException, InterruptedException {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
 
-        Object[] result = p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_TANKS, new Object[0]);
+        Object[] result = LuaResults.unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_TANKS, new Object[0]));
 
         assertNotNull(result);
         Map<Object, Object> table = (Map<Object, Object>) result[0];
@@ -326,7 +313,7 @@ class GenericFluidPeripheralTest {
         };
         GenericFluidPeripheral p = new GenericFluidPeripheral(nullTankHandler, ForgeDirection.UNKNOWN);
 
-        Object[] result = p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_TANKS, new Object[0]);
+        Object[] result = LuaResults.unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_TANKS, new Object[0]));
 
         assertNotNull(result);
         Map<Object, Object> table = (Map<Object, Object>) result[0];
@@ -342,7 +329,7 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[0]));
+            () -> LuaResults.unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[0])));
     }
 
     @Test
@@ -350,7 +337,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { 42.0 }));
+            () -> LuaResults
+                .unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { 42.0 })));
     }
 
     @Test
@@ -358,7 +346,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest", 0.0 }));
+            () -> LuaResults
+                .unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest", 0.0 })));
     }
 
     @Test
@@ -366,7 +355,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest", -100.0 }));
+            () -> LuaResults
+                .unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest", -100.0 })));
     }
 
     // =========================================================================
@@ -378,7 +368,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "nonexistent" }));
+            () -> LuaResults
+                .unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "nonexistent" })));
         assertTrue(
             ex.getMessage()
                 .contains("nonexistent"));
@@ -395,7 +386,8 @@ class GenericFluidPeripheralTest {
 
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(computer, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "drive_0" }));
+            () -> LuaResults
+                .unwrap(p.callMethod(computer, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "drive_0" })));
         assertTrue(
             ex.getMessage()
                 .contains("drive_0"));
@@ -413,7 +405,7 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[0]));
+            () -> LuaResults.unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[0])));
     }
 
     @Test
@@ -421,7 +413,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { 42.0 }));
+            () -> LuaResults
+                .unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { 42.0 })));
     }
 
     // =========================================================================
@@ -433,7 +426,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral p = new GenericFluidPeripheral(new EmptyTank(1000));
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { "nonexistent" }));
+            () -> LuaResults
+                .unwrap(p.callMethod(NULL_COMPUTER, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { "nonexistent" })));
         assertTrue(
             ex.getMessage()
                 .contains("nonexistent"));
@@ -450,7 +444,8 @@ class GenericFluidPeripheralTest {
 
         LuaException ex = assertThrows(
             LuaException.class,
-            () -> p.callMethod(computer, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { "monitor_0" }));
+            () -> LuaResults
+                .unwrap(p.callMethod(computer, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { "monitor_0" })));
         assertTrue(
             ex.getMessage()
                 .contains("monitor_0"));
@@ -471,7 +466,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral dest = new GenericFluidPeripheral(new EmptyTank(1000));
         IComputerAccess computer = computerWith("dest", dest);
 
-        Object[] result = source.callMethod(computer, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest" });
+        Object[] result = LuaResults
+            .unwrap(source.callMethod(computer, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest" }));
 
         assertNotNull(result);
         assertEquals(0.0, result[0]);
@@ -483,7 +479,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral dest = new GenericFluidPeripheral(new EmptyTank(1000));
         IComputerAccess computer = computerWith("source", source);
 
-        Object[] result = dest.callMethod(computer, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { "source" });
+        Object[] result = LuaResults
+            .unwrap(dest.callMethod(computer, SYNC_CONTEXT, METHOD_PULL_FLUID, new Object[] { "source" }));
 
         assertNotNull(result);
         assertEquals(0.0, result[0]);
@@ -495,7 +492,8 @@ class GenericFluidPeripheralTest {
         GenericFluidPeripheral dest = new GenericFluidPeripheral(new EmptyTank(1000));
         IComputerAccess computer = computerWith("dest", dest);
 
-        Object[] result = source.callMethod(computer, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest", 500.0 });
+        Object[] result = LuaResults
+            .unwrap(source.callMethod(computer, SYNC_CONTEXT, METHOD_PUSH_FLUID, new Object[] { "dest", 500.0 }));
 
         assertNotNull(result);
         assertEquals(0.0, result[0]);

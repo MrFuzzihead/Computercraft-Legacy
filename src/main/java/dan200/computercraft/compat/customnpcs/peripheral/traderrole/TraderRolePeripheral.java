@@ -249,7 +249,7 @@ public class TraderRolePeripheral implements IPeripheral {
 
     private Object[] trader(ILuaContext ctx, TraderAction action) throws LuaException, InterruptedException {
         requireCnpc();
-        return ctx.executeMainThreadTask(() -> action.run(m_tile.resolveTrader()));
+        return new Object[] { ctx.executeMainThreadTask(() -> action.run(m_tile.resolveTrader())) };
     }
 
     private void requireCnpc() throws LuaException {
@@ -269,7 +269,7 @@ public class TraderRolePeripheral implements IPeripheral {
         String name = requireString(args, 0, "npcName");
         double radius = (args.length > 1 && args[1] instanceof Number) ? ((Number) args[1]).doubleValue() : 16.0;
         final double rSq = radius * radius;
-        return context.executeMainThreadTask(() -> {
+        return new Object[] { context.executeMainThreadTask(() -> {
             AbstractNpcAPI api = AbstractNpcAPI.Instance();
             if (api == null) return new Object[] { false };
             for (noppes.npcs.api.entity.IEntity<?> entity : api.getLoadedEntities()) {
@@ -285,14 +285,14 @@ public class TraderRolePeripheral implements IPeripheral {
                 }
             }
             return new Object[] { false };
-        });
+        }) };
     }
 
     private Object[] methodLinkNearest(ILuaContext context, Object[] args) throws LuaException, InterruptedException {
         requireCnpc();
         double radius = (args.length > 0 && args[0] instanceof Number) ? ((Number) args[0]).doubleValue() : 16.0;
         final double rSq = radius * radius;
-        return context.executeMainThreadTask(() -> {
+        return new Object[] { context.executeMainThreadTask(() -> {
             AbstractNpcAPI api = AbstractNpcAPI.Instance();
             if (api == null) return new Object[] { false };
             noppes.npcs.api.entity.ICustomNpc<?> best = null;
@@ -312,7 +312,7 @@ public class TraderRolePeripheral implements IPeripheral {
             if (best == null) return new Object[] { false };
             m_tile.setLink(best.getUniqueID(), best.getName());
             return new Object[] { true };
-        });
+        }) };
     }
 
     /** Resolves an online player by name. Must be called on the main thread. */

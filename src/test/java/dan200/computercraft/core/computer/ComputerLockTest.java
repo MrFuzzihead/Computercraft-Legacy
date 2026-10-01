@@ -95,7 +95,7 @@ class ComputerLockTest {
             return null;
         }).when(api)
             .startup();
-        when(api.callMethod(any(), eq(0), any())).thenAnswer(invocation -> {
+        when(api.callMethodResult(any(), eq(0), any())).thenAnswer(invocation -> {
             luaLocked.set(Thread.holdsLock(computer));
             enteredLua.countDown();
             await(releaseLua);
@@ -195,7 +195,7 @@ class ComputerLockTest {
         drain();
         assertTrue(computer.isOn());
         verify(api).startup();
-        verify(api).callMethod(any(), eq(0), any());
+        verify(api).callMethodResult(any(), eq(0), any());
         assertNotSame(oldMachine, field("m_machine").get(computer));
     }
 

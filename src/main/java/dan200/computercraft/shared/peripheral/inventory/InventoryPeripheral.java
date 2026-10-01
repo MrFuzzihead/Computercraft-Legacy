@@ -75,17 +75,17 @@ public class InventoryPeripheral implements IPeripheralTargeted {
         throws LuaException, InterruptedException {
         switch (method) {
             case METHOD_SIZE: {
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
                         IInventory inv = getInventory();
                         return new Object[] { inv.getSizeInventory() };
                     }
-                });
+                }) };
             }
             case METHOD_LIST: {
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -99,14 +99,14 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         }
                         return new Object[] { result };
                     }
-                });
+                }) };
             }
             case METHOD_GET_ITEM_DETAIL: {
                 if (args.length < 1 || !(args[0] instanceof Number)) {
                     throw new LuaException("Expected number");
                 }
                 final int slot = ((Number) args[0]).intValue();
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -118,14 +118,14 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         }
                         return new Object[] { makeFullDetail(stack) };
                     }
-                });
+                }) };
             }
             case METHOD_GET_ITEM_LIMIT: {
                 if (args.length < 1 || !(args[0] instanceof Number)) {
                     throw new LuaException("Expected number");
                 }
                 final int slot = ((Number) args[0]).intValue();
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -133,7 +133,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         validateSlot(inv, slot);
                         return new Object[] { inv.getInventoryStackLimit() };
                     }
-                });
+                }) };
             }
             case METHOD_PUSH_ITEMS: {
                 if (args.length < 2 || !(args[0] instanceof String) || !(args[1] instanceof Number)) {
@@ -144,7 +144,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                 final int limit = (args.length >= 3 && args[2] instanceof Number) ? ((Number) args[2]).intValue()
                     : Integer.MAX_VALUE;
                 final int toSlot = (args.length >= 4 && args[3] instanceof Number) ? ((Number) args[3]).intValue() : -1;
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -159,7 +159,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         int moved = moveItems(from, fromSlot - 1, to, toSlot <= 0 ? -1 : toSlot - 1, effectiveLimit);
                         return new Object[] { moved };
                     }
-                });
+                }) };
             }
             case METHOD_PULL_ITEMS: {
                 if (args.length < 2 || !(args[0] instanceof String) || !(args[1] instanceof Number)) {
@@ -170,7 +170,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                 final int limit = (args.length >= 3 && args[2] instanceof Number) ? ((Number) args[2]).intValue()
                     : Integer.MAX_VALUE;
                 final int toSlot = (args.length >= 4 && args[3] instanceof Number) ? ((Number) args[3]).intValue() : -1;
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -185,7 +185,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         int moved = moveItems(from, fromSlot - 1, to, toSlot <= 0 ? -1 : toSlot - 1, effectiveLimit);
                         return new Object[] { moved };
                     }
-                });
+                }) };
             }
             default:
                 return null;

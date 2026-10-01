@@ -31,14 +31,14 @@ public class CommandBlockPeripheral implements IPeripheral {
         throws LuaException, InterruptedException {
         switch (method) {
             case 0:
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
                         return new Object[] { CommandBlockPeripheral.this.m_commandBlock.func_145993_a()
                             .func_145753_i() };
                     }
-                });
+                }) };
             case 1:
                 if (arguments.length >= 1 && arguments[0] instanceof String) {
                     final String command = (String) arguments[0];
@@ -61,7 +61,7 @@ public class CommandBlockPeripheral implements IPeripheral {
 
                 throw new LuaException("Expected string");
             case 2:
-                return context.executeMainThreadTask(new ILuaTask() {
+                return new Object[] { context.executeMainThreadTask(new ILuaTask() {
 
                     @Override
                     public Object[] execute() throws LuaException {
@@ -71,7 +71,7 @@ public class CommandBlockPeripheral implements IPeripheral {
                             .func_145760_g();
                         return result > 0 ? new Object[] { true } : new Object[] { false, "Command failed" };
                     }
-                });
+                }) };
             default:
                 return null;
         }

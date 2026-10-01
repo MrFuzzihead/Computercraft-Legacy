@@ -19,21 +19,21 @@ public final class ArgumentDelegator {
      * @param context   The context of the currently running lua thread.
      * @param method    The method index to call
      * @param arguments An instance of {@link IArguments}, representing the arguments passed into peripheral.call().
-     * @return An array of objects, representing values you wish to return to the lua program.
+     * @return An array of objects, or a {@link MethodResult} to suspend the call.
      * @throws LuaException         If the wrong arguments are supplied to your method.
      * @throws InterruptedException If the computer is terminated.
-     * @see ILuaObject#callMethod(ILuaContext, int, Object[])
+     * @see ILuaObject#callMethodResult(ILuaContext, int, Object[])
      * @see ILuaObjectWithArguments#callMethod(ILuaContext, int, IArguments)
      * @see IBinaryHandler
      */
-    public static Object[] delegateLuaObject(ILuaObject object, ILuaContext context, int method, IArguments arguments)
+    public static Object delegateLuaObject(ILuaObject object, ILuaContext context, int method, IArguments arguments)
         throws LuaException, InterruptedException {
         if (object instanceof ILuaObjectWithArguments) {
-            return ((ILuaObjectWithArguments) object).callMethod(context, method, arguments);
+            return ((ILuaObjectWithArguments) object).callMethodResult(context, method, arguments);
         } else if (object instanceof IBinaryHandler) {
-            return object.callMethod(context, method, arguments.asBinary());
+            return object.callMethodResult(context, method, arguments.asBinary());
         } else {
-            return object.callMethod(context, method, arguments.asArguments());
+            return object.callMethodResult(context, method, arguments.asArguments());
         }
     }
 
@@ -45,21 +45,21 @@ public final class ArgumentDelegator {
      * @param context    The context of the currently running lua thread.
      * @param method     The method index to call
      * @param arguments  An instance of {@link IArguments}, representing the arguments passed into peripheral.call().
-     * @return An array of objects, representing values you wish to return to the lua program.
+     * @return An array of objects, or a {@link MethodResult} to suspend the call.
      * @throws LuaException         If the wrong arguments are supplied to your method.
      * @throws InterruptedException If the computer is terminated.
-     * @see IPeripheral#callMethod(IComputerAccess, ILuaContext, int, Object[])
+     * @see IPeripheral#callMethodResult(IComputerAccess, ILuaContext, int, Object[])
      * @see IPeripheralWithArguments#callMethod(IComputerAccess, ILuaContext, int, IArguments)
      * @see IBinaryHandler
      */
-    public static Object[] delegatePeripheral(IPeripheral peripheral, IComputerAccess computer, ILuaContext context,
+    public static Object delegatePeripheral(IPeripheral peripheral, IComputerAccess computer, ILuaContext context,
         int method, IArguments arguments) throws LuaException, InterruptedException {
         if (peripheral instanceof IPeripheralWithArguments) {
-            return ((IPeripheralWithArguments) peripheral).callMethod(computer, context, method, arguments);
+            return ((IPeripheralWithArguments) peripheral).callMethodResult(computer, context, method, arguments);
         } else if (peripheral instanceof IBinaryHandler) {
-            return peripheral.callMethod(computer, context, method, arguments.asBinary());
+            return peripheral.callMethodResult(computer, context, method, arguments.asBinary());
         } else {
-            return peripheral.callMethod(computer, context, method, arguments.asArguments());
+            return peripheral.callMethodResult(computer, context, method, arguments.asArguments());
         }
     }
 }

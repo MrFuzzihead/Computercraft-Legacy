@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
+import dan200.computercraft.testsupport.LuaResults;
 
 /**
  * Unit tests for {@link CommandAPI}.
@@ -58,28 +60,13 @@ class CommandAPITest {
     private static final ILuaContext SYNC_CONTEXT = new ILuaContext() {
 
         @Override
-        public Object[] executeMainThreadTask(ILuaTask task) throws LuaException, InterruptedException {
-            return task.execute();
+        public MethodResult executeMainThreadTask(ILuaTask task) throws LuaException {
+            return MethodResult.of(task.execute());
         }
 
         @Override
         public long issueMainThreadTask(ILuaTask task) throws LuaException {
             return 0L;
-        }
-
-        @Override
-        public Object[] pullEvent(String filter) throws LuaException, InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] pullEventRaw(String filter) throws InterruptedException {
-            return null;
-        }
-
-        @Override
-        public Object[] yield(Object[] args) throws InterruptedException {
-            return null;
         }
     };
 
@@ -173,7 +160,7 @@ class CommandAPITest {
     @Test
     void execNullServerReturnsFalse() throws LuaException, InterruptedException {
         // MinecraftServer.getServer() returns null outside a running server.
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" });
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" }));
 
         assertNotNull(result);
         assertEquals(Boolean.FALSE, result[0]);
@@ -181,7 +168,7 @@ class CommandAPITest {
 
     @Test
     void execNullServerReturnsOutputTable() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" });
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" }));
 
         assertNotNull(result);
         assertInstanceOf(Map.class, result[1]);
@@ -189,7 +176,7 @@ class CommandAPITest {
 
     @Test
     void execNullServerReturnsThreeValues() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" });
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" }));
 
         assertNotNull(result);
         assertEquals(3, result.length, "exec() must return (boolean, table, number)");
@@ -197,7 +184,7 @@ class CommandAPITest {
 
     @Test
     void execNullServerReturnsZeroAffectedCount() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" });
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_EXEC, new Object[] { "say hi" }));
 
         assertNotNull(result);
         assertEquals(0, ((Number) result[2]).intValue());
@@ -223,7 +210,7 @@ class CommandAPITest {
 
     @Test
     void listNullServerReturnsEmptyTable() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_LIST, new Object[0]);
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_LIST, new Object[0]));
 
         assertNotNull(result);
         assertEquals(1, result.length);
@@ -233,7 +220,7 @@ class CommandAPITest {
 
     @Test
     void listWithPrefixNullServerReturnsEmptyTable() throws LuaException, InterruptedException {
-        Object[] result = api.callMethod(SYNC_CONTEXT, METHOD_LIST, new Object[] { "say" });
+        Object[] result = LuaResults.unwrap(api.callMethod(SYNC_CONTEXT, METHOD_LIST, new Object[] { "say" }));
 
         assertNotNull(result);
         Map<?, ?> table = assertInstanceOf(Map.class, result[0]);

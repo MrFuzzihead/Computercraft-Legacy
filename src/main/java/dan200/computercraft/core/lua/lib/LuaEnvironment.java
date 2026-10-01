@@ -17,6 +17,7 @@ import dan200.computercraft.api.lua.ILuaEnvironment;
 import dan200.computercraft.api.lua.ILuaObjectWithArguments;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
+import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.core.apis.IAPIEnvironment;
 import dan200.computercraft.core.apis.ILuaAPI;
@@ -60,33 +61,11 @@ public class LuaEnvironment implements ILuaEnvironment {
     public Object[] executeTask(IComputerAccess access, ILuaContext context, ILuaTask task, int delay)
         throws LuaException, InterruptedException {
         long id = issueTask(access, task, delay);
-
-        Object[] response;
-        try {
-            do {
-                response = context.pullEvent(ILuaEnvironment.EVENT_NAME);
-            } while (response.length < 3 || !(response[1] instanceof Number)
-                || !(response[2] instanceof Boolean)
-                || (long) ((Number) response[1]).intValue() != id);
-        } catch (InterruptedException e) {
-            DelayedTasks.cancel(id);
-            throw e;
-        } catch (LuaException e) {
-            DelayedTasks.cancel(id);
-            throw e;
-        }
-
-        Object[] returnValues = new Object[response.length - 3];
-        if (!(Boolean) response[2]) {
-            if (response.length >= 4 && response[3] instanceof String) {
-                throw new LuaException((String) response[3]);
-            } else {
-                throw new LuaException();
-            }
-        } else {
-            System.arraycopy(response, 3, returnValues, 0, returnValues.length);
-            return returnValues;
-        }
+        // The bridge owns the retry loop that used to live here, and the Lua error is raised from
+        // inside its callback -- so the catch blocks that used to cancel the queued task never
+        // run. The cancellation is handed over as a failure hook instead, so a task that fails is
+        // still removed from the queue rather than lingering until its delay elapses.
+        return new Object[] { MethodResult.task(ILuaEnvironment.EVENT_NAME, id, () -> DelayedTasks.cancel(id)) };
     }
 
     @Override
@@ -151,7 +130,8 @@ public class LuaEnvironment implements ILuaEnvironment {
         @Override
         public Object[] callMethod(ILuaContext context, int method, IArguments arguments)
             throws LuaException, InterruptedException {
-            return ArgumentDelegator.delegateLuaObject(api, context, method, arguments);
+            Object result = ArgumentDelegator.delegateLuaObject(api, context, method, arguments);
+            return result instanceof Object[] ? (Object[]) result : new Object[] { result };
         }
 
         @Override

@@ -239,7 +239,8 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
                         p = m_peripherals[side];
                     }
                     if (p != null) {
-                        return p.call(context, methodName, args.subArgs(2));
+                        Object r = p.call(context, methodName, args.subArgs(2));
+                        return r instanceof Object[] ? (Object[]) r : new Object[] { r };
                     }
                 }
                 throw new LuaException("No peripheral attached");
@@ -373,7 +374,7 @@ public class PeripheralAPI implements ILuaAPI, IAPIEnvironment.IPeripheralChange
             }
         }
 
-        public Object[] call(ILuaContext context, String methodName, IArguments arguments)
+        public Object call(ILuaContext context, String methodName, IArguments arguments)
             throws LuaException, InterruptedException {
             int method = -1;
             synchronized (this) {

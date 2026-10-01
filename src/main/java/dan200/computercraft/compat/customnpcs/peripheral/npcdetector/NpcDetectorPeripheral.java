@@ -171,48 +171,52 @@ public abstract class NpcDetectorPeripheral implements IPeripheral {
         switch (method) {
             case 0: { // getNpcs([radius])
                 double radius = parseRadius(args, 0);
-                return context.executeMainThreadTask(() -> new Object[] { scanNpcs(radius, null, null) });
+                return new Object[] {
+                    context.executeMainThreadTask(() -> new Object[] { scanNpcs(radius, null, null) }) };
             }
             case 1: { // getNpcsByName(name [, radius])
                 String name = requireString(args, 0, "name");
                 double radius = parseRadius(args, 1);
-                return context.executeMainThreadTask(() -> new Object[] { scanNpcs(radius, name, null) });
+                return new Object[] {
+                    context.executeMainThreadTask(() -> new Object[] { scanNpcs(radius, name, null) }) };
             }
             case 2: { // getNpcsInFaction(factionName [, radius])
                 String faction = requireString(args, 0, "factionName");
                 double radius = parseRadius(args, 1);
-                return context.executeMainThreadTask(() -> new Object[] { scanNpcs(radius, null, faction) });
+                return new Object[] {
+                    context.executeMainThreadTask(() -> new Object[] { scanNpcs(radius, null, faction) }) };
             }
             case 3: { // getNearestNpc([radius])
                 double radius = parseRadius(args, 0);
-                return context.executeMainThreadTask(() -> {
+                return new Object[] { context.executeMainThreadTask(() -> {
                     Map<Object, Object> all = scanNpcs(radius, null, null);
                     return all.isEmpty() ? new Object[] { null } : new Object[] { all.get(1) };
-                });
+                }) };
             }
             case 4: { // countNpcs([radius])
                 double radius = parseRadius(args, 0);
-                return context
-                    .executeMainThreadTask(() -> new Object[] { (double) scanNpcs(radius, null, null).size() });
+                return new Object[] { context
+                    .executeMainThreadTask(() -> new Object[] { (double) scanNpcs(radius, null, null).size() }) };
             }
             case 5: { // getPlayers([radius])
                 double radius = parseRadius(args, 0);
-                return context.executeMainThreadTask(() -> new Object[] { scanPlayers(radius) });
+                return new Object[] { context.executeMainThreadTask(() -> new Object[] { scanPlayers(radius) }) };
             }
             case 6: { // getNearestPlayer([radius])
                 double radius = parseRadius(args, 0);
-                return context.executeMainThreadTask(() -> {
+                return new Object[] { context.executeMainThreadTask(() -> {
                     Map<Object, Object> all = scanPlayers(radius);
                     return all.isEmpty() ? new Object[] { null } : new Object[] { all.get(1) };
-                });
+                }) };
             }
             case 7: { // countPlayers([radius])
                 double radius = parseRadius(args, 0);
-                return context.executeMainThreadTask(() -> new Object[] { (double) scanPlayers(radius).size() });
+                return new Object[] {
+                    context.executeMainThreadTask(() -> new Object[] { (double) scanPlayers(radius).size() }) };
             }
             case 8: { // getEntities([radius])
                 double radius = parseRadius(args, 0);
-                return context.executeMainThreadTask(() -> new Object[] { scanAll(radius) });
+                return new Object[] { context.executeMainThreadTask(() -> new Object[] { scanAll(radius) }) };
             }
             default:
                 return null;

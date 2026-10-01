@@ -1,3 +1,22 @@
+> **Status: superseded. Retained as a historical record.**
+>
+> This is the plan as written when the target was Cobalt **0.6.0**, on a
+> Java 8 toolchain. Neither holds any more, and the steps below should not be
+> followed as written:
+>
+> - The dependency is now `shadowImplementation("cc.tweaked:cobalt:0.9.9")`.
+>   The `org.squiddev:Cobalt` coordinate was renamed; 0.6.0 and 0.7.3 are not
+>   the target.
+> - The build no longer targets Java 8. It uses
+>   `enableModernJavaSyntax = modern` and ships native modern bytecode, so the
+>   JVM Downgrader constraint discussed below no longer applies and Cobalt 0.9.x
+>   is usable directly.
+> - `ILuaContext.pullEvent`/`pullEventRaw`/`yield` have been removed in favour of
+>   `MethodResult` and `ILuaCallback`, which suspend the Lua call rather than
+>   blocking. See `docs/METHODRESULT_MIGRATION.md`.
+>
+> For the current state of the port, see `NOTICE` and `docs/TWEAKEDCC_COVERAGE.md`.
+
 # Plan: Upgrade Cobalt Dependency from 0.2 to 0.7.3
 
 Replace the local `libs/Cobalt-0.2.jar` file dependency with the `org.squiddev:Cobalt:0.7.3` Maven artifact,

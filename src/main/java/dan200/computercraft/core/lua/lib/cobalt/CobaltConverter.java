@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-import org.squiddev.cobalt.LuaBaseString;
 import org.squiddev.cobalt.LuaError;
 import org.squiddev.cobalt.LuaString;
 import org.squiddev.cobalt.LuaTable;
@@ -21,6 +20,23 @@ import org.squiddev.cobalt.Varargs;
  * Converts between Cobalt {@link LuaValue} types and Java objects.
  */
 public class CobaltConverter {
+
+    /**
+     * Copy the raw bytes out of a {@link LuaString}.
+     *
+     * <p>
+     * LuaString is now {@code final} with no {@code LuaBaseString} supertype and its backing
+     * array is private, so the bytes are read through the public {@code length}/{@code byteAt}
+     * accessors. This preserves the exact signed bytes the old field access returned.
+     */
+    static byte[] toByteArray(LuaString string) {
+        int length = string.length();
+        byte[] result = new byte[length];
+        for (int i = 0; i < length; i++) {
+            result[i] = string.byteAt(i);
+        }
+        return result;
+    }
 
     public static Object toObject(LuaValue value, boolean binary) throws LuaError {
         return toObject(value, null, binary);
@@ -34,16 +50,9 @@ public class CobaltConverter {
                 return value.toBoolean();
             case TSTRING: {
                 if (binary) {
-                    // value may be a LuaRope (extends LuaBaseString but not LuaString).
-                    // Call strvalue() to resolve the rope into a concrete LuaString first.
-                    LuaString string = ((LuaBaseString) value).strvalue();
-                    if (string.offset == 0 && string.length == string.bytes.length) {
-                        return string.bytes;
-                    } else {
-                        byte[] result = new byte[string.length];
-                        System.arraycopy(string.bytes, string.offset, result, 0, string.length);
-                        return result;
-                    }
+                    // LuaString is final and is the only string type, so a TSTRING value is
+                    // always a LuaString; its backing array is private.
+                    return toByteArray((LuaString) value);
                 } else {
                     return value.toString();
                 }

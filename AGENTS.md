@@ -67,18 +67,20 @@ dan200.computercraft
 
 ## Key Conventions (for Agents)
 
-- Compiles with a JDK 25 toolchain but ships **Java 8 bytecode**, via JVM Downgrader
-  (`enableModernJavaSyntax = jvmDowngrader`, `downgradeTargetVersion = 8`). Modern syntax
-  *and* newer stdlib APIs are both available, unlike the old Jabel setup. The jar is
-  multi-release: Java 7/8 classes sit at the root (all entries must stay <= class version
-  52) with a `META-INF/versions/21/` overlay that Java 21+ prefers. Java 8 ignores the
-  overlay entirely.
-- **JvmDowngrader's limit:** it rewrites language features (records, sealed types, `indy`
-  string concatenation) and can supply stub *classes* absent from Java 8, but it cannot add
-  *methods* to JDK classes that exist on Java 8 and merely lack them — e.g.
-  `Arrays.mismatch` (Java 9) or `Collection.toArray(T[])` (Java 11). Such calls compile into
-  a clean Java 8 jar and then fail with `NoSuchMethodError` at runtime. This matters most
-  for shaded dependencies, which are downgraded without any source-level fixup available.
+- **The mod requires Java 17+.** It builds with `enableModernJavaSyntax = modern` and ships
+  native modern bytecode. The game itself runs on a modern JVM via **lwjgl3ify**, which the
+  GTNH convention injects automatically for `runClient17/21/25` and `runServer17/21/25` — do
+  *not* add lwjgl3ify or HodgePodge to `dependencies.gradle`. Java 8 players are cut off by
+  design; that is the accepted trade for using Cobalt 0.9.9 (records, sealed types) directly
+  instead of downgrading it.
+- **Do not reintroduce a JVM Downgrader multi-release overlay.** FML 1.7.10's `JarDiscoverer`
+  feeds *every* `.class` entry to ASM 5.0.3, which cannot read class files above Java 8. It
+  walks the whole jar, so a `META-INF/versions/N` overlay makes it throw and FML discards the
+  entire mod — silently, with one `failed to read properly` line in the log, and computers that
+  never turn on. The unit tests do **not** catch this, because they run on
+  `testRuntimeClasspath` and never touch the packaged jar. Modern bytecode at the jar *root* is
+  fine; only the overlay trips this. `addon.gradle.kts` documents the full list of what must
+  return together if the build mode is ever switched back to `jvmDowngrader`.
 - Legacy instance fields use `m_` prefix; follow in existing classes.
 - Do not refactor `ComputerCraftAPI` reflection logic.
 - Do not create/edit `dan200.computercraft.Tags` (auto-generated).
@@ -112,20 +114,11 @@ Register in `Computer.java` alongside existing APIs.
 
 - Build: `./gradlew build`
 - Test: `./gradlew test`
-- Run server: `./gradlew runServer`
-- Run on modern Java: `./gradlew runServer25` / `runClient25`. lwjgl3ify and HodgePodge are
-  injected automatically by the convention for these tasks — do **not** add them to
-  `dependencies.gradle`.
+- Run server: `./gradlew runServer` (runs on the configured toolchain, Java 25)
 - Format: `./gradlew spotlessApply`
 - Checkstyle: `./gradlew checkstyleMain`
 
 Tests use JUnit 5 (`useJUnitPlatform()`).
-
-**Known papercut:** with `jvmDowngrader`, the first build after `build/tmp` is cleared fails
-in `verifyTestSuiteExecuted` rather than running tests, because `Test`'s `@SkipWhenEmpty`
-input is snapshotted before `downgradeTestClasses` produces its output. Just re-run the
-build. The guard turns what would otherwise be a green build with zero tests executed into
-a loud failure; see the comment in `addon.gradle.kts` for the full explanation.
 See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for Lua runtime migration details.
 
 ---
@@ -135,7 +128,7 @@ See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for L
 | Dependency | Role |
 |---|---|
 | com.gtnewhorizons.gtnhconvention | Build plugin |
-| org.squiddev:Cobalt:0.6.0 | Lua 5.1/5.2 runtime (shadowed, MIT) |
+| cc.tweaked:cobalt:0.9.9 | Lua 5.1/5.2 runtime (shadowed, MIT; published as org.squiddev:Cobalt before the rename) |
 | org.java-websocket:Java-WebSocket:1.5.6 | WebSocket client (shadowed, MIT) |
 | org.slf4j:slf4j-api:2.0.6 | Transitive of Java-WebSocket; present in the shipped jar but **undeclared** in `dependencies.gradle` (MIT) |
 | com.github.GTNewHorizons:ForgeMultipart | Multipart peripheral support |
