@@ -1,2 +1,9 @@
 before_install:
+  # JitPack's image ships only JDK 8-13, so a Java 25 toolchain request fell through to
+  # Gradle's foojay auto-provisioning, which returned a JRE (no javac/javadoc/jar) and
+  # failed validation. Installing a real JDK 25 via sdkman resolves the toolchain locally.
+  # Same approach as junit-framework's .jitpack.yml.
+  - sdk update
+  - sdk install java 25-open
+  - sdk use java 25-open
   - ./gradlew setupCIWorkspace
