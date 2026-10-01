@@ -397,7 +397,7 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
 
         @Override
         protected Varargs invoke(LuaState state, DebugFrame frame, Varargs args) throws LuaError, UnwindThrowable {
-            Object[] results;
+            Object raw;
             try {
                 if (ComputerCraft.timeoutError) {
                     String message = softAbort;
@@ -408,7 +408,7 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
                     }
                 }
 
-                results = ArgumentDelegator
+                raw = ArgumentDelegator
                     .delegateLuaObject(object, CobaltMachine.this, method, new CobaltArguments(args));
             } catch (LuaException e) {
                 throw new LuaError(e.getMessage(), e.getLevel());
@@ -418,10 +418,13 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
                 throw new LuaError("Java Exception Thrown: " + e.toString(), 0);
             }
 
-            // The sentinel: a peripheral asking to wait hands back a single-element array
-            // holding a MethodResult rather than values.
-            if (results != null && results.length == 1 && results[0] instanceof MethodResult) {
-                MethodResult pending = (MethodResult) results[0];
+            // A peripheral signals a suspension either by returning a MethodResult directly (the
+            // form callMethodResult invites) or, for implementations still using the legacy
+            // single-element sentinel array, by returning one holding a MethodResult.
+            Object[] results = raw instanceof Object[] ? (Object[]) raw : null;
+            if (raw instanceof MethodResult
+                || results != null && results.length == 1 && results[0] instanceof MethodResult) {
+                MethodResult pending = raw instanceof MethodResult ? (MethodResult) raw : (MethodResult) results[0];
                 if (!pending.isImmediate()) {
                     if (pendingSuspend != null) {
                         // Two concurrent waits on one machine is not representable; treat it as

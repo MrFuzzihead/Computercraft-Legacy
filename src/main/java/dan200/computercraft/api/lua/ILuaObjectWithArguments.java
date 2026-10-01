@@ -21,6 +21,28 @@ public interface ILuaObjectWithArguments extends ILuaObject {
      * @throws InterruptedException If the computer is terminated.
      * @see #callMethod(ILuaContext, int, Object[])
      */
+    /**
+     * Invoke a method, allowing the call to suspend by returning a {@link MethodResult}.
+     *
+     * <p>
+     * This is the form the Lua bridge actually calls. It exists because {@link #callMethod}'s
+     * {@code Object[]} return cannot express a suspension -- a peripheral that has to wait for an
+     * event cannot block the thread that would deliver it. See {@link MethodResult}.
+     *
+     * <p>
+     * The default delegates to {@link #callMethod}, so existing implementations -- including
+     * every companion mod written against ComputerCraft 1.7.10 -- compile and behave exactly as
+     * before. Override it to return a {@link MethodResult} directly instead of the single-element
+     * sentinel array.
+     *
+     * @return An {@code Object[]} of values, a {@link MethodResult} to suspend, or null for no
+     *         values.
+     */
+    default Object callMethodResult(ILuaContext context, int method, IArguments arguments)
+        throws LuaException, InterruptedException {
+        return callMethod(context, method, arguments);
+    }
+
     Object[] callMethod(ILuaContext context, int method, IArguments arguments)
         throws LuaException, InterruptedException;
 }

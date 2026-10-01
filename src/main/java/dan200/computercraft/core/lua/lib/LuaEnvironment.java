@@ -130,7 +130,8 @@ public class LuaEnvironment implements ILuaEnvironment {
         @Override
         public Object[] callMethod(ILuaContext context, int method, IArguments arguments)
             throws LuaException, InterruptedException {
-            return ArgumentDelegator.delegateLuaObject(api, context, method, arguments);
+            Object result = ArgumentDelegator.delegateLuaObject(api, context, method, arguments);
+            return result instanceof Object[] ? (Object[]) result : new Object[] { result };
         }
 
         @Override

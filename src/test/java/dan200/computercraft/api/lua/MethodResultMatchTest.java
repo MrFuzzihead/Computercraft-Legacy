@@ -154,4 +154,69 @@ class MethodResultMatchTest {
         assertNull(feed(pending, "key_up", 7.0));
         assertTrue(!ran[0], "an unrelated event must not run the failure hook");
     }
+
+    /**
+     * The compatibility guarantee: an implementation written against ComputerCraft 1.7.10's
+     * {@code Object[] callMethod} must still work, because {@code callMethodResult} defaults to
+     * delegating to it. This is what lets companion mods compile unchanged.
+     */
+    @Test
+    @DisplayName("callMethodResult defaults to delegating to the legacy callMethod")
+    void defaultResultDelegatesToLegacyCallMethod() throws Exception {
+        boolean[] legacyCalled = new boolean[1];
+
+        ILuaObject legacy = new ILuaObject() {
+
+            @Override
+            public String[] getMethodNames() {
+                return new String[] { "old" };
+            }
+
+            @Override
+            public Object[] callMethod(ILuaContext context, int method, Object[] args) {
+                legacyCalled[0] = true;
+                return new Object[] { "legacy" };
+            }
+        };
+
+        Object result = legacy.callMethodResult(null, 0, new Object[0]);
+
+        assertTrue(legacyCalled[0], "a legacy implementation's callMethod must be invoked");
+        assertTrue(result instanceof Object[], "the legacy return type must pass straight through");
+        assertEquals("legacy", ((Object[]) result)[0]);
+    }
+
+    @Test
+    @DisplayName("an overridden callMethodResult is used instead of callMethod")
+    void overriddenResultWins() throws Exception {
+        boolean[] legacyCalled = new boolean[1];
+
+        ILuaObject modern = new ILuaObject() {
+
+            @Override
+            public String[] getMethodNames() {
+                return new String[] { "new" };
+            }
+
+            @Override
+            public Object[] callMethod(ILuaContext context, int method, Object[] args) {
+                legacyCalled[0] = true;
+                return new Object[] { "legacy" };
+            }
+
+            @Override
+            public Object callMethodResult(ILuaContext context, int method, Object[] args) {
+                return MethodResult.of("modern");
+            }
+        };
+
+        Object result = modern.callMethodResult(null, 0, new Object[0]);
+
+        assertTrue(!legacyCalled[0], "an overriding implementation must not fall back to callMethod");
+        assertSame(
+            MethodResult.of()
+                .getClass(),
+            result.getClass());
+        assertTrue(((MethodResult) result).isImmediate());
+    }
 }
