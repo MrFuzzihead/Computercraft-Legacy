@@ -24,6 +24,12 @@ function slowPrint( sText, nRate )
 end
 
 function formatTime( nTime, bTwentyFourHour )
+    if type( nTime ) ~= "number" then
+        error( "bad argument #1 (number expected, got " .. type( nTime ) .. ")", 2 )
+    end
+    if bTwentyFourHour ~= nil and type( bTwentyFourHour ) ~= "boolean" then
+        error( "bad argument #2 (boolean expected, got " .. type( bTwentyFourHour ) .. ")", 2 )
+    end
     local sTOD = nil
     if not bTwentyFourHour then
         if nTime >= 12 then
@@ -39,7 +45,8 @@ function formatTime( nTime, bTwentyFourHour )
     local nHour = math.floor(nTime)
     local nMinute = math.floor((nTime - nHour)*60)
     if sTOD then
-        return string.format( "%d:%02d %s", nHour, nMinute, sTOD )
+        -- Midnight is 12:00 AM, not 0:00 AM.
+        return string.format( "%d:%02d %s", nHour == 0 and 12 or nHour, nMinute, sTOD )
     else
         return string.format( "%d:%02d", nHour, nMinute )
     end
@@ -223,7 +230,19 @@ local function serializeImpl( t, tTracking, sIndent, opts )
     elseif sType == "string" then
         return string.format( "%q", t )
 
-    elseif sType == "number" or sType == "boolean" or sType == "nil" then
+    elseif sType == "number" then
+        -- NaN and the infinities have no Lua literal form, so emit an expression that
+        -- evaluates back to the same value. Matches CC:Tweaked.
+        if t ~= t then
+            return "0/0"
+        elseif t == math.huge then
+            return "1/0"
+        elseif t == -math.huge then
+            return "-1/0"
+        end
+        return tostring(t)
+
+    elseif sType == "boolean" or sType == "nil" then
         return tostring(t)
 
     else
@@ -232,37 +251,145 @@ local function serializeImpl( t, tTracking, sIndent, opts )
     end
 end
 
+-- JSON string escaping. Ported from CC:Tweaked's `serializeJSONString`, including the split
+-- between byte-wise escaping (the default) and code-point escaping (`unicode_strings`).
+--
+-- Upstream drives the code-point path with Lua's `utf8.codes`. That library is not installed
+-- in this runtime, so `utf8Codes` below walks UTF-8 by hand. It also tolerates malformed
+-- sequences (yielding the offending byte) where `utf8.codes` would raise, so serialising
+-- arbitrary binary strings cannot throw.
+
+local JSON_STRING_ESCAPES = {
+    ["\""] = "\\\"",
+    ["\\"] = "\\\\",
+    ["\b"] = "\\b",
+    ["\f"] = "\\f",
+    ["\n"] = "\\n",
+    ["\r"] = "\\r",
+    ["\t"] = "\\t",
+}
+for nByte = 0, 0x1f do
+    local sChar = string.char( nByte )
+    if JSON_STRING_ESCAPES[ sChar ] == nil then
+        JSON_STRING_ESCAPES[ sChar ] = string.format( "\\u00%02X", nByte )
+    end
+end
+
+-- Iterator over UTF-8 code points: for _, code in utf8Codes( s ) do ... end
+local function utf8Codes( s )
+    local i, n = 1, #s
+    return function()
+        if i > n then return nil end
+        local nStart = i
+        local c = string.byte( s, i )
+        local nCode
+
+        if c < 0x80 then
+            nCode, i = c, i + 1
+        elseif c >= 0xC2 and c <= 0xDF then
+            local c2 = string.byte( s, i + 1 )
+            if c2 and c2 >= 0x80 and c2 <= 0xBF then
+                nCode, i = ( c - 0xC0 ) * 0x40 + ( c2 - 0x80 ), i + 2
+            end
+        elseif c >= 0xE0 and c <= 0xEF then
+            local c2, c3 = string.byte( s, i + 1, i + 2 )
+            if c2 and c3 and c2 >= 0x80 and c2 <= 0xBF and c3 >= 0x80 and c3 <= 0xBF then
+                local nValue = ( c - 0xE0 ) * 0x1000 + ( c2 - 0x80 ) * 0x40 + ( c3 - 0x80 )
+                -- Reject overlong encodings.
+                if nValue >= 0x800 then nCode, i = nValue, i + 3 end
+            end
+        elseif c >= 0xF0 and c <= 0xF4 then
+            local c2, c3, c4 = string.byte( s, i + 1, i + 3 )
+            if c2 and c3 and c4
+                and c2 >= 0x80 and c2 <= 0xBF
+                and c3 >= 0x80 and c3 <= 0xBF
+                and c4 >= 0x80 and c4 <= 0xBF
+            then
+                local nValue = ( c - 0xF0 ) * 0x40000 + ( c2 - 0x80 ) * 0x1000
+                    + ( c3 - 0x80 ) * 0x40 + ( c4 - 0x80 )
+                if nValue >= 0x10000 then nCode, i = nValue, i + 4 end
+            end
+        end
+
+        if not nCode then
+            -- Malformed sequence: fall through as the raw byte so it still gets escaped.
+            nCode, i = c, i + 1
+        end
+
+        return nStart, nCode
+    end
+end
+
+local function hexifyJSONByte( c )
+    return string.format( "\\u00%02X", string.byte( c ) )
+end
+
 -- Escape a string into a valid JSON string literal (double-quoted).
--- When bUnicode is true, bytes >= 0x80 are also escaped as \uXXXX so the
--- output is pure ASCII (matching the CC:Tweaked unicode_strings option).
+--
+-- Without `unicode_strings`, every byte >= 0x7F is escaped as `\u00XX`, so the output is pure
+-- ASCII regardless of the input encoding. With `unicode_strings`, the string is walked as
+-- UTF-8 and each *code point* is escaped, with a UTF-16 surrogate pair above U+FFFF.
 local function serializeJSONString( s, bUnicode )
-    -- Replace special characters with JSON escape sequences
-    s = string.gsub( s, '\\', '\\\\' )
-    s = string.gsub( s, '"',  '\\"'  )
-    s = string.gsub( s, '\b', '\\b'  )
-    s = string.gsub( s, '\f', '\\f'  )
-    s = string.gsub( s, '\n', '\\n'  )
-    s = string.gsub( s, '\r', '\\r'  )
-    s = string.gsub( s, '\t', '\\t'  )
-    -- Escape control characters (and, when bUnicode=true, all non-ASCII bytes)
-    local pattern = bUnicode and '([%z\1-\31\128-\255])' or '([%z\1-\31])'
-    s = string.gsub( s, pattern, function( c )
-        return string.format( '\\u%04x', string.byte( c ) )
-    end )
+    if bUnicode and string.find( s, "[\128-\255]" ) then
+        local tOut = { '"' }
+        for _, nCode in utf8Codes( s ) do
+            if nCode > 0xFFFF then
+                local nValue = nCode - 0x10000
+                tOut[#tOut + 1] = string.format(
+                    "\\u%04X\\u%04X",
+                    math.floor( nValue / 0x400 ) % 0x400 + 0xD800,
+                    nValue % 0x400 + 0xDC00 )
+            elseif nCode <= 0x5C and JSON_STRING_ESCAPES[ string.char( nCode ) ] then
+                -- 0x5C is '\\'; only look up the table below that so we never call
+                -- string.char() for high code points.
+                tOut[#tOut + 1] = JSON_STRING_ESCAPES[ string.char( nCode ) ]
+            elseif nCode < 0x20 or nCode >= 0x7F then
+                tOut[#tOut + 1] = string.format( "\\u%04X", nCode )
+            else
+                tOut[#tOut + 1] = string.char( nCode )
+            end
+        end
+        tOut[#tOut + 1] = '"'
+        return table.concat( tOut )
+    end
+
+    s = string.gsub( s, '[%z\1-\31"\\]', JSON_STRING_ESCAPES )
+    s = string.gsub( s, '[\127-\255]', hexifyJSONByte )
     return '"' .. s .. '"'
 end
 
-empty_json_array = {}
-json_null = {}
+-- Immutable sentinels, matching CC:Tweaked: mutating them raises, and tostring() gives
+-- the JSON they serialise to.
+local function mk_tbl( str, name )
+    local msg = "attempt to mutate textutils." .. name
+    return setmetatable( {}, {
+        __newindex = function() error( msg, 2 ) end,
+        __tostring = function() return str end,
+    } )
+end
 
-local function serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
+-- A table representing an empty JSON array, in order to distinguish it from an empty
+-- JSON object. Its contents must not be modified.
+empty_json_array = mk_tbl( "[]", "empty_json_array" )
+
+-- A table representing the JSON null value. Its contents must not be modified.
+json_null = mk_tbl( "null", "json_null" )
+
+local function serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions, bNBTStyle )
     local sType = type(t)
     if t == empty_json_array then
         return "[]"
 
+    elseif t == json_null then
+        return "null"
+
     elseif sType == "table" then
         if tTracking[t] ~= nil then
-            error( "Cannot serialize table with recursive entries", 0 )
+            if tTracking[t] == false then
+                error( "Cannot serialize table with repeated entries", 0 )
+            else
+                error( "Cannot serialize table with recursive entries", 0 )
+            end
         end
         tTracking[t] = true
 
@@ -276,19 +403,34 @@ local function serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
             local sArrayResult = "["
             local nObjectSize = 0
             local nArraySize = 0
+            local nLargestArrayIndex = 0
             for k,v in pairs(t) do
                 if type(k) == "string" then
-                    local sEntry = serializeJSONImpl( k, tTracking, bUnicode, bAllowRepetitions ) .. ":" .. serializeJSONImpl( v, tTracking, bUnicode, bAllowRepetitions )
+                    local sEntry
+                    if bNBTStyle then
+                        sEntry = tostring( k ) .. ":" .. serializeJSONImpl( v, tTracking, bUnicode, bAllowRepetitions, bNBTStyle )
+                    else
+                        sEntry = serializeJSONImpl( k, tTracking, bUnicode, bAllowRepetitions, bNBTStyle ) .. ":" .. serializeJSONImpl( v, tTracking, bUnicode, bAllowRepetitions, bNBTStyle )
+                    end
                     if nObjectSize == 0 then
                         sObjectResult = sObjectResult .. sEntry
                     else
                         sObjectResult = sObjectResult .. "," .. sEntry
                     end
                     nObjectSize = nObjectSize + 1
+                elseif type(k) == "number" and k > nLargestArrayIndex then
+                    -- Track the largest index so that a nil in the middle of a sequence is
+                    -- emitted as JSON null rather than silently truncating the array.
+                    nLargestArrayIndex = k
                 end
             end
-            for n,v in ipairs(t) do
-                local sEntry = serializeJSONImpl( v, tTracking, bUnicode, bAllowRepetitions )
+            for n = 1, nLargestArrayIndex do
+                local sEntry
+                if t[n] == nil then
+                    sEntry = "null"
+                else
+                    sEntry = serializeJSONImpl( t[n], tTracking, bUnicode, bAllowRepetitions, bNBTStyle )
+                end
                 if nArraySize == 0 then
                     sArrayResult = sArrayResult .. sEntry
                 else
@@ -307,6 +449,10 @@ local function serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
 
         if bAllowRepetitions then
             tTracking[t] = nil
+        else
+            -- Mark as "already seen" rather than clearing, so a second visit is reported as a
+            -- repeated entry instead of a recursive one.
+            tTracking[t] = false
         end
         return sResult
 
@@ -342,229 +488,311 @@ function unserialize( s )
 end
 
 function serializeJSON( t, opts )
-    local bUnicode = type(opts) == "table" and opts.unicode_strings or false
-    local bAllowRepetitions = type(opts) == "table" and opts.allow_repetitions or false
+    if opts ~= nil and type( opts ) ~= "table" then
+        error( "bad argument #2 (table expected, got " .. type( opts ) .. ")", 2 )
+    end
+    local bUnicode = opts ~= nil and opts.unicode_strings and true or false
+    local bAllowRepetitions = opts ~= nil and opts.allow_repetitions and true or false
+    local bNBTStyle = opts ~= nil and opts.nbt_style and true or false
     local tTracking = {}
-    return serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions )
+    return serializeJSONImpl( t, tTracking, bUnicode, bAllowRepetitions, bNBTStyle )
 end
 
--- Parse a JSON string and return the corresponding Lua value.
--- nullValue (optional) is the Lua value to use for JSON null (defaults to nil).
-local function parseJSON( sText, nullValue, parseEmptyArray )
-    local nPos = 1
-    local nLen = #sText
+-- Encode a Unicode code point as UTF-8. `utf8` is not part of the runtime's global
+-- library set (Cobalt installs Base/String/Table/Math/Coroutine only), so the decoder
+-- below and this encoder have to be self-contained.
+local function encodeUTF8( nCode )
+    if nCode < 0x80 then
+        return string.char( nCode )
+    elseif nCode < 0x800 then
+        return string.char( 0xC0 + math.floor( nCode / 0x40 ), 0x80 + nCode % 0x40 )
+    elseif nCode < 0x10000 then
+        return string.char(
+            0xE0 + math.floor( nCode / 0x1000 ),
+            0x80 + math.floor( nCode / 0x40 ) % 0x40,
+            0x80 + nCode % 0x40 )
+    else
+        return string.char(
+            0xF0 + math.floor( nCode / 0x40000 ),
+            0x80 + math.floor( nCode / 0x1000 ) % 0x40,
+            0x80 + math.floor( nCode / 0x40 ) % 0x40,
+            0x80 + nCode % 0x40 )
+    end
+end
 
-    local function skipWhitespace()
-        local _, nEnd = sText:find( "^[ \t\n\r]+", nPos )
-        if nEnd then nPos = nEnd + 1 end
+local unserializeJSONImpl
+do
+    local sub, find, match, concat, tonumber, format = string.sub, string.find, string.match,
+        table.concat, tonumber, string.format
+
+    -- Skip any whitespace, returning the position of the first non-space character.
+    local function skip( str, pos )
+        local _, last = find( str, "^[ \n\r\t]+", pos )
+        if last then return last + 1 else return pos end
     end
 
-    local parseValue  -- forward declaration for mutual recursion
+    local escapes = {
+        ["b"] = "\b", ["f"] = "\f", ["n"] = "\n", ["r"] = "\r", ["t"] = "\t",
+        ["\""] = "\"", ["/"] = "/", ["\\"] = "\\",
+    }
 
-    local function parseString()
-        nPos = nPos + 1  -- skip opening '"'
-        local tParts = {}
-        local nStart = nPos
-        while nPos <= nLen do
-            local c = sText:sub( nPos, nPos )
-            if c == '"' then
-                -- End of string
-                table.insert( tParts, sText:sub( nStart, nPos - 1 ) )
-                nPos = nPos + 1
-                return table.concat( tParts )
-            elseif c == '\\' then
-                -- Escape sequence
-                table.insert( tParts, sText:sub( nStart, nPos - 1 ) )
-                nPos = nPos + 1
-                local e = sText:sub( nPos, nPos )
-                if e == '"' or e == '\\' or e == '/' then
-                    table.insert( tParts, e )
-                elseif e == 'b' then
-                    table.insert( tParts, '\b' )
-                elseif e == 'f' then
-                    table.insert( tParts, '\f' )
-                elseif e == 'n' then
-                    table.insert( tParts, '\n' )
-                elseif e == 'r' then
-                    table.insert( tParts, '\r' )
-                elseif e == 't' then
-                    table.insert( tParts, '\t' )
-                elseif e == 'u' then
-                    -- Unicode escape \uXXXX — encode as UTF-8
-                    local hex = sText:sub( nPos + 1, nPos + 4 )
-                    nPos = nPos + 4
-                    local n = tonumber( hex, 16 )
-                    if n then
-                        if n < 0x80 then
-                            table.insert( tParts, string.char( n ) )
-                        elseif n < 0x800 then
-                            -- 2-byte UTF-8
-                            table.insert( tParts, string.char(
-                                0xC0 + math.floor( n / 64 ),
-                                0x80 + ( n % 64 )
-                            ) )
-                        elseif n < 0x10000 then
-                            -- 3-byte UTF-8
-                            table.insert( tParts, string.char(
-                                0xE0 + math.floor( n / 4096 ),
-                                0x80 + math.floor( ( n % 4096 ) / 64 ),
-                                0x80 + ( n % 64 )
-                            ) )
-                        else
-                            table.insert( tParts, '?' )
+    local mt = {}
+
+    local function error_at( pos, msg, ... )
+        if select( "#", ... ) > 0 then msg = format( msg, ... ) end
+        error( setmetatable( { pos = pos, msg = msg }, mt ) )
+    end
+
+    local function expected( pos, actual, exp )
+        if actual == "" then actual = "end of input" else actual = format( "%q", actual ) end
+        error_at( pos, "Unexpected %s, expected %s.", actual, exp )
+    end
+
+    local function parse_string( str, pos, terminate )
+        local buf, n = {}, 1
+
+        -- Match a run of ordinary characters at once; walking a long string one byte at
+        -- a time is noticeably slower on Cobalt.
+        local char_pat = "^[ !#-[%]^-\255]+"
+        if terminate == "'" then char_pat = "^[ -&(-[%]^-\255]+" end
+
+        while true do
+            local c = sub( str, pos, pos )
+            if c == "" then error_at( pos, "Unexpected end of input, expected '%s'.", terminate ) end
+            if c == terminate then break end
+
+            if c == "\\" then
+                c = sub( str, pos + 1, pos + 1 )
+                if c == "" then error_at( pos, "Unexpected end of input, expected escape sequence." ) end
+
+                if c == "u" then
+                    local num_str = match( str, "^%x%x%x%x", pos + 2 )
+                    if not num_str then error_at( pos, "Malformed unicode escape %q.", sub( str, pos + 2, pos + 5 ) ) end
+                    local nCode = tonumber( num_str, 16 )
+                    pos = pos + 6
+
+                    -- Combine a UTF-16 surrogate pair into a single code point.
+                    if nCode >= 0xD800 and nCode <= 0xDBFF and sub( str, pos, pos + 1 ) == "\\u" then
+                        local low_str = match( str, "^%x%x%x%x", pos + 2 )
+                        local nLow = low_str and tonumber( low_str, 16 )
+                        if nLow and nLow >= 0xDC00 and nLow <= 0xDFFF then
+                            nCode = 0x10000 + ( nCode - 0xD800 ) * 0x400 + ( nLow - 0xDC00 )
+                            pos = pos + 6
                         end
                     end
+
+                    buf[n], n = encodeUTF8( nCode ), n + 1
                 else
-                    table.insert( tParts, e )
+                    local unesc = escapes[c]
+                    if not unesc then error_at( pos + 1, "Unknown escape character %q.", c ) end
+                    buf[n], n, pos = unesc, n + 1, pos + 2
                 end
-                nPos = nPos + 1
-                nStart = nPos
+            elseif c >= " " then
+                local _, finish = find( str, char_pat, pos )
+                buf[n], n = sub( str, pos, finish ), n + 1
+                pos = finish + 1
             else
-                nPos = nPos + 1
+                error_at( pos + 1, "Unescaped whitespace %q.", c )
             end
         end
-        error( "Unterminated string in JSON", 0 )
+
+        return concat( buf, "", 1, n - 1 ), pos + 1
     end
 
-    local function parseNumber()
-        local _, nEnd, sNum = sText:find( "^(-?%d+%.?%d*[eE]?[+-]?%d*)", nPos )
-        if not sNum then
-            error( "Invalid number in JSON at position " .. nPos, 0 )
-        end
-        nPos = nEnd + 1
-        return tonumber( sNum )
+    -- NBT numeric suffixes, e.g. `1b`, `1.0f`, `1L`.
+    local num_types = {
+        b = true, B = true, s = true, S = true, l = true, L = true,
+        f = true, F = true, d = true, D = true,
+    }
+    local function parse_number( str, pos, opts )
+        local _, last, num_str = find( str, "^(-?%d+%.?%d*[eE]?[+-]?%d*)", pos )
+        local val = tonumber( num_str )
+        if not val then error_at( pos, "Malformed number %q.", tostring( num_str ) ) end
+
+        -- In NBT style the number may carry a type suffix, which is discarded.
+        if opts.nbt_style and num_types[sub( str, last + 1, last + 1 )] then return val, last + 2 end
+
+        return val, last + 1
     end
 
-    local function parseArray()
-        nPos = nPos + 1  -- skip '['
-        local tResult = {}
-        skipWhitespace()
-        if sText:sub( nPos, nPos ) == ']' then
-            nPos = nPos + 1
-            -- When parse_empty_array is true (the default), return the sentinel
-            -- empty_json_array so callers can distinguish [] from {} on round-trip.
-            -- When false, return a fresh empty table instead.
-            if parseEmptyArray then
-                return empty_json_array
-            end
-            return tResult
-        end
-        while true do
-            skipWhitespace()
-            table.insert( tResult, parseValue() )
-            skipWhitespace()
-            local c = sText:sub( nPos, nPos )
-            if c == ']' then
-                nPos = nPos + 1
-                return tResult
-            elseif c == ',' then
-                nPos = nPos + 1
-            else
-                error( "Expected ',' or ']' in JSON array at position " .. nPos, 0 )
-            end
-        end
+    -- NBT-style unquoted object keys.
+    local function parse_ident( str, pos )
+        local _, last, val = find( str, "^([%w_+.-]+)", pos )
+        if not last then error_at( pos, "Expected object key" ) end
+        return val, last + 1
     end
 
-    local function parseObject()
-        nPos = nPos + 1  -- skip '{'
-        local tResult = {}
-        skipWhitespace()
-        if sText:sub( nPos, nPos ) == '}' then
-            nPos = nPos + 1
-            return tResult
+    -- NBT array type markers: [I;1,2], [L;1L,2L], [B;1b,2b].
+    local arr_types = { I = true, L = true, B = true }
+
+    local function decode_impl( str, pos, opts )
+        local c = sub( str, pos, pos )
+        if c == "\"" then
+            return parse_string( str, pos + 1, "\"" )
+        elseif c == "'" and opts.nbt_style then
+            return parse_string( str, pos + 1, "'" )
+        elseif c == "-" or c >= "0" and c <= "9" then
+            return parse_number( str, pos, opts )
+        elseif c == "t" then
+            if sub( str, pos + 1, pos + 3 ) == "rue" then return true, pos + 4 end
+        elseif c == "f" then
+            if sub( str, pos + 1, pos + 4 ) == "alse" then return false, pos + 5 end
+        elseif c == "n" then
+            if sub( str, pos + 1, pos + 3 ) == "ull" then
+                if opts.parse_null then
+                    return json_null, pos + 4
+                else
+                    return opts.null_value, pos + 4
+                end
+            end
+        elseif c == "{" then
+            local obj = {}
+
+            pos = skip( str, pos + 1 )
+            c = sub( str, pos, pos )
+
+            if c == "" then return error_at( pos, "Unexpected end of input, expected '}'." ) end
+            if c == "}" then return obj, pos + 1 end
+
+            while true do
+                local key, value
+                if c == "\"" then
+                    key, pos = parse_string( str, pos + 1, "\"" )
+                elseif opts.nbt_style then
+                    key, pos = parse_ident( str, pos )
+                else
+                    return expected( pos, c, "object key" )
+                end
+
+                pos = skip( str, pos )
+
+                c = sub( str, pos, pos )
+                if c ~= ":" then return expected( pos, c, "':'" ) end
+
+                value, pos = decode_impl( str, skip( str, pos + 1 ), opts )
+                obj[key] = value
+
+                -- Consume the next delimiter
+                pos = skip( str, pos )
+                c = sub( str, pos, pos )
+                if c == "}" then break
+                elseif c == "," then pos = skip( str, pos + 1 )
+                else return expected( pos, c, "',' or '}'" )
+                end
+
+                c = sub( str, pos, pos )
+            end
+
+            return obj, pos + 1
+
+        elseif c == "[" then
+            local arr, n = {}, 1
+
+            pos = skip( str, pos + 1 )
+            c = sub( str, pos, pos )
+
+            -- NBT list/array type prefix, e.g. "[I;...".
+            if arr_types[c] and sub( str, pos + 1, pos + 1 ) == ";" and opts.nbt_style then
+                pos = skip( str, pos + 2 )
+                c = sub( str, pos, pos )
+            end
+
+            if c == "" then return expected( pos, c, "']'" ) end
+            if c == "]" then
+                if opts.parse_empty_array ~= false then
+                    return empty_json_array, pos + 1
+                else
+                    return {}, pos + 1
+                end
+            end
+
+            while true do
+                n, arr[n], pos = n + 1, decode_impl( str, pos, opts )
+
+                -- Consume the next delimiter
+                pos = skip( str, pos )
+                c = sub( str, pos, pos )
+                if c == "]" then break
+                elseif c == "," then pos = skip( str, pos + 1 )
+                else return expected( pos, c, "',' or ']'" )
+                end
+            end
+
+            return arr, pos + 1
+
+        elseif c == "" then
+            error_at( pos, "Unexpected end of input." )
         end
-        while true do
-            skipWhitespace()
-            if sText:sub( nPos, nPos ) ~= '"' then
-                error( "Expected string key in JSON object at position " .. nPos, 0 )
-            end
-            local sKey = parseString()
-            skipWhitespace()
-            if sText:sub( nPos, nPos ) ~= ':' then
-                error( "Expected ':' in JSON object at position " .. nPos, 0 )
-            end
-            nPos = nPos + 1
-            skipWhitespace()
-            local value = parseValue()
-            tResult[ sKey ] = value
-            skipWhitespace()
-            local c = sText:sub( nPos, nPos )
-            if c == '}' then
-                nPos = nPos + 1
-                return tResult
-            elseif c == ',' then
-                nPos = nPos + 1
-            else
-                error( "Expected ',' or '}' in JSON object at position " .. nPos, 0 )
-            end
-        end
+
+        error_at( pos, "Unexpected character %q.", c )
     end
 
-    parseValue = function()
-        skipWhitespace()
-        local c = sText:sub( nPos, nPos )
-        if c == '"' then
-            return parseString()
-        elseif c == '{' then
-            return parseObject()
-        elseif c == '[' then
-            return parseArray()
-        elseif c == 't' then
-            if sText:sub( nPos, nPos + 3 ) == 'true' then
-                nPos = nPos + 4
-                return true
+    unserializeJSONImpl = function( s, opts )
+        local ok, res, pos = pcall( decode_impl, s, skip( s, 1 ), opts )
+        if not ok then
+            if type( res ) == "table" and getmetatable( res ) == mt then
+                return nil, format( "Malformed JSON at position %d: %s", res.pos, res.msg )
             end
-            error( "Invalid token in JSON at position " .. nPos, 0 )
-        elseif c == 'f' then
-            if sText:sub( nPos, nPos + 4 ) == 'false' then
-                nPos = nPos + 5
-                return false
-            end
-            error( "Invalid token in JSON at position " .. nPos, 0 )
-        elseif c == 'n' then
-            if sText:sub( nPos, nPos + 3 ) == 'null' then
-                nPos = nPos + 4
-                return nullValue
-            end
-            error( "Invalid token in JSON at position " .. nPos, 0 )
-        elseif c == '-' or (c >= '0' and c <= '9') then
-            return parseNumber()
-        else
-            error( "Unexpected character '" .. c .. "' in JSON at position " .. nPos, 0 )
-        end
-    end
 
-    local ok, result = pcall( parseValue )
-    if ok then
-        skipWhitespace()
-        if nPos <= nLen then
-            return nil, "Unexpected trailing content at position " .. nPos
+            error( res, 0 )
         end
-        return result
-    else
-        return nil, result
+
+        pos = skip( s, pos )
+        if pos <= #s then
+            return nil, format(
+                "Malformed JSON at position %d: Unexpected trailing character %q.", pos, sub( s, pos, pos ) )
+        end
+        return res
     end
 end
 
+--[[- Converts a serialised JSON string back into a reassembled Lua object.
+
+If a `null` value is encountered, it is converted into `nil`. It can be converted into
+[`textutils.json_null`] with the `parse_null` option.
+
+If an empty array is encountered, it is converted into [`textutils.empty_json_array`].
+It can be converted into a new empty table with `parse_empty_array = false`.
+
+@tparam string sText The serialised string to deserialise.
+@tparam[opt] { nbt_style? = boolean, parse_null? = boolean, parse_empty_array? = boolean } tOptions
+@return[1] The deserialised object
+@treturn[2] nil If the object could not be deserialised.
+@treturn string A message describing why the JSON string is invalid.
+]]
 function unserializeJSON( sText, tOptions )
-    local nullValue = nil
-    local parseEmptyArray = true
-    if type( tOptions ) == "table" then
-        nullValue = tOptions[ "null" ]
-        if tOptions[ "parse_empty_array" ] == false then
-            parseEmptyArray = false
-        end
+    if type( sText ) ~= "string" then
+        error( "bad argument #1 (string expected, got " .. type( sText ) .. ")", 2 )
     end
-    return parseJSON( sText, nullValue, parseEmptyArray )
+    if tOptions ~= nil and type( tOptions ) ~= "table" then
+        error( "bad argument #2 (table expected, got " .. type( tOptions ) .. ")", 2 )
+    end
+
+    local opts = {
+        nbt_style = tOptions ~= nil and tOptions.nbt_style and true or false,
+        parse_empty_array = tOptions == nil or tOptions.parse_empty_array ~= false,
+        -- `parse_null` is the modern spelling; the historical local option was `null`,
+        -- carrying the value to substitute. Both are honoured, `parse_null` taking
+        -- precedence when both are given.
+        parse_null = tOptions ~= nil and tOptions.parse_null == true,
+        null_value = tOptions ~= nil and tOptions["null"] or nil,
+    }
+
+    return unserializeJSONImpl( sText, opts )
 end
 
 function urlEncode( str )
     if str then
+        if type( str ) ~= "string" then
+            error( "bad argument #1 (string expected, got " .. type( str ) .. ")", 2 )
+        end
         str = string.gsub(str, "\n", "\r\n")
-        str = string.gsub(str, "([^%w ])", function(c)
+        -- Matches CC:Tweaked's unreserved set: alphanumerics plus '-', '_' and '.'.
+        -- '%%%02X' escaping is applied to everything else; ' ' becomes '+'.
+        str = string.gsub(str, "[^A-Za-z0-9%-%_%.]", function(c)
+            if c == " " then return "+" end
             return string.format("%%%02X", string.byte(c))
         end )
-        str = string.gsub(str, " ", "+")
     end
     return str
 end

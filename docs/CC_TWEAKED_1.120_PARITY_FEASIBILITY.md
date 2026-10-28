@@ -336,6 +336,14 @@ The batches are ordered by dependency, not just priority.
 
 ### Batch A — Core BIOS / Lua runtime (P0, ~1–2 days)
 
+> **Status: implemented.** See [`PARITY_BATCH_LOG.md`](PARITY_BATCH_LOG.md) for the public
+> API impact, deviations and in-game validation list.
+>
+> **Version note:** port against the audit's stated target (`mc-1.20.x`, `version=1.120.2`),
+> not the local `migrate/CC-Tweaked-mc-26.3` copy — that copy is the newer 1.120.3 / MC 26.3
+> line, which inlined the JSON/SNBT parsers into `textutils.lua` and deleted
+> `cc/internal/json.lua` + `cc/internal/snbt.lua`. Both files exist at 1.120.2.
+
 Files: `bios.lua`, `rom/apis/textutils`, `rom/apis/keys`,
 `rom/modules/main/cc/base64.lua` (new), `rom/modules/main/cc/internal/snbt.lua` (new).
 

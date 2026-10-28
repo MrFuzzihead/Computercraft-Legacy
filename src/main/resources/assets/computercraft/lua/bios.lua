@@ -127,8 +127,12 @@ do
 end
 
 -- Install lua parts of the os api
+--
+-- The version string is "CraftOS 1.9" to match CC:Tweaked, so that programs which
+-- feature-detect against os.version() take the modern code path. The mod itself is
+-- still 1.75-based; this is a compatibility label, not a claim about the codebase.
 function os.version()
-    return "CraftOS 1.7"
+    return "CraftOS 1.9"
 end
 
 function os.pullEventRaw( sFilter )
@@ -160,6 +164,9 @@ function sleep( nTime )
 end
 
 function write( sText )
+    -- CC:Tweaked accepts numbers here too (write(42)); tostring keeps that working
+    -- without changing how strings are handled.
+    sText = tostring( sText )
     local w,h = term.getSize()
     local x,y = term.getCursorPos()
 
@@ -219,22 +226,31 @@ function write( sText )
     return nLinesPrinted
 end
 
+-- Matches CC:Tweaked: arguments are separated by a tab, and select("#", ...) is used
+-- so that embedded nils are printed as "nil" rather than truncating the whole call.
 function print( ... )
     local nLinesPrinted = 0
-    for n,v in ipairs( { ... } ) do
-        nLinesPrinted = nLinesPrinted + write( tostring( v ) )
+    local nLimit = select( "#", ... )
+    for n = 1, nLimit do
+        local s = tostring( (select( n, ... )) )
+        if n < nLimit then
+            s = s .. "\t"
+        end
+        nLinesPrinted = nLinesPrinted + write( s )
     end
     nLinesPrinted = nLinesPrinted + write( "\n" )
     return nLinesPrinted
 end
 
 function printError( ... )
+    local oldColour
     if term.isColour() then
+        oldColour = term.getTextColour()
         term.setTextColour( colors.red )
     end
     print( ... )
     if term.isColour() then
-        term.setTextColour( colors.white )
+        term.setTextColour( oldColour )
     end
 end
 
@@ -510,25 +526,37 @@ function read( _sReplaceChar, _tHistory, _fnComplete, _sDefault )
     return sLine
 end
 
-loadfile = function( _sFile, _tEnv )
+-- loadfile( path [, mode [, env]] )
+--
+-- The 2-argument form loadfile(path, env) is accepted as a convenience, matching
+-- CC:Tweaked. `mode` is passed straight through to load(); a nil mode means "allow
+-- whatever the VM allows", which for Cobalt is text chunks only.
+loadfile = function( _sFile, _sMode, _tEnv )
+    if type( _sMode ) == "table" and _tEnv == nil then
+        _sMode, _tEnv = nil, _sMode
+    end
     local file = fs.open( _sFile, "r" )
     if file then
-        local func, err = load( file.readAll(), fs.getName( _sFile ), "t", _tEnv )
+        -- Chunk names follow CC:Tweaked's "@/path" form, which shows up in tracebacks.
+        -- fs.combine() is not used here because this codebase's version takes two
+        -- arguments (the 1.7.10 contract), unlike the modern one.
+        local sName = ( string.sub( _sFile, 1, 1 ) == "/" ) and _sFile or ( "/" .. _sFile )
+        local func, err = load( file.readAll(), "@" .. sName, _sMode, _tEnv )
         file.close()
         return func, err
     end
     return nil, "File not found"
 end
 
-if _VERSION == "Lua 5.1" and not _CC_DISABLE_LUA51_FEATURES then
-    dofile = function( _sFile )
-        local fnFile, e = loadfile( _sFile )
-        if fnFile then
-            setfenv( fnFile, getfenv(2) )
-            return fnFile()
-        else
-            error( e, 2 )
-        end
+-- dofile() is part of the standard Lua library, so it must exist regardless of the
+-- underlying Lua version. It used to be defined only in the Lua 5.1 branch, which left
+-- it undefined on the Lua 5.2 runtime (Cobalt).
+function dofile( _sFile )
+    local fnFile, e = loadfile( _sFile, nil, _G )
+    if fnFile then
+        return fnFile()
+    else
+        error( e, 2 )
     end
 end
 
@@ -573,38 +601,54 @@ end
 
 
 function os.run( _tEnv, _sPath, ... )
-    local tArgs = { ... }
     local tEnv = _tEnv
     -- Only install the _G fallback when the caller has not already set up a
     -- metatable on the env.  The shell creates a fresh per-run table with
     -- __index pointing at its own tEnv (which contains 'shell', 'multishell',
     -- etc.) and then chains _G from tEnv itself.  Overwriting that metatable
     -- here would sever the shell chain and make 'shell' invisible to programs.
-    if getmetatable( tEnv ) == nil then
+    local mt = getmetatable( tEnv )
+    if mt == nil then
         setmetatable( tEnv, { __index = _G } )
+        mt = getmetatable( tEnv )
     end
-    local fnFile, err = loadfile( _sPath, tEnv )
+
+    -- "bios.strict_globals": assigning to an undeclared global inside a program is an
+    -- error. load() assigns _ENV on this table, which would trip __newindex, so _ENV has
+    -- to be set before the protection is installed.
+    if settings and settings.get( "bios.strict_globals", false ) then
+        tEnv._ENV = tEnv
+        if type( mt ) == "table" then
+            mt.__newindex = function( _, name )
+                error( "Attempt to create global " .. tostring( name ), 2 )
+            end
+        end
+    end
+
+    local fnFile, err = loadfile( _sPath, nil, tEnv )
     if fnFile then
-        local ok, err = pcall( function()
-            fnFile( table.unpack( tArgs ) )
-        end )
+        local ok, err = pcall( fnFile, ... )
         if not ok then
             if err and err ~= "" then
                 printError( err )
             end
-            return false
+            return false, err
         end
         return true
     end
     if err and err ~= "" then
         printError( err )
     end
-    return false
+    return false, err
 end
 
 local tAPIsLoading = {}
 function os.loadAPI( _sPath )
     local sName = fs.getName( _sPath )
+    -- Match CC:Tweaked: an API file named "foo.lua" is exposed as "foo".
+    if string.sub( sName, -4 ) == ".lua" then
+        sName = string.sub( sName, 1, -5 )
+    end
     if tAPIsLoading[sName] == true then
         printError( "API "..sName.." is already being loaded" )
         return false
@@ -800,13 +844,18 @@ end
 local tEmpty = {}
 function fs.complete( sPath, sLocation, bIncludeFiles, bIncludeDirs )
     -- Allow arg 3 to be an options table (CC:Tweaked 1.101.0 compat)
+    local bIncludeHidden
     if type(bIncludeFiles) == "table" then
         local opts = bIncludeFiles
         bIncludeFiles = (opts.include_files ~= false)
         bIncludeDirs  = (opts.include_dirs  ~= false)
+        bIncludeHidden = (opts.include_hidden ~= false)
     else
         bIncludeFiles = (bIncludeFiles ~= false)
         bIncludeDirs  = (bIncludeDirs  ~= false)
+        -- Hidden entries stay included by default, so existing callers which pass
+        -- booleans keep the pre-1.101 behaviour.
+        bIncludeHidden = true
     end
     local sDir = sLocation
     local nStart = 1
@@ -842,7 +891,9 @@ function fs.complete( sPath, sLocation, bIncludeFiles, bIncludeDirs )
         local tFiles = fs.list( sDir )
         for n=1,#tFiles do
             local sFile = tFiles[n]
-            if #sFile >= #sName and string.sub( sFile, 1, #sName ) == sName then
+            if #sFile >= #sName and string.sub( sFile, 1, #sName ) == sName and (
+                bIncludeHidden or string.sub( sFile, 1, 1 ) ~= "." or string.sub( sName, 1, 1 ) == "."
+            ) then
                 local bIsDir = fs.isDir( fs.combine( sDir, sFile ) )
                 local sResult = string.sub( sFile, #sName + 1 )
                 if bIsDir then
@@ -942,14 +993,135 @@ if bAPIError then
     term.setCursorPos( 1,1 )
 end
 
+-- Set default settings
+-- Mirrors CC:Tweaked's bios defaults so that programs can call settings.get() without
+-- having to know whether a value was ever persisted. Individual features read these
+-- definitions as they are ported (shell completion, edit extensions, list/motd, ...).
+if settings then
+    settings.define( "shell.allow_startup", {
+        default = true,
+        description = "Run startup files when the computer turns on.",
+        type = "boolean",
+    } )
+    settings.define( "shell.allow_disk_startup", {
+        default = (commands == nil),
+        description = "Run startup files from disk drives when the computer turns on.",
+        type = "boolean",
+    } )
+
+    settings.define( "shell.autocomplete", {
+        default = true,
+        description = "Autocomplete program and arguments in the shell.",
+        type = "boolean",
+    } )
+    settings.define( "shell.autocomplete_hidden", {
+        default = false,
+        description = [[Autocomplete hidden files and folders (those starting with ".").]],
+        type = "boolean",
+    } )
+    settings.define( "edit.autocomplete", {
+        default = true,
+        description = "Autocomplete API and function names in the editor.",
+        type = "boolean",
+    } )
+    settings.define( "lua.autocomplete", {
+        default = true,
+        description = "Autocomplete API and function names in the Lua REPL.",
+        type = "boolean",
+    } )
+
+    settings.define( "edit.default_extension", {
+        default = "lua",
+        description = [[The file extension the editor will use if none is given. Set to "" to disable.]],
+        type = "string",
+    } )
+    settings.define( "paint.default_extension", {
+        default = "nfp",
+        description = [[The file extension the paint program will use if none is given. Set to "" to disable.]],
+        type = "string",
+    } )
+
+    settings.define( "list.show_hidden", {
+        default = false,
+        description = [[Whether the list program shows hidden files (those starting with ".").]],
+        type = "boolean",
+    } )
+
+    settings.define( "motd.enable", {
+        default = (pocket == nil),
+        description = "Display a random message when the computer starts up.",
+        type = "boolean",
+    } )
+    settings.define( "motd.path", {
+        default = "/rom/motd.txt:/motd.txt",
+        description = [[The path to load random messages from. Should be a colon (":") separated string of file paths.]],
+        type = "string",
+    } )
+
+    settings.define( "lua.warn_against_use_of_local", {
+        default = true,
+        description = [[Print a message when input in the Lua REPL starts with the word 'local'. Local variables defined in the Lua REPL are inaccessible on the next input.]],
+        type = "boolean",
+    } )
+    settings.define( "lua.function_args", {
+        default = true,
+        description = "Show function arguments when printing functions.",
+        type = "boolean",
+    } )
+    settings.define( "lua.function_source", {
+        default = false,
+        description = "Show where a function was defined when printing functions.",
+        type = "boolean",
+    } )
+    settings.define( "bios.strict_globals", {
+        default = false,
+        description = "Prevents assigning variables into a program's environment. Make sure you use the local keyword or assign to _G explicitly.",
+        type = "boolean",
+    } )
+
+    if term.isColour() then
+        settings.define( "bios.use_multishell", {
+            default = true,
+            description = [[Allow running multiple programs at once, through the use of the "fg" and "bg" programs.]],
+            type = "boolean",
+        } )
+    end
+end
+
 -- Load default settings from _CC_DEFAULT_SETTINGS (if set), then persisted settings
 if settings then
     if type(_CC_DEFAULT_SETTINGS) == "string" then
-        for entry in _CC_DEFAULT_SETTINGS:gmatch("[^,]+") do
-            local key, value = entry:match("^(.-)=(.+)$")
-            if key then
-                local ok, parsed = pcall(textutils.unserialise, value)
-                settings.set(key, ok and parsed ~= nil and parsed or value)
+        for sPair in string.gmatch( _CC_DEFAULT_SETTINGS, "[^,]+" ) do
+            local sName, sValue = string.match( sPair, "([^=]*)=(.*)" )
+            if sName and sValue then
+                local value
+                if sValue == "true" then
+                    value = true
+                elseif sValue == "false" then
+                    value = false
+                elseif sValue == "nil" then
+                    value = nil
+                elseif tonumber( sValue ) then
+                    value = tonumber( sValue )
+                elseif string.match( sValue, "^[%{\[\"']" ) then
+                    -- Local extension over CC:Tweaked, which would store the raw text here:
+                    -- accept table and quoted-string literals so existing configs that used
+                    -- them keep working. unserialize evaluates with an empty environment.
+                    local ok, parsed = pcall( textutils.unserialise, sValue )
+                    value = ok and parsed ~= nil and parsed or sValue
+                else
+                    value = sValue
+                end
+
+                if value ~= nil then
+                    -- A value that violates the registered type must not abort the BIOS; a
+                    -- typo in cc_default_settings should not brick every computer.
+                    if not pcall( settings.set, sName, value ) then
+                        settings.unset( sName )
+                    end
+                else
+                    settings.unset( sName )
+                end
             end
         end
     end
