@@ -5,6 +5,8 @@
 > Target reference: **CC:Tweaked 1.120.2** (`mc-1.20.x`).
 > Local runtime: **Cobalt 0.9.9** (Lua 5.2), **Forge 1.7.10-10.13.4.1614**.
 >
+> GTNH stack checked: **Hodgepodge**, **lwjgl3ify 3.x (SDL3)**, **GTNHLib**.
+>
 > Scope: Lua API surface, ROM programs/modules, peripheral surface, and QoL behaviour.
 > Rendering/backend-only changes (VBO monitor renderer, lecterns, Create compat, EMI/JEI,
 > 1.20 item/block registries, etc.) are explicitly out of scope.
@@ -20,8 +22,8 @@ actually express this”**. After checking the 1.7.10/Forge APIs, the list split
 |---|---:|---|
 | ✅ Pure port | ~60% | Pure Lua or ordinary Java; no platform limitation. |
 | 🟡 1.7.10 adaptation | ~20% | Possible, but semantics must be approximated (metadata instead of block states, OreDictionary instead of tags, etc.). |
-| 🔵 Optional integration | ~5% | Only available when ETFR/HogUtils or another mod is installed. |
-| ❌ Platform-blocked | ~5% | Cannot be matched without a new native/client hook or a different UX. |
+| 🔵 Optional integration | ~10% | Only available when ETFR/HogUtils, GTNHLib, or lwjgl3ify is installed. |
+| ❌ Platform-blocked | ~2% | Cannot be matched without a new native/client hook or a different UX. |
 | ⏭ Not meaningful | ~5% | Modern feature is deprecated/empty, or cross-version behaviour does not matter on 1.7.10. |
 | ✅ Already done | remainder | Do not re-implement. |
 
@@ -30,9 +32,11 @@ The most important corrections to the first pass:
 1. **`itemGroups` is not a real gap.** CC:T 1.120’s `ItemDetails.fill` always writes an
    empty list for the deprecated `itemGroups` field. Add `itemGroups = {}` for shape
    compatibility; there is no 1.7.10 “item group” work to do.
-2. **Block states cannot be matched generically.** 1.7.10 has metadata, not named block
-   states. ETFR’s `BlockStateConverter` is only for reading structure NBT; it is not a
-   general state API. Use `state = { metadata = n }` and document the limitation.
+2. **Block states are available through GTNHLib, not vanilla 1.7.10.** Vanilla only has
+   metadata, and ETFR’s `BlockStateConverter` is structure-NBT-only. GTNHLib’s
+   `BlockPropertyRegistry` provides a real block-state API; it registers many vanilla
+   blocks, ETFR registers at least pointed dripstone, and mods can register more. Use it
+   when present and fall back to `state = { metadata = n }` otherwise.
 3. **`tags` is not necessarily impossible.** ETFR depends on **HogUtils**, which provides
    `ItemTags` / `BlockTags`. When ETFR/HogUtils is present, real modern-style tags can be
    exposed via reflection. Without it, OreDictionary is the only 1.7.10 analogue.
@@ -42,9 +46,12 @@ The most important corrections to the first pass:
    `net.minecraft.command.PlayerSelector` (players only), not 1.8+ `@e` entity selectors,
    and it has no 1.11+ entity tags/NBT selectors. A player-only subset is possible; full
    modern selector parity is not.
-5. **`file_transfer` is platform-blocked, not just missing.** Forge 1.7.10’s `GuiScreen`
-   has no `handleFileDrop`, and LWJGL2 has no GLFW-style OS drop callback. ETFR does not
-   add one. An AWT `FileDialog` alternative is possible, but it is not the modern UX.
+5. **`file_transfer` is blocked on vanilla LWJGL2, but possible with lwjgl3ify.**
+   Forge 1.7.10’s `GuiScreen` has no `handleFileDrop`, and LWJGL2 has no OS drop
+   callback. lwjgl3ify uses SDL3, which exposes `SDL_AddEventWatch` and
+   `SDL_EVENT_DROP_FILE`; a small optional client bridge can turn those into a
+   `file_transfer`-style upload. Without lwjgl3ify, the AWT `FileDialog` alternative is
+   still not the modern UX.
 6. **Some previously “missing” fields are feasible natively:** `nbt` hash, `maxCount`,
    `damage`/`maxDamage`, `displayName`, `durability`, `lore`, `unbreakable`,
    `potionEffects`, and `mapColor` all have 1.7.10 APIs.
@@ -58,6 +65,9 @@ The most important corrections to the first pass:
    (irrelevant here) and multi-host accuracy. Treat as an optional accuracy fix.
 10. **`rednet` ID wrapping is parity, not urgency.** 1.7.10 computer IDs are normally
     small; the 65,500-channel wrap only matters for very large ID ranges.
+11. **Hodgepodge is not a direct gap filler.** It is mostly fixes/tweaks and requires
+    GTNHLib; the useful piece is the transitive GTNHLib block-state API. It does not add
+    tags, entity selectors, or file drop.
 
 ---
 
@@ -82,7 +92,7 @@ Batch IDs are defined in §5. Effort: **S** < 1 day, **M** 1–3 days, **L** > 3
 
 | Fact | Evidence |
 |---|---|
-| No named block states; only `Block` + `int` metadata. | `World.getBlockMetadata`, `Block` API. |
+| Vanilla has no named block states; only `Block` + `int` metadata. | `World.getBlockMetadata`, `Block` API. |
 | `Block.getMapColor(int)` returns `MapColor` with `colorValue`. | `net.minecraft.block.Block`, `net.minecraft.block.material.MapColor`. |
 | `ItemStack` has NBT, damage, max damage, max stack, display name, tooltip. | `ItemStack.getTagCompound`, `getMaxDamage`, `getMaxStackSize`, `getDisplayName`, `getTooltip`. |
 | Item potion effects are readable. | `ItemPotion.getEffects(ItemStack)`, `PotionEffect`. |
@@ -109,7 +119,7 @@ Batch IDs are defined in §5. Effort: **S** < 1 day, **M** 1–3 days, **L** > 3
 
 | Fact | Evidence |
 |---|---|
-| ETFR is a 1.7.10 content backport; it does not add a general block-state API. | ETFR `BlockStateContainer` / `BlockStateConverter` are in `core/utils/structurenbt`, for structure NBT conversion only. |
+| ETFR is a 1.7.10 content backport; it does not add its own general block-state API. | ETFR `BlockStateContainer` / `BlockStateConverter` are in `core/utils/structurenbt`, for structure NBT conversion only; ETFR uses GTNHLib block properties where it needs real states. |
 | ETFR depends on HogUtils. | ETFR `README.md`. |
 | HogUtils provides `ItemTags` and `BlockTags`. | ETFR-bundled path: `roadhog360.hogutils.api.hogtags.helpers.ItemTags` / `BlockTags`; newer main may use `handlers.impl.TagHandlerMeta`. |
 | Tag query shape in the ETFR-bundled HogUtils: `ItemTags.getTags(Item, meta)` / `BlockTags.getTags(Block, meta)`, returning `Set<String>`. | ETFR `libs/hogutils-*-sources.jar`, `helpers/ItemTags.java`, `helpers/BlockTags.java`. |
@@ -117,9 +127,53 @@ Batch IDs are defined in §5. Effort: **S** < 1 day, **M** 1–3 days, **L** > 3
 | HogUtils is LGPL-3.0. | HogUtils `LICENSE`. |
 | ETFR does not add `@e` entity selectors or file drag-and-drop. | No `EntitySelector`/`handleFileDrop` equivalents in ETFR. |
 
-**Licensing note:** ETFR and HogUtils are LGPL-3.0. If you compile against them, add the
-appropriate notice and keep the dependency optional. A reflection-only bridge avoids a
-hard dependency and avoids copying LGPL code. The root project remains CCPL.
+### GTNH stack
+
+| Capability | Hodgepodge | lwjgl3ify | GTNHLib |
+|---|---|---|---|
+| Block states | No | No | **Yes** — `BlockPropertyRegistry` / `BlockState` |
+| OS file drag-and-drop | No | **Platform yes** — SDL3 drop events; no ready MC hook | No |
+| Item/block tags | No | No | No — use ETFR/HogUtils |
+| Forge-style capabilities | No | No | No — `ItemIO` / `ItemSource` / `ItemSink` is GTNH’s own abstraction |
+| NBT helpers | No | No | `ItemStackNBT`, `NBTJson`, FNV hashes — not MD5 NBT hash or SNBT |
+| Entity selectors (`@e`) | No | No | No — Brigadier support exists, but no entity selector arguments |
+| Brigadier commands | No | No | Yes |
+| Java 17+ / LWJGL3 | No | Yes | No |
+
+**Hodgepodge** is a patch/tweak collection. It requires GTNHLib 0.2.2+, but does not
+provide block states, tags, selectors, or drag-and-drop itself. GTNH packs normally
+include GTNHLib, but standalone installs may not; keep the bridge optional.
+
+**GTNHLib** has a real block-state registry:
+
+- `BlockPropertyRegistry.getBlockState(IBlockAccess world, int x, int y, int z)`
+- `BlockPropertyRegistry.getBlockState(Block block, int meta)`
+- `BlockState.toMap()` → `Map<String, String>` (stringified values)
+- `BlockState.forEachValue(...)` → typed values (`Boolean`, `Number`, enums, strings)
+- `BlockStateCommand` (`/blockstate`) for in-game inspection
+
+GTNHLib registers properties for many vanilla blocks; ETFR registers at least pointed
+dripstone, and other mods can register their own. This is the best available source for
+modern-style `state` tables. It is **opt-in/optional**: blocks with no registered
+properties must still fall back to `state = { metadata = n }`. Check the GTNHLib version
+shipped by the pack — `blockstate` may be newer than Hodgepodge’s 0.2.2 minimum.
+
+**lwjgl3ify** uses SDL3 (not GLFW) and exposes the SDL bindings on the classpath:
+
+- `SDL_AddEventWatch` / `SDL_RemoveEventWatch`
+- `SDL_EVENT_DROP_FILE` / `SDL_EVENT_DROP_TEXT`
+- `SDL_DropEvent.dataString()` → dropped path
+- `Display.getWindow()` → SDL window handle
+- `DisplayEvents.addPostWindowCreateListener(...)`
+
+There is no ready Minecraft file-drop hook, but the platform event exists. A small
+optional client bridge plus a GUI drop target can provide CC:T-style upload when
+lwjgl3ify is installed.
+
+**Licensing note:** ETFR, HogUtils, Hodgepodge, lwjgl3ify, and GTNHLib are LGPL-3.0.
+If you compile against them, add the appropriate notice and keep the dependency optional.
+Reflection-only bridges avoid hard dependencies and avoid copying LGPL code. The root
+project remains CCPL.
 
 ---
 
@@ -136,7 +190,7 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | `os.version()` returns `"CraftOS 1.7"` | Native Lua | — | ✅ Native | A | S |
 | `require`/`package` global-only; no `cc.require` | Native Lua/`loadfile` | — | ✅ Native | C | M |
 | Missing settings defaults in `bios.lua` | Native Lua | — | ✅ Native | A | S |
-| `textutils` `parse_null` / `json_null` / `nbt_style` | Native Lua; port `cc.internal.snbt`, or use `JsonToNBT` as fallback | — | ✅ Native (test SNBT edge cases) | A | S/M |
+| `textutils` `parse_null` / `json_null` / `nbt_style` | Native Lua; port `cc.internal.snbt`, or use `JsonToNBT` as fallback | GTNHLib `NBTJson` is NBT↔JSON, not SNBT | ✅ Native (test SNBT edge cases) | A | S/M |
 | `textutils.formatTime(0)` / `urlEncode` / inf-nan | Native Lua | — | ✅ Native | A | S |
 | `io` legacy subset | Native over existing fs handles | — | ✅ Native | B | M |
 | `fs.complete` ignores `include_hidden` | Native Lua | — | ✅ Native | A | S |
@@ -152,8 +206,8 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | `commands.getBlockInfo` dimension string | Native `WorldProvider` mapping | — | ✅ Native | G | S |
 | `commands.getBlockInfos` order | Native Java | — | ✅ Native | G | S |
 | `commands.list` semantics | Native Java | — | ✅ Native | G | S |
-| `commands.getEntities` | Only `PlayerSelector` (players) | No ETFR `@e` | 🟡 Partial | G | M/L |
-| `turtle`/`inventory` `nbt` hash | Native NBT | — | ✅ Native | F | M |
+| `commands.getEntities` | Only `PlayerSelector` (players) | No ETFR `@e`; GTNHLib Brigadier has no entity selector args | 🟡 Partial | G | M/L |
+| `turtle`/`inventory` `nbt` hash | Native NBT | GTNHLib has FNV/NBTJson, not MD5; implement locally | ✅ Native | F | M |
 | `turtle`/`inventory` `maxCount`, `damage`, `maxDamage`, `displayName` | Native `ItemStack` | — | ✅ Native | F | S |
 | `turtle`/`inventory` `durability` | Native damage/max damage | — | 🟡 Approximate | F | S |
 | `turtle`/`inventory` `lore` | Native NBT `display.Lore` | — | 🟡 Approximate (plain strings, not JSON components) | F | S |
@@ -162,7 +216,8 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | `turtle`/`inventory` `mapColor` | Native `Block.getMapColor` | — | ✅ Native | F | S |
 | `turtle`/`inventory` `tags` | No native tags | HogUtils via ETFR; OreDict fallback | 🔵 Optional | F | M |
 | `turtle`/`inventory` `itemGroups` | No 1.13 item groups | Modern field is always empty | ⏭ No-op | F | S |
-| `turtle.inspect` named block `state` | Metadata only | ETFR converter is structure-only | 🟡 Approximate | F | S/M |
+| `turtle.inspect` named block `state` | Vanilla is metadata-only | GTNHLib `BlockPropertyRegistry`; ETFR uses it for some blocks | 🔵 Optional / ✅ with GTNHLib | F | M |
+| `commands.getBlockInfo` named block `state` | Vanilla is metadata-only | GTNHLib `BlockPropertyRegistry` | 🔵 Optional / ✅ with GTNHLib | F/G | M |
 | `turtle.inspect` `tags` | No native block tags | HogUtils | 🔵 Optional | F | M |
 | `inventory.getItemLimit` per-item capacity | Native `ItemStack.getMaxStackSize` + `IInventory` limit | — | ✅ Native | F | S |
 | `pocket.equipBack` only modems | Local pocket upgrades exist | — | ✅ Native | M | M |
@@ -193,9 +248,8 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | `copy`/`move`/`delete`/`mkdir` safety/multi-path | Native Lua | — | ✅ Native | D | S/M |
 | Missing help docs / `motd.txt` / `modules/turtle` | Native resources | — | ✅ Native | D | S |
 | `/computercraft` admin command | Native Forge command | — | ✅ Native | K | M |
-| `file_transfer` / native drag-drop import | No Forge/LWJGL2 API | No ETFR equivalent | ❌ Blocked | J | L |
-| Full `commands.getEntities` selector parity | No `@e`, entity tags, NBT selectors | No ETFR equivalent | ❌/🟡 Partial | G | L |
-| Named block states in inspect/commands | No block-state API | ETFR only structure NBT | 🟡 Metadata only | F | S/M |
+| `file_transfer` / native drag-drop import | No Forge/LWJGL2 API | lwjgl3ify SDL3 drop events; no ETFR equivalent | ❌ on LWJGL2 / ✅ with lwjgl3ify | J | L |
+| Full `commands.getEntities` selector parity | No `@e`, entity tags, NBT selectors | No ETFR `@e`; GTNHLib Brigadier has no entity selector args | ❌/🟡 Partial | G | L |
 
 ### 4.2 Terminal, text, and formatting
 
@@ -222,11 +276,12 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | `getBlockInfos` order | ✅ Native | Modern order is y→z→x; fix loop order. |
 | `commands.list` subcommand path | ✅ Native | Change from prefix filter to child-command listing. |
 | `commands.getEntities` | 🟡 Partial | Player selectors only with `PlayerSelector`; a custom scanner can add simple `@e[type=...]` but not `tag=`, `nbt=`, `scores=`. |
-| `turtle.inspect` state | 🟡 Metadata | `state = { metadata = n }`; never fake named properties generically. |
+| `turtle.inspect` state | 🔵 Optional / 🟡 fallback | Use GTNHLib `BlockPropertyRegistry.getBlockState(world, x, y, z)` and `forEachValue` for typed values. Fallback: `state = { metadata = n }`. |
+| `commands.getBlockInfo` state | 🔵 Optional / 🟡 fallback | Same GTNHLib bridge; fallback `{ metadata = n }`. |
 | `turtle.inspect` tags | 🔵 Optional | HogUtils `BlockTags` when present; otherwise empty. |
 | Item `tags` | 🔵 Optional | HogUtils when present; OreDict fallback or empty otherwise. |
 | `itemGroups` | ⏭ No-op | Modern 1.120 always writes an empty list; add `{}` for shape. |
-| `nbt` hash | ✅ Native | Sorted NBT + MD5, encoded as lowercase hex (matches CC:T `BaseEncoding.base16().lowerCase()`). |
+| `nbt` hash | ✅ Native | Sorted NBT + MD5, encoded as lowercase hex (matches CC:T `BaseEncoding.base16().lowerCase()`). GTNHLib’s FNV/NBTJson helpers are not a substitute. |
 | `lore` | 🟡 Approximate | 1.7.10 lore strings are plain text, not JSON components. |
 | `potionEffects` | 🟡 Approximate | `ItemPotion.getEffects`; localise names from `Potion`; convert ticks to seconds (`/20`). |
 | `mapColor` | ✅ Native | Only for block items. Modern `ARGB32.transparent(...)` strips alpha, so the result is a 24-bit RGB value; return `MapColor.colorValue` directly. |
@@ -238,6 +293,7 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | Gap | Verdict | Notes |
 |---|---|---|
 | `inventory.getItemLimit` | ✅ Native | `min(stack.getMaxStackSize(), inv.getInventoryStackLimit())` for occupied slots; inventory limit for empty. |
+| `inventory` beyond `IInventory` | 🔵 Optional | GTNHLib `ItemUtil.getItemIO` can wrap `IInventory`, MFR DSU, and CoFH item ducts. This is a GTNH extension, not a modern `IItemHandler` capability. |
 | `inventory`/`turtle` item detail fields | ✅/🟡 | See §4.3. |
 | `peripheral_hub` | ✅ Native | Wired modem reports `"modem"` + `"peripheral_hub"`. |
 | Remote multi-type | ✅ Native | Propagate all types through `getTypeRemote`; keep primary type first for compatibility. |
@@ -269,7 +325,7 @@ hard dependency and avoids copying LGPL code. The root project remains CCPL.
 | `copy`/`move`/`delete`/`mkdir` | ✅ Native | Multi-path, read-only/mount-root guards. |
 | Help docs / `motd.txt` / `modules/turtle` | ✅ Native | Resource files. |
 | `/computercraft` admin command | ✅ Native | Forge `ICommand`; skip 1.20-only subcommands. |
-| `file_transfer`/drag-drop | ❌ Blocked | No Forge/LWJGL2 API; AWT `FileDialog` is an alternative, not parity. |
+| `file_transfer`/drag-drop | ❌ LWJGL2 / ✅ lwjgl3ify | SDL3 `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE`; add an optional client bridge and GUI drop target. AWT `FileDialog` fallback without lwjgl3ify. |
 | Full `commands.getEntities` | ❌/🟡 | See §4.3. |
 
 ---
@@ -352,14 +408,17 @@ Files: `TermAPI.java`, `MonitorPeripheral`, `rom/apis/window`, `rom/apis/colors`
 ### Batch F — Item/block detail and inventory (P1, ~3–5 days)
 
 Files: `TurtleAPI.java`, `InventoryPeripheral.java`, `TurtleInspectCommand.java`,
-`CommandAPI.java`, `NBTUtil.java`, optional `HogUtilsBridge`.
+`CommandAPI.java`, `NBTUtil.java`, optional `HogUtilsBridge`,
+optional `GTNHLibBlockStateBridge`.
 
 - `nbt` hash, `maxCount`, `damage`/`maxDamage`, `displayName`, `durability`, `lore`,
   `unbreakable`, `potionEffects`, `mapColor`.
 - `itemGroups = {}` (modern shape).
 - `inventory.getItemLimit` per-item capacity.
-- `turtle.inspect` `state = { metadata = n }` and optional `tags`.
+- `turtle.inspect`/`commands.getBlockInfo` `state`: GTNHLib `BlockPropertyRegistry` when
+  present; fallback `{ metadata = n }`.
 - Optional HogUtils reflection bridge for `tags`; OreDict fallback.
+- Optional GTNHLib `ItemIO` bridge for richer inventory wrappers (not required for parity).
 
 **Why here:** depends on NBT utility; independent of shell.
 
@@ -401,13 +460,16 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 
 **Why here:** large pure-Lua work; depends on Batch C.
 
-### Batch J — File transfer/import (P3, blocked)
+### Batch J — File transfer/import (P3; conditional on lwjgl3ify)
 
-- No Forge/LWJGL2 drag-drop API; ETFR does not add one.
+- On vanilla LWJGL2: no Forge/LWJGL2 drag-drop API; ETFR does not add one.
+- With lwjgl3ify: SDL3 exposes `SDL_AddEventWatch` and `SDL_EVENT_DROP_FILE`;
+  `SDL_DropEvent.dataString()` gives the path. Add an optional client bridge, a
+  `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` drop target, upload size limits, and the
+  `file_transfer` event.
 - Option A: defer.
-- Option B: AWT `FileDialog`-based import (different UX), plus `file_transfer`-shaped
-  event/API only if we define our own contract.
-- Do not promise modern `file_transfer` parity.
+- Option B: AWT `FileDialog`-based import (different UX) when lwjgl3ify is absent.
+- Do not promise modern `file_transfer` parity on vanilla LWJGL2.
 
 ### Batch K — Admin command (P2, ~1 day)
 
@@ -454,7 +516,7 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 12. Batch K (admin command).
 13. Batch L (GPS accuracy).
 
-### P3 — blocked/deferred
+### P3 — deferred/conditional
 
 14. Batch J (file transfer/import).
 
@@ -464,17 +526,44 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 
 | Item | Why |
 |---|---|
-| Named block-state properties | 1.7.10 has only metadata; ETFR’s converter is structure-NBT-only. Expose `state.metadata` and document. |
+| Named block-state properties without GTNHLib | Vanilla 1.7.10 has only metadata. With GTNHLib, use `BlockPropertyRegistry`; otherwise expose `state.metadata`. |
 | `itemGroups` contents | CC:T 1.120 always writes an empty list; add `{}` only. |
 | Full `@e` selector parity | 1.7.10 lacks `@e`, entity tags, and NBT selectors; a subset is acceptable, full parity is not. |
-| Native OS file drag-and-drop | Forge 1.7.10 `GuiScreen` has no `handleFileDrop`; LWJGL2 has no drop callback. Use AWT or skip. |
+| Native OS file drag-and-drop on vanilla LWJGL2 | Forge 1.7.10 `GuiScreen` has no `handleFileDrop`; LWJGL2 has no drop callback. With lwjgl3ify, SDL3 provides the event; without it, use AWT or skip. |
 | Cross-version GPS channel compatibility | Irrelevant for 1.7.10↔1.20; only multi-host accuracy matters. |
 | `rednet` ID wrapping as urgent work | 1.7.10 IDs are normally small; parity-only. |
 | 1.20 lecterns/Create/EMI/JEI integrations | Out of scope/platform-specific. |
 
 ---
 
-## 8. Optional ETFR/HogUtils integration
+## 8. Optional integrations
+
+### GTNHLib block states
+
+- Soft-depend or reflect on
+  `com.gtnewhorizon.gtnhlib.blockstate.registry.BlockPropertyRegistry`.
+- `BlockPropertyRegistry.getBlockState(world, x, y, z)` → `BlockState`.
+- `BlockState.forEachValue(...)` gives typed values; `toMap()` gives stringified values.
+- Use `BlockStatePool` for repeated calls and `close()` states after use.
+- Fallback to `state = { metadata = n }` when no properties are registered.
+- GTNHLib registers many vanilla blocks; ETFR registers some of its own; other mods can
+  register more.
+- Optionally use GTNHLib `ItemUtil.getItemIO` to wrap MFR DSUs / CoFH item ducts for the
+  generic inventory peripheral. This is an enhancement, not modern capability parity.
+- Licensing: GTNHLib is LGPL-3.0; reflection preferred, or optional `compileOnly`.
+
+### lwjgl3ify file drop
+
+- Optional compileOnly/reflection on `org.lwjgl.sdl.*` and
+  `org.lwjglx.opengl.Display`.
+- Register an `SDL_AddEventWatch` filter for `SDL_EVENT_DROP_FILE`; read
+  `SDL_DropEvent.dataString()`.
+- Queue paths on the client thread and route them to the open
+  `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` screen.
+- Add upload size limits and a `file_transfer`-shaped event.
+- Licensing: lwjgl3ify is LGPL-3.0; do not copy its code.
+
+### ETFR/HogUtils tags
 
 If the goal is “populate modern `tags` fields when ETFR is installed”:
 
@@ -515,12 +604,16 @@ This makes `turtle.getItemDetail`/`inventory.getItemDetail`/`turtle.inspect`/`co
   - `pocket.equipBack` with a speaker/ender modem.
   - `fun/speaker` WAV/DFPWM playback.
   - `edit` multi-line strings/syntax highlighting.
+  - GTNHLib installed: `turtle.inspect`/`commands.getBlockInfo` state properties;
+    without it: metadata fallback.
 - Optional integration:
   - ETFR + HogUtils installed: verify `tags` fields; without ETFR/HogUtils, verify empty
     tables and no class-loading errors.
 - Manual:
-  - `file_transfer` has no automated test; if an AWT alternative is added, test on
-    Windows/Linux/macOS clients.
+  - lwjgl3ify installed: drag a file onto an open computer GUI; verify upload path and
+    size limits.
+  - Without lwjgl3ify: `file_transfer` has no automated test; if an AWT alternative is
+    added, test on Windows/Linux/macOS clients.
 
 ---
 
@@ -531,14 +624,19 @@ This makes `turtle.getItemDetail`/`inventory.getItemDetail`/`turtle.inspect`/`co
 2. **`commands.getEntities`:** player-only subset, custom limited `@e` scanner, or skip?
    Recommendation: implement `@a/@p/@r` + simple `@e[type=...,distance=...]` only if a
    real use case appears.
-3. **File import:** defer, or add AWT file chooser as a non-parity alternative?
+3. **File import:** implement the lwjgl3ify SDL3 drop path when present, AWT fallback
+   otherwise, or defer both?
 4. **`os.version`:** return `"CraftOS 1.9"` even though the mod is 1.75-based? Yes, for
    program compatibility.
 5. **GPS:** adopt the fixed channel/dedupe now, or leave until multi-host accuracy is a
    reported problem?
 6. **`itemGroups`:** add `itemGroups = {}` to match modern shape? Yes, cheap.
-7. **Block state:** document `state.metadata` as the only supported state field, or add
-   ETFR-specific mappings for a few blocks? Recommendation: document first.
+7. **Block state:** use GTNHLib `BlockPropertyRegistry` when present, fall back to
+   `state.metadata`. Recommendation: optional GTNHLib bridge first; no hand-written
+   per-block mappings.
+8. **GTNHLib pin:** compileOnly against a version that contains `blockstate`, or reflect
+   so no version constraint is added? Recommendation: reflection for runtime, optional
+   compileOnly for development.
 
 ---
 
@@ -551,6 +649,7 @@ matter on 1.7.10 and under-weighted a few that are feasible:
   programs. These unlock most modern user code.
 - **Do next:** item details (most fields are native), commands dimension/order, HTTP
   hardening, rednet/parallel, pocket upgrades, `peripheral_hub`.
-- **Optional:** item/block `tags` via ETFR/HogUtils; GPS accuracy.
-- **Do not promise:** named block states, full `@e` selectors, native file drag-and-drop,
-  non-empty `itemGroups`.
+- **Optional:** item/block `tags` via ETFR/HogUtils; block states via GTNHLib; file drop
+  via lwjgl3ify; GPS accuracy.
+- **Do not promise:** named block states without GTNHLib, full `@e` selectors, native file
+  drag-and-drop on vanilla LWJGL2, non-empty `itemGroups`.
