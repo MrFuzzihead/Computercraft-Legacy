@@ -79,7 +79,10 @@ handleMetatable = {
             if self._closed then error("attempt to use a closed file", 2) end
 
             local handle = self._handle
-            if not handle.read then return nil, "file is not readable" end
+            -- read() accepts readLine as an alternative, so lines() does too. Upstream only checks
+            -- for read, which leaves io.stdin:lines() and io.lines() (no filename) returning
+            -- nil, "file is not readable" even though reading a line from stdin is possible.
+            if not handle.read and not handle.readLine then return nil, "file is not readable" end
 
             local args = table.pack(...)
             return function()

@@ -403,6 +403,10 @@ Lua-visible surface:
    the port wraps `readLine` and drops the flag.
 3. **`stdin:read("*a")` is nil** — inherited: the standard streams only provide `readLine`/`write`,
    so there is no `readAll` to call. Same as upstream.
+4. **`io.stdin:lines()` and `io.lines()` work.** Upstream's `lines` requires `handle.read`, which
+   the standard streams do not have, so both returned `nil, "file is not readable"` even though
+   `read()` accepts `readLine`. The port checks for either, matching `read`.
+   (Renumbering: the entries formerly numbered 4 and 5 follow.)
 4. **`file:write(1)` writes `"1"`, not `"1.0"`.** `io` converts values with Lua's `tostring`
    before handing them to the fs handle, because this codebase's handles stringify a Java double.
    Note that calling `fs.open(..., "w"):write(1)` directly still writes `1.0`: that is a
@@ -414,12 +418,12 @@ Lua-visible surface:
 
 | Test | Covers |
 |---|---|
-| `IOAPITest` (45 tests) | open/modes/argument checks, `l`/`L`/`a`/numeric/multi-format reads, `lines` (with and without autoclose, format pass-through), `seek` against a real file, write/append/chaining, standard streams, `io.input`/`io.output` getters and setters, `io.type`, closed-handle errors, `setvbuf`, error messages |
+| `IOAPITest` (47 tests) | open/modes/argument checks, `l`/`L`/`a`/numeric/multi-format reads, `lines` (with and without autoclose, format pass-through), `seek` against a real file, write/append/chaining, standard streams, `io.input`/`io.output` getters and setters, `io.type`, closed-handle errors, `setvbuf`, error messages, `io.stdin:lines()`/`io.lines()` over stubbed input |
 | `FSAPITest.binaryWriteHandlesAcceptStringsAsWellAsBytes` | the `wb` fix, including that a single byte number still works |
 | `BiosBatchBHeadlessTest` (3 tests) | real BIOS: `io` loaded as an API table, `io.write`/`io.stderr` reaching the terminal, `/rom` file reads, `io.lines`, `io.output`/`io.input` redirection, `io.stdin` driven by simulated keystrokes, and `help` still printing through `io` |
 | `IngameTestScriptsTest` | now discovers every `docs/ingame-tests/**/*.lua` (skipping `*manual*`), so `b1_io` runs in CI too |
 
-Full suite: **1520 tests, 0 failures**.
+Full suite: **1522 tests, 0 failures**.
 
 ### Found while testing
 

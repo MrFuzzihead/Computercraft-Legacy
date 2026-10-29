@@ -65,13 +65,12 @@ eq("io.read() returned the typed line", "through io.read", viaRead)
 -- ---------------------------------------------------------------------------
 section("stdin:read('*a') is nil, not a crash")
 
-io.write("Type: anything")
-print()
+-- This one does NOT wait: the stdin handle has no readAll, so '*a' resolves to nil
+-- immediately. The newline is consumed by the read in the next section.
 local whole = io.stdin:read("*a")
 eq("stdin has no readAll, so '*a' is nil", nil, whole)
-
--- The '*a' read consumed nothing, so the line typed above is still pending. Drain it so the
--- program does not exit with an unread input line confusing the shell.
+io.write("Type: anything, then Enter (it is read by the next prompt)")
+print()
 io.stdin:read()
 
 -- ---------------------------------------------------------------------------
@@ -79,6 +78,8 @@ section("stdin:lines() over typed input")
 
 print("Type three lines, then a fourth that is just '.'")
 local n = 0
+-- Works because handle:lines now accepts readLine as well as read (upstream only checked
+-- read, which made io.stdin:lines() and io.lines() fail with "file is not readable").
 for typed in io.stdin:lines() do
   if typed == "." then break end
   n = n + 1

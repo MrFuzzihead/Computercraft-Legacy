@@ -55,8 +55,11 @@ class IOAPITest {
         "-- Stubs for the standard streams, which io captures at load time.",
         "_writes = {}",
         "write = function( s ) _writes[#_writes + 1] = tostring( s ) end",
-        "read = function() return _stdin_line end",
-        "_stdin_line = nil",
+        "_stdin_queue = {}",
+        "read = function()",
+        "  if #_stdin_queue > 0 then return table.remove( _stdin_queue, 1 ) end",
+        "  return nil",
+        "end",
         "",
         "-- Minimal terminal + colours for io.stderr.",
         "_text_colour = 1",
@@ -593,12 +596,33 @@ class IOAPITest {
     @Test
     void defaultInputReadsThroughTheReadGlobal() {
         LuaRomTestSupport.Capture cap = run(
-            "_stdin_line = 'typed'\n" + "local a = io.stdin:read()\n"
+            "_stdin_queue = { 'typed', 'typed' }\n" + "local a = io.stdin:read()\n"
                 + "local b = io.stdin:read('L')\n"
                 + "_capture(a, b)");
         assertEquals("typed", cap.string(0));
         // Upstream would pass `true` into io.read() here and raise; the port wraps it instead.
         assertEquals("typed", cap.string(1), "io.stdin:read('*L') must not raise");
+    }
+
+    @Test
+    void stdinLinesYieldsTypedLines() {
+        // lines() requires handle.read upstream, but the standard input only provides readLine,
+        // so io.stdin:lines() returned nil, "file is not readable" even though read() works.
+        LuaRomTestSupport.Capture cap = run(
+            "_stdin_queue = { 'first', 'second' }\n" + "local out = {}\n"
+                + "for line in io.stdin:lines() do out[#out + 1] = line end\n"
+                + "_capture( #out, table.concat( out, '|' ) )");
+        assertEquals(2.0, cap.number(0));
+        assertEquals("first|second", cap.string(1));
+    }
+
+    @Test
+    void ioLinesWithNoFilenameReadsStdin() {
+        LuaRomTestSupport.Capture cap = run(
+            "_stdin_queue = { 'only' }\n" + "local out = {}\n"
+                + "for line in io.lines() do out[#out + 1] = line end\n"
+                + "_capture( table.concat( out, '|' ) )");
+        assertEquals("only", cap.string(0));
     }
 
     @Test
