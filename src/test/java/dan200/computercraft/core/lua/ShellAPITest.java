@@ -170,6 +170,11 @@ class ShellAPITest {
         sb.append("  return base .. '/' .. rel\n");
         sb.append("end\n");
 
+        // Programs are peeked at for a #! hashbang; none of the mock files have one.
+        sb.append("function fs.open(p) return nil end\n");
+        sb.append("function fs.getDir(p) return p:match('^(.*)/[^/]*$') or '' end\n");
+        // cc.require is loaded lazily by createShellEnv; a minimal stand-in is enough here.
+        sb.append("function dofile(p) return { make = function() return function() end, {} end } end\n");
         sb.append("function fs.exists(p)  return _mock_files[p] == true end\n");
         sb.append("function fs.isDir(p)   return false end\n");
         sb.append("function fs.getName(p) return p:match('[^/]+$') or p end\n");
