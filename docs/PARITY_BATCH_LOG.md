@@ -349,6 +349,13 @@ include_hidden = false }) end)` omits `.hidden`.
 **9 — `os.version()`.** `print(os.version())` must print `CraftOS 1.9`, and the shell banner on
 boot must show the same.
 
-**10 — Multishell smoke test.** With the above changes in place, open a second tab (`Ctrl+T`),
-run something in each, and verify `Ctrl+T`/`Ctrl+W` and program switching still work — Batch A
-touches `print`, `write`, `os.run` and the program env chain, all of which multishell depends on.
+**10 — Multishell smoke test.** `bg shell` to open a second tab, click between the tab labels, and
+run something in each. Batch A touches `print`, `write`, `os.run` and the program env chain, all
+of which multishell depends on.
+
+Note for whoever runs this: **there are no keyboard shortcuts for tabs in this build.**
+`WidgetTerminal` reserves Ctrl+T / Ctrl+R / Ctrl+S as hold-to-terminate / reboot / shutdown, and
+`multishell.lua` only switches tabs on `mouse_click`. Ctrl+W and Ctrl+Left/Right have no handler
+at all. CC:Tweaked 1.120.2 behaves identically, so this is neither a regression nor a gap. Also
+note that `multishell.launch({}, path)` does not put `multishell` in the tab's env — a tab printed
+`multishell.getCurrent()` as `nil` for exactly that reason. `bg`/`fg` pass the shell env for you.

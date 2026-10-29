@@ -40,7 +40,7 @@ Send me the `RESULT`/`FAIL` block of anything that does not come out clean.
 
 | File | Item | What it proves | Needs |
 |---|---|---|---|
-| `a3_multishell.lua` | 3 | Tabs launch, focus switches, titles work; then a manual Ctrl+T/Ctrl+W drill. Skips cleanly without multishell. One check is skipped when run from `/startup` — see the note below. | Colour computer |
+| `a3_multishell.lua` | 3 | Tabs launch, counts/titles work, a tab's env can see `multishell`, focus switches; then a drill for the things only a mouse can do. Skips cleanly without multishell. | Colour computer |
 | `a4_print.lua` | 4 | `print` emits `a\tb` and keeps nil holes; `write` coerces numbers; `printError` restores colour; a tab is exactly **one column** wide. | — |
 | `a5_settings.lua` | 5 | Every BIOS-registered default, `getNames`, type enforcement, and persistence across a reboot (uses a throwaway `batcha.test` key, cleaned up after). | Two runs, one reboot |
 | `a6_strict_globals.lua` | 6 | `bios.strict_globals` blocks new globals via `os.run`, still allows reads, and is restored before exit. | — |
@@ -50,18 +50,35 @@ Send me the `RESULT`/`FAIL` block of anything that does not come out clean.
 
 ## Items that cannot be scripted
 
-### 3 — multishell keybinds
+### 3 — multishell
 
-`a3_multishell` runs a manual drill at the end: `Ctrl+T` to open a tab, `Ctrl+W` to
-close it, arrow/click to switch. Batch A changes `print`, `write`, `os.run` and the
-program env chain, all of which the shell and multishell sit on, so a crash here would
-be a regression. Report anything that blanks, crashes, or shows `attempt to index nil`.
+`a3_multishell` checks what can be scripted (launch, tab count, title, that the tab's env can
+see `multishell`, focus switching) and then prints a manual drill.
 
-One check is expected to report `SKIP getFocus before the menu is first selected`. That
-is not a bug: the shell's tab is resumed *inside* `launchProcess()` before
-`selectProcess()` runs, so `multishell.getFocus()` is `nil` for anything executed from
-`/startup`. Run `a3_multishell` from the shell prompt (as you will in game) and it
-asserts the real value instead.
+**There are no keyboard shortcuts for tabs in this build, and there never were.** Verified
+against the source:
+
+| Expected | Actual |
+|---|---|
+| Ctrl+T opens a tab | **No.** `WidgetTerminal.update()` uses Ctrl+T as *terminate* (hold ~1s). |
+| Ctrl+W closes a tab | **No handler at all.** |
+| Ctrl+Left/Right switches tabs | **No handler.** `multishell` only switches on `mouse_click`. |
+| Clicking a tab switches | **Yes.** |
+| `bg` / `fg` open tabs | **Yes** — they call `shell.openTab` / `shell.switchTab`. |
+
+CC:Tweaked 1.120.2 is the same: its `TerminalWidget` still reserves Ctrl+T/S/R, and its
+`multishell.lua` also only handles `mouse_click`. So this is not a regression and not a
+missing feature — the shortcut just does not exist in either version.
+
+Two things that look like bugs but are not:
+
+- **A tab printing `multishell.getCurrent()` as `nil`.** `multishell.launch(env, path)` only
+exposes what you put in `env`, so `launch({}, "/prog")` leaves `multishell` nil inside the tab.
+Pass `{ multishell = multishell }`, or use `bg`/`fg`, which pass the shell env for you. The
+script now asserts this explicitly.
+- **`SKIP getFocus before the menu is first selected`.** The shell's process is resumed inside
+`launchProcess()` before `selectProcess()` runs, so `getFocus()` is `nil` for anything run from
+`/startup`. Run `a3_multishell` from the prompt and it asserts the real value.
 
 ### 5 — the reboot
 

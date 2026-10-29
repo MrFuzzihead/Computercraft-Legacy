@@ -71,19 +71,26 @@ else
   multishell.setTitle(cur, oldTitle)
 
   section("launch a second tab")
-  -- A program that prints once and stays alive so the tab persists.
+  -- The tab program reports back through a file rather than through the screen, because
+  -- its output lands in its own window. It also checks that the tab can see `multishell`:
+  -- launch() only passes the env you give it, so a bare {} leaves `multishell` nil inside
+  -- the tab (getCurrent() then evaluates to nil). That is a caller mistake, not a bug, and
+  -- the same applies to shell.openTab(), which passes the shell env for you.
   local h = fs.open("/.a3_tab", "w")
-  h.write("print('a3 tab running: ' .. tostring(multishell and multishell.getCurrent()))\n")
+  h.write("local id = multishell and multishell.getCurrent()\n")
+  h.write("local f = fs.open(\"/.a3_tab_result\", \"w\")\n")
+  h.write("f.write(tostring(id))\n")
+  h.write("f.close()\n")
   h.write("while true do sleep(1) end\n")
   h.close()
 
-  local tabId = multishell.launch({}, "/.a3_tab")
+  local tabId = multishell.launch({ multishell = multishell }, "/.a3_tab")
   -- Report what launch() actually returned rather than just "not a number": this IS the
   -- diagnostic a human needs if the tab id is unexpectedly nil.
   ok("launch returned a tab id (" .. tostring(tabId) .. ")", type(tabId) == "number", type(tabId))
 
-  -- launch() appends to the process list synchronously, so the count is already
-  -- updated; no sleep() here, which also keeps this script runnable without timers.
+  -- launch() resumes the new process and appends to the list synchronously, so neither the
+  -- count nor the tab result file needs a sleep().
   ok(
     "tab count increased (" .. count0 .. " -> " .. tostring(multishell.getCount()) .. ")",
     multishell.getCount() > count0
@@ -91,6 +98,15 @@ else
 
   if type(tabId) == "number" then
     ok("the new tab has a title (" .. tostring(multishell.getTitle(tabId)) .. ")", multishell.getTitle(tabId) ~= nil)
+
+    if fs.exists("/.a3_tab_result") then
+      local r = fs.open("/.a3_tab_result", "r")
+      local reported = r.readAll()
+      r.close()
+      eq("the tab sees its own id via multishell.getCurrent()", tostring(tabId), reported)
+    else
+      ok("the tab program ran", false, "/.a3_tab_result was not written")
+    end
 
     section("focus switching")
     local before = multishell.getFocus()
@@ -100,17 +116,16 @@ else
       multishell.setFocus(before)
       eq("focus restored", before, multishell.getFocus())
     else
-      -- getFocus() is nil until the menu has been shown at least once in some builds.
+      -- getFocus() is nil for anything that runs from /startup; see the note above.
       skip("focus restore (getFocus() was " .. tostring(before) .. ")")
     end
   else
-    skip("title and focus checks (no tab id)")
+    skip("title, tab-env and focus checks (no tab id)")
   end
 
-  -- Terminate the extra tab by alternating focus; multishell has no close API in this
-  -- version, so leave it for the user to close with Ctrl+W in the drill.
   fs.delete("/.a3_tab")
-  ok("temporary tab program removed", not fs.exists("/.a3_tab"))
+  fs.delete("/.a3_tab_result")
+  ok("temporary tab files removed", not fs.exists("/.a3_tab"))
 end
 
 finish("BATCH-A-3 multishell")
@@ -118,17 +133,26 @@ finish("BATCH-A-3 multishell")
 -- ---------------------------------------------------------------------------
 -- Human drill, printed after finish() so the clear above cannot hide it.
 
-print("--- MANUAL DRILL (multishell keybinds) ---")
-print("1. Ctrl+T            -> a new tab appears, shell banner shows.")
-print("   EXPECT: two tabs drawn at the top, active one highlighted.")
-print("2. In the new tab type:  print('a','b')")
-print("   EXPECT: 'a b' (one space), no error.")
-print("3. Ctrl+W            -> the current tab closes.")
-print("4. Ctrl+T again, then Ctrl+Left/Right (or click a tab)")
-print("   EXPECT: focus moves between tabs, prompt follows.")
-print("5. In tab 1 run:  help")
-print("   EXPECT: paged output still scrolls and prompts correctly.")
-print("6. Close every extra tab so only the shell remains.")
+print("--- MANUAL DRILL: what this build actually supports ---")
+print("There are NO keyboard shortcuts for tabs in this build.")
+print("multishell only switches tabs on mouse_click, and the Java side")
+print("reserves Ctrl+T / Ctrl+R / Ctrl+S. Checking it, in order:")
 print("")
-print("Report any crash, blank tab, or 'attempt to index nil' error.")
-
+print("1. Type:  bg shell")
+print("   EXPECT: a second tab appears at the top, titled shell.")
+print("   (bg opens a tab; fg opens one and switches to it.)")
+print("2. CLICK the tab labels at the top to switch between them.")
+print("   EXPECT: the prompt follows the click. Arrow keys do nothing.")
+print("3. Tap Ctrl+T, then Ctrl+W. EXPECT: NOTHING happens.")
+print("   This is correct: no handler exists for Ctrl+W, and Ctrl+T")
+print("   needs a 1-second HOLD before it fires.")
+print("4. In a spare tab, HOLD Ctrl+T for about a second.")
+print("   EXPECT: the running program is terminated (a terminate")
+print("   event), then the tab shows Press any key and closes.")
+print("   Ctrl+R held = reboot, Ctrl+S held = shutdown. Do not test")
+print("   those here unless you are happy to reboot.")
+print("5. In a remaining tab run:  help")
+print("   EXPECT: paged output still scrolls and prompts correctly;")
+print("   this is the path that exercises print/write after Batch A.")
+print("")
+print("Report any crash, blank tab, or attempt-to-index-nil error.")
