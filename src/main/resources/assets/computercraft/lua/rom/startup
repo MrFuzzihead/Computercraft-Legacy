@@ -24,6 +24,12 @@ end
 shell.setPath( sPath )
 help.setPath( "/rom/help" )
 
+-- Show the message of the day, if enabled and the program exists. The existence check keeps
+-- this harmless until the motd program is ported (Batch D).
+if settings.get( "motd.enable" ) and fs.exists( "/rom/programs/motd" ) then
+    shell.run( "/rom/programs/motd" )
+end
+
 -- Setup aliases
 shell.setAlias( "ls", "list" )
 shell.setAlias( "dir", "list" )
@@ -63,17 +69,29 @@ local function completeSide( sText, bAddSpaces )
 end
 local function completeFile( shell, nIndex, sText, tPreviousText )
     if nIndex == 1 then
-        return fs.complete( sText, shell.dir(), true, false )
+        return fs.complete( sText, shell.dir(), {
+        include_files = true,
+        include_dirs = false,
+        include_hidden = settings.get( "shell.autocomplete_hidden" ),
+    } )
     end
 end
 local function completeDir( shell, nIndex, sText, tPreviousText )
     if nIndex == 1 then
-        return fs.complete( sText, shell.dir(), false, true )
+        return fs.complete( sText, shell.dir(), {
+        include_files = false,
+        include_dirs = true,
+        include_hidden = settings.get( "shell.autocomplete_hidden" ),
+    } )
     end
 end
 local function completeEither( shell, nIndex, sText, tPreviousText )
     if nIndex == 1 then
-        return fs.complete( sText, shell.dir(), true, true )
+        return fs.complete( sText, shell.dir(), {
+        include_files = true,
+        include_dirs = true,
+        include_hidden = settings.get( "shell.autocomplete_hidden" ),
+    } )
     end
 end
 local function completeEitherEither( shell, nIndex, sText, tPreviousText )
@@ -87,7 +105,11 @@ local function completeEitherEither( shell, nIndex, sText, tPreviousText )
         end
         return tResults
     elseif nIndex == 2 then
-        return fs.complete( sText, shell.dir(), true, true )
+        return fs.complete( sText, shell.dir(), {
+        include_files = true,
+        include_dirs = true,
+        include_hidden = settings.get( "shell.autocomplete_hidden" ),
+    } )
     end
 end
 local function completeProgram( shell, nIndex, sText, tPreviousText )
@@ -153,7 +175,11 @@ local function completePastebin( shell, nIndex, sText, tPreviousText )
         return completeMultipleChoice( sText, tPastebinOptions )
     elseif nIndex == 2 then
         if tPreviousText[2] == "put" then
-            return fs.complete( sText, shell.dir(), true, false )
+            return fs.complete( sText, shell.dir(), {
+        include_files = true,
+        include_dirs = false,
+        include_hidden = settings.get( "shell.autocomplete_hidden" ),
+    } )
         end
     end
 end
@@ -203,20 +229,49 @@ if fs.exists( "/rom/autorun" ) and fs.isDir( "/rom/autorun" ) then
 	end
 end
 
+-- Every startup program in a directory (or the single startup file) under sBaseDir.
+local function findStartups( sBaseDir )
+    local tStartups = nil
+    local sBasePath = "/" .. fs.combine( sBaseDir, "startup" )
+    local sStartupNode = shell.resolveProgram( sBasePath )
+    if sStartupNode then
+        tStartups = { sStartupNode }
+    end
+    -- A startup directory and a startup file can coexist, so check both.
+    if fs.isDir( sBasePath ) then
+        if tStartups == nil then
+            tStartups = {}
+        end
+        local tList = fs.list( sBasePath )
+        table.sort( tList )
+        for n = 1, #tList do
+            local sPath = "/" .. fs.combine( sBasePath, tList[n] )
+            if not fs.isDir( sPath ) then
+                tStartups[#tStartups + 1] = sPath
+            end
+        end
+    end
+    return tStartups
+end
+
 -- Run the user created startup, either from disk drives or the root
-local sUserStartup = shell.resolveProgram( "/startup" )
-local bEnableDiskStartup = (commands == nil)
-if bEnableDiskStartup then
-    for n,sName in pairs( peripheral.getNames() ) do
+local tUserStartups = nil
+if settings.get( "shell.allow_startup" ) then
+    tUserStartups = findStartups( "/" )
+end
+if settings.get( "shell.allow_disk_startup" ) then
+    for n, sName in pairs( peripheral.getNames() ) do
         if disk.isPresent( sName ) and disk.hasData( sName ) then
-            local sDiskStartup = shell.resolveProgram( "/" .. disk.getMountPath( sName ) .. "/startup" )
-            if sDiskStartup then
-                sUserStartup = sDiskStartup
+            local tStartups = findStartups( disk.getMountPath( sName ) )
+            if tStartups then
+                tUserStartups = tStartups
                 break
             end
         end
     end
 end
-if sUserStartup then
-    shell.run( sUserStartup )
+if tUserStartups then
+    for n = 1, #tUserStartups do
+        shell.run( tUserStartups[n] )
+    end
 end
