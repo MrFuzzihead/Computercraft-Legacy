@@ -449,14 +449,15 @@ class TextUtilsJsonTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void testSerializeJsonUnicodeStringsEncodesNonAsciiBytes() {
+    void testSerializeJsonUnicodeStringsEncodesCodePoints() {
         ResultCapture cap = new ResultCapture();
-        // 0xC3 0xA9 is UTF-8 for 'é'; with unicode_strings each byte becomes \\uXXXX
+        // 0xC3 0xA9 is UTF-8 for 'é' (U+00E9); with unicode_strings the code *point* is
+        // escaped, matching CC:Tweaked's utf8.codes walk.
         run(
             buildMachine(cap),
             "local s = string.char(195, 169)\n" + "_capture(serializeJSON(s, {unicode_strings=true}))");
         assertNotNull(cap.args);
-        assertEquals("\"\\u00c3\\u00a9\"", cap.args[0], "unicode_strings=true must escape non-ASCII bytes as \\uXXXX");
+        assertEquals("\"\\u00E9\"", cap.args[0], "unicode_strings=true must escape non-ASCII code points as \\uXXXX");
     }
 
     @Test
@@ -477,16 +478,13 @@ class TextUtilsJsonTest {
     }
 
     @Test
-    void testSerializeJsonWithoutUnicodeStringPreservesUtf8Bytes() {
+    void testSerializeJsonWithoutUnicodeStringEscapesNonAsciiBytes() {
         ResultCapture cap = new ResultCapture();
-        // Without unicode_strings, raw UTF-8 bytes should pass through unchanged
-        run(
-            buildMachine(cap),
-            "local s = string.char(195, 169)\n" + "local json = serializeJSON(s)\n"
-                + "local raw = '\"' .. s .. '\"'\n"
-                + "_capture(json == raw)");
+        // CC:Tweaked escapes bytes >= 0x7F in the default path too, so the output is always
+        // pure ASCII. (This ROM used to pass raw UTF-8 through; that was a deviation.)
+        run(buildMachine(cap), "local s = string.char(195, 169)\n" + "_capture(serializeJSON(s))");
         assertNotNull(cap.args);
-        assertTrue((Boolean) cap.args[0], "Without unicode_strings, UTF-8 bytes should be preserved verbatim");
+        assertEquals("\"\\u00C3\\u00A9\"", cap.args[0], "Default serialisation must escape non-ASCII bytes");
     }
 
     @Test
@@ -499,8 +497,8 @@ class TextUtilsJsonTest {
         assertNotNull(cap.args);
         String result = (String) cap.args[0];
         assertTrue(
-            result.contains("\\u00c3") && result.contains("\\u00a9"),
-            "unicode_strings=true must escape non-ASCII bytes in object values");
+            result.contains("\\u00E9"),
+            "unicode_strings=true must escape non-ASCII code points in object values, got: " + result);
     }
 
     // -------------------------------------------------------------------------

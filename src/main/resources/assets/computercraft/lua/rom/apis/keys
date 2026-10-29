@@ -34,8 +34,11 @@ local tKeys = {
 	nil,		nil,		nil,		nil,		nil,			-- 136
 	"numPadEquals",nil,		nil,		"cimcumflex","at",			-- 141
 	"colon",	"underscore","kanji",	"stop",		"ax",			-- 146
-	nil,		"numPadEnter","rightCtrl",nil,		nil,			-- 151
-	nil,		nil,		nil,		nil,		nil,			-- 156
+	-- LWJGL2 has KEY_UNLABELED at 151 and KEY_NUMPADENTER/KEY_RCONTROL at 156/157.
+	-- The original table had these two names four slots early (152/153), where LWJGL2
+	-- defines nothing, so numPadEnter/rightCtrl could never match a real key event.
+	nil,		nil,		nil,		nil,		nil,			-- 151
+	"numPadEnter","rightCtrl",nil,		nil,		nil,			-- 156
 	nil,		nil,		nil,		nil,		nil,			-- 161
 	nil,		nil,		nil,		nil,		nil,			-- 166
 	nil,		nil,		nil,		nil,		nil,			-- 171
@@ -54,6 +57,45 @@ for nKey, sKey in pairs( tKeys ) do
 	keys[sKey] = nKey
 end
 keys["return"] = keys.enter
+
+-- Modern (CC:Tweaked) names for key codes which already exist here under an older
+-- spelling. These are aliases only: the numeric values are unchanged, so programs which
+-- compare against keys.semiColon keep behaving identically.
+local tAliases = {
+	semiColon		= "semicolon",
+	scollLock		= "scrollLock",
+	cimcumflex		= "circumflex",
+	multiply		= "numPadMultiply",
+	numPadEquals	= "numPadEqual",
+}
+for sLegacy, sAlias in pairs( tAliases ) do
+	if keys[ sLegacy ] ~= nil then
+		keys[ sAlias ] = keys[ sLegacy ]
+	end
+end
+
+-- Key codes which exist in LWJGL2 (and so can actually be delivered by 1.7.10) but which
+-- the original table omitted. Values are org.lwjgl.input.Keyboard constants.
+--
+-- Deliberately not added, because 1.7.10 cannot produce them:
+--   * f20-f25: LWJGL2 stops at KEY_F19 (113).
+--   * world1 / world2: no LWJGL2 constant; CC:Tweaked itself leaves them commented out.
+local tExtra = {
+	f16				= 103, -- KEY_F16
+	f17				= 104, -- KEY_F17
+	f18				= 105, -- KEY_F18
+							-- (106-111 have no name in this table)
+	f19				= 113, -- KEY_F19
+	printScreen		= 183, -- KEY_SYSRQ
+	leftSuper		= 219, -- KEY_LMETA / KEY_LWIN
+	rightSuper		= 220, -- KEY_RMETA / KEY_RWIN
+	menu			= 221, -- KEY_APPS
+}
+for sKey, nKey in pairs( tExtra ) do
+	keys[ sKey ] = nKey
+	-- Register the human-readable name too, so keys.getName(keys.f16) == "f16".
+	tKeys[ nKey ] = sKey
+end
 
 function getName( _nKey )
 	return tKeys[ _nKey ]
