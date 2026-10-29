@@ -71,6 +71,13 @@ end
 -- Files in / or one directory down whose name looks like the one we asked for.
 local function findCandidates()
   local found = {}
+  local function add(path)
+    for _, existing in ipairs(found) do
+      if existing == path then return end
+    end
+    found[#found + 1] = path
+  end
+
   local function consider(dir, depth)
     local names = fs.list(dir)
     table.sort(names)
@@ -81,12 +88,16 @@ local function findCandidates()
         if depth < 2 then consider(path, depth + 1) end
       else
         local lower = name:lower()
-        if lower:find("manual", 1, true) or lower:find("batchb", 1, true) then
-          found[#found + 1] = path
+        -- .lua files are programs, not notes. Skipping them matters: this pack's own
+        -- b2_io_manual.lua used to be offered as a "candidate" and made the search
+        -- ambiguous, which turned a findable file into a skip.
+        if not lower:match("%.lua$") then
+          if lower:find("batchb", 1, true) or lower:find("manual", 1, true) then add(path) end
         end
       end
     end
   end
+
   consider("", 0)
   return found
 end
@@ -103,11 +114,12 @@ local function listing(dir)
 end
 
 local function describeTree()
-  note("what this computer can see:")
+  note("current directory: /" .. (shell.dir() == "" and "" or shell.dir() .. "/") )
+  note("what this computer can see (the read-only rom mount is skipped):")
   note("  /  " .. listing(""))
   for _, name in ipairs(fs.list("")) do
     local dir = fs.combine("", name)
-    if fs.isDir(dir) then
+    if fs.isDir(dir) and name ~= "rom" then
       note("  " .. dir .. "/  " .. listing(dir))
       for _, inner in ipairs(fs.list(dir)) do
         local sub = fs.combine(dir, inner)
@@ -132,6 +144,9 @@ if tArgs[1] ~= nil then
     skip("that is a directory, not a file: " .. target)
     target = nil
   end
+elseif isFile(shell.resolve(NAME)) then
+  -- Running from inside /batchB (or wherever you saved it) finds it directly.
+  target = shell.resolve(NAME)
 elseif isFile(DEFAULT_PATH) then
   target = DEFAULT_PATH
 else
@@ -144,7 +159,7 @@ else
     for _, path in ipairs(candidates) do note("candidate: " .. path) end
     note("re-run with one of them as an argument, e.g. b3_io_edit_check " .. candidates[1])
   else
-    skip("no " .. DEFAULT_PATH .. " and nothing similar in / or one level down")
+    skip("no " .. DEFAULT_PATH .. " and nothing similar in / or two levels down")
   end
 end
 

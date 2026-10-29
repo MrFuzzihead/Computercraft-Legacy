@@ -272,6 +272,30 @@ class IngameTestScriptsTest {
     }
 
     /**
+     * The search must not be fooled by the pack's own .lua files: a run from a directory
+     * containing both {@code batchb-manual.txt} and {@code b2_io_manual.lua} used to report
+     * "several files could be the one you meant" and skip instead of reading the text file.
+     */
+    @Test
+    void editCheckIgnoresLuaFilesWhenSearching() throws Exception {
+        File hdd = freshHdd();
+        File dir = new File(hdd, "batchB");
+        assertTrue(dir.mkdirs(), "could not create the batchB directory");
+        Files.write(new File(dir, "batchb-manual.txt").toPath(), "typed line\n".getBytes(StandardCharsets.UTF_8));
+        Files.write(new File(dir, "b2_io_manual.lua").toPath(), "return 1\n".getBytes(StandardCharsets.UTF_8));
+
+        Run run = runScript(hdd, script("b3_io_edit_check"));
+        run.assertAllPassed("b3_io_edit_check (nested, with a decoy .lua)");
+
+        java.util.regex.Matcher m = Pattern.compile("passed (\\d+)")
+            .matcher(
+                run.summaries()
+                    .get(0));
+        assertTrue(m.find(), "no pass count in " + run.log);
+        assertTrue(Integer.parseInt(m.group(1)) >= 5, "the checks should have run, not been skipped: " + run.log);
+    }
+
+    /**
      * {@code a5_settings} is deliberately two-phase: it writes a throwaway key, saves, and asks for
      * a reboot. Running it twice against the same save directory simulates that reboot, including
      * the cleanup phase.
