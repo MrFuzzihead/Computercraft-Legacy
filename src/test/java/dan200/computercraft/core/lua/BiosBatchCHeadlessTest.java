@@ -310,14 +310,36 @@ class BiosBatchCHeadlessTest {
         }
     }
 
-    private static Boot boot() throws Exception {
-        File rom = new File("src/main/resources/assets/computercraft/lua/rom");
-        assertTrue(rom.isDirectory(), "the Lua ROM must be present at " + rom.getAbsolutePath());
+    /** Writes a fixture file, rethrowing checked I/O as unchecked (a failure here is a test bug). */
+    private static void write(File file, String contents) {
+        try {
+            Files.write(file.toPath(), contents.getBytes(StandardCharsets.UTF_8));
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
 
+    /** Boots a computer after letting {@code seed} populate the save directory. */
+    private static Boot bootWith(java.util.function.Consumer<File> seed) throws Exception {
+        File hdd = Files.createTempDirectory("cc-bios-batch-c-startup")
+            .toFile();
+        hdd.deleteOnExit();
+        seed.accept(hdd);
+        return bootFrom(hdd);
+    }
+
+    private static Boot boot() throws Exception {
         File hdd = Files.createTempDirectory("cc-bios-batch-c")
             .toFile();
         hdd.deleteOnExit();
         Files.write(new File(hdd, "startup").toPath(), STARTUP.getBytes(StandardCharsets.UTF_8));
+        return bootFrom(hdd);
+    }
+
+    /** Boots a computer using an already-prepared save directory. */
+    private static Boot bootFrom(File hdd) throws Exception {
+        File rom = new File("src/main/resources/assets/computercraft/lua/rom");
+        assertTrue(rom.isDirectory(), "the Lua ROM must be present at " + rom.getAbsolutePath());
 
         CobaltMachine machine = LuaTestMachine.create();
         Computer computer = computerOf(machine);
@@ -410,6 +432,46 @@ class BiosBatchCHeadlessTest {
         unexpected.removeAll(EXPECTED_CHECKS);
         assertTrue(unexpected.isEmpty(), "undeclared checks: " + unexpected);
         assertEquals(EXPECTED_CHECKS.size(), seen.size());
+    }
+
+    /**
+     * {@code /startup} may be a directory, and both forms run in sorted order. Also checks that
+     * {@code shell.allow_startup} turns the whole thing off.
+     *
+     * <p>
+     * This has to build its own save directory: the shared {@link #boot()} helper uses
+     * {@code /startup} as a single file to bootstrap the checks.
+     * </p>
+     */
+    @Test
+    void startupDirectoryRunsEveryProgramInOrder() throws Exception {
+        Boot boot = bootWith(hdd -> {
+            File dir = new File(hdd, "startup");
+            assertTrue(dir.mkdirs(), "could not create /startup");
+            write(new File(dir, "01_first"), "local h = fs.open('/order.log', 'w') h.write('first\\n') h.close()\n");
+            write(new File(dir, "02_second"), "local h = fs.open('/order.log', 'a') h.write('second\\n') h.close()\n");
+        });
+
+        File log = new File(boot.hdd, "order.log");
+        assertTrue(log.isFile(), "no startup program ran. Screen:\n" + boot.screen);
+        assertEquals(
+            Arrays.asList("first", "second"),
+            Files.readAllLines(log.toPath(), StandardCharsets.UTF_8),
+            "startup programs should run in sorted order");
+    }
+
+    @Test
+    void startupCanBeDisabledWithTheSetting() throws Exception {
+        Boot boot = bootWith(hdd -> {
+            write(new File(hdd, "startup"), "local h = fs.open('/ran.log', 'w') h.write('ran') h.close()\n");
+            // settings.load runs textutils.unserialize, which prepends "return ", so the file
+            // holds a bare table literal (this is what settings.save writes).
+            write(new File(hdd, ".settings"), "{ [\"shell.allow_startup\"] = false }\n");
+        });
+
+        assertFalse(
+            new File(boot.hdd, "ran.log").isFile(),
+            "shell.allow_startup = false must skip /startup. Screen:\n" + boot.screen);
     }
 
     @Test

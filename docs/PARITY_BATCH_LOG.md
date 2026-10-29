@@ -585,3 +585,52 @@ calling function again (upstream behaviour) — not done yet.
 | `errors.no_internal_error` | the reporting path itself does not raise (it did once, via a missing `term.blit` in the test recorder, which is exactly the kind of thing that would kill a shell tab in game) |
 
 Full suite: **1544 tests, 0 failures**.
+
+### Batch C, slice 3 — completion, startup, `cc.expect`
+
+**Files**
+
+| File | Change |
+|---|---|
+| `rom/modules/main/cc/shell/completion.lua` | `build(...)` gains the `many` flag, validates its specs, and `file`/`dir`/`dirOrFile` follow `shell.autocomplete_hidden` |
+| `rom/startup` | `/startup` may be a **directory**, honours `shell.allow_startup` / `shell.allow_disk_startup`, and runs the MOTD hook |
+| `rom/modules/main/cc/expect.lua` | reports a value's `__name`; the caller-name lookup is restored but is inert on this runtime |
+
+### Public API impact
+
+| Change | Impact | Note |
+|---|---|---|
+| `completion.build(..., { fn, many = true })` | 🟢 | New flag: the last spec keeps completing every later argument. `many` anywhere else raises. |
+| `build` validates non-function specs | 🟡 | Previously a bad spec was silently ignored. |
+| Hidden files in completion | 🟡 | Now controlled by `shell.autocomplete_hidden` (default `false`, so hidden files are no longer offered by default). Typing a leading `.` still completes them. |
+| `/startup` as a directory | 🟢 | Every file in it runs, in sorted order; a `/startup` file and directory may coexist. |
+| `shell.allow_startup` / `shell.allow_disk_startup` | 🟡 | Startup can now be disabled per computer. Defaults are `true` / `commands == nil`, as upstream. |
+| MOTD hook | 🟢 | Runs `/rom/programs/motd` when `motd.enable` is set — guarded by an existence check, so it stays inert until Batch D ports that program. |
+| `cc.expect` reports `__name` | 🟡 | A table with a `__name` metatable field (e.g. `FILE*`) is named in the message instead of `table`. |
+
+### Deviations and limits
+
+1. **`build`'s spec signature is unchanged.** Our completers take `(shell, index, text, previous)`;
+   upstream's take `(shell, text, previous)` because `build` drops the index. Rather than change
+   every completer and caller, `build` still normalises the index to 1. `many` behaves as upstream.
+2. **`build` keeps the factory form.** `{ cc.completion.choice, { "yes", "no" } }` still calls the
+   factory once at build time, which is this module's existing documented behaviour.
+3. **`cc.expect` still cannot name the calling function.** The lookup is restored and guarded, but
+   `Cobalt 0.9.9`'s `debug.getinfo` populates `what` (`"Lua"`/`"C"`/`"main"`) and never `name`, so
+   the branch is unreachable here. Verified with a probe over five stack levels. `__name` display
+   works, because that only needs `debug.getmetatable`.
+
+### Coverage
+
+| Test | Covers |
+|---|---|
+| `CcShellCompletionTest` (+6, 69 total) | `many` repeats for later indexes and stops without it, `many` in the middle raises, non-function specs raise, and `file`/`dir`/`dirOrFile` pass `shell.autocomplete_hidden` through |
+| `BiosBatchCHeadlessTest` (+2, 4 total) | `/startup` as a directory runs every file in sorted order; `shell.allow_startup = false` skips it |
+| `CcExpectDebugTest` (3) | `__name` is reported by `expect` and `field`; a plain value still reports its Lua type |
+
+Full suite: **1555 tests, 0 failures**.
+
+### Batch C status
+
+Complete. Deferred to other batches: `motd` itself and the missing help topics (Batch D), and
+`cc.internal.import`/`event`/`menu`/`edit_runner` (only needed by later batches).
