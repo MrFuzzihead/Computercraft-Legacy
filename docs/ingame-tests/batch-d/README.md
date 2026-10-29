@@ -12,6 +12,7 @@ copy docs\ingame-tests\batch-d\*.lua "run\client\saves\<World>\computer\<id>\"
 | File | Covers |
 |---|---|
 | `d1_programs.lua` | `about` (version + host), `motd` (single line, several lines, missing file), `peripherals`, `set` (list / show / set / unset / wrong type), `list.show_hidden`, `clear` (screen / palette / all / usage), and `monitor scale` (skipped when no monitor is attached) |
+| `d2_files.lua` | `mkdir`/`delete` with several paths, `copy`/`move` with wildcards, refusing to overwrite, read-only and mount-root guards, `wget` usage and invalid URLs, `speaker` usage/sound/stop, `pocket/equip` + `unequip`. Hardware and `http` cases report `SKIP` |
 
 It appends to `/batch-d-results.txt`. Where a monitor is required it reports `SKIP` rather than
 failing, so the same script is meaningful on any computer.
@@ -30,6 +31,10 @@ failing, so the same script is meaningful on any computer.
 
 ## Notes on this batch
 
+- `copy` and `move` take `<source> <destination>` and expand wildcards with `fs.find`; only
+  `delete` and `mkdir` accept several paths. The tests follow that shape.
+- `rom/programs/import` is intentionally absent: it waits for a `file_transfer` event, which needs
+  Batch J, and vanilla LWJGL2 has no file-drop callback.
 - `rom/motd.txt` is **not** upstream's file: the CC:Tweaked one advertises tweaked.cc and
   forums.computercraft.cc, and mentions drag-and-drop upload (Batch J, unavailable on vanilla
   LWJGL2). The replacement lists tips that are true of this mod.

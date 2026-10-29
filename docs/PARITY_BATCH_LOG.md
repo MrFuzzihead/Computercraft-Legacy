@@ -732,3 +732,64 @@ Full suite: **1555 tests, 0 failures** (the in-game pack runs inside it).
 - `copy`/`move`/`delete`/`mkdir`: multi-path support and read-only/mount-root guards
 - `import` (upstream's `rom/programs/import`)
 - `rom/modules/turtle` directory
+
+### Batch D, slice 2 — file programs, wget, speaker, pocket equip
+
+**Files**
+
+| File | Change |
+|---|---|
+| `rom/programs/{copy,move,delete,mkdir}` | replaced with the 1.120.2 versions: wildcard expansion via `fs.find`, multi-path `delete`/`mkdir`, read-only / mount-root / free-space guards |
+| `rom/programs/http/wget` | **new** — downloads a file, or `run`s it |
+| `rom/programs/fun/speaker` | **new** — DFPWM and 8-bit WAV playback, plus `sound` and `stop` (MPL-2.0) |
+| `rom/programs/pocket/{equip,unequip}` | **new** (MPL-2.0) |
+| `rom/modules/turtle/.ignoreme` | **new** — the empty turtle module directory |
+| `rom/help/{wget,speaker,speakers,pocket}` | **new** topics |
+| `NOTICE` (+ mirrored copy) | records `fun/speaker` and `pocket/{equip,unequip}` as MPL-2.0 |
+
+### Public API impact
+
+No `dan200.computercraft.api` changes.
+
+| Change | Impact | Note |
+|---|---|---|
+| `copy` / `move` understand wildcards | 🟢 | `copy /a/*.txt /b` now works; previously only exact paths. |
+| `copy` refuses to clobber, and reports read-only destinations and free space | 🟡 | It used to overwrite silently. |
+| `move` refuses to move a mount root or a read-only file | 🟡 | Previously it tried and failed with a raw fs error. |
+| `delete` / `mkdir` accept several paths | 🟢 | Both used to take only the first. |
+| `delete` explains a mount root instead of deleting inside it | 🟡 | It now prints `Cannot delete mount /x` and suggests `rm /x/*`. |
+| `wget`, `speaker`, `pocket/equip`, `pocket/unequip` | 🟢 | New programs; `shell.programs` and completion pick them up. |
+
+### Deviations
+
+1. **`wget`'s "http disabled" message points at this mod's config.** Upstream says to set
+   `http.enabled` in CC:T's server config; this mod's flag is `http_enable` in
+   `ComputerCraft.cfg`.
+2. **`rom/programs/import` is deliberately not ported.** It exists upstream but waits for a
+   `file_transfer` event, which needs Batch J — and vanilla LWJGL2 has no file-drop callback, so
+   the program would be dead on every 1.7.10 client. Revisit with Batch J if lwjgl3ify support is
+   added.
+3. `speaker` uses `string.unpack`, which Cobalt provides, and `cc.audio.dfpwm`, which this ROM
+   already ships.
+
+### Coverage
+
+`docs/ingame-tests/batch-d/d2_files.lua` (also run in CI):
+
+| Check | Notes |
+|---|---|
+| `mkdir` | several paths, nested creation, usage message |
+| `copy` | single source to a new name, into a directory, wildcard into a directory, refusing to overwrite, refusing "several into one", no matches |
+| `move` | renames, wildcard into a directory, refuses to overwrite (destination untouched) |
+| `delete` | one path, several paths, refuses a read-only file (and the file survives), no matches |
+| `wget` | usage message, invalid URL; `SKIP` when the http API is off |
+| `speaker` | usage message, `sound`, `stop`; `SKIP` with no speaker attached |
+| `pocket/equip` | `equip`/`unequip`; `SKIP` on a non-pocket computer |
+
+Full suite: **1555 tests, 0 failures**.
+
+### Batch D status
+
+Complete. Deliberately excluded: `import` (see above). The `speaker play` WAV/DFPWM path and the
+pocket-computer equip flow need real hardware, so they are in the pack's manual drill rather than
+the automated checks.
