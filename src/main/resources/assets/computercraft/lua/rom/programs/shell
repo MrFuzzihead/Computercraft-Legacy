@@ -39,6 +39,10 @@ end
 -- program's directory. Ported from CC:Tweaked; see rom/modules/main/cc/require.lua.
 local make_package
 
+-- Modern error reporting (traceback + hints). CC:Tweaked's cc.internal modules are used
+-- unmodified; they need the debug library, which this runtime now installs (Cobalt DebugLib).
+local exception = dofile( "rom/modules/main/cc/internal/exception.lua" )
+
 local function createShellEnv( sDir )
 	if not make_package then
 		-- Loaded lazily: nothing here needs it until a program is actually run.
@@ -143,9 +147,55 @@ executeProgram = function( nRemaining, sPath, tArgs )
 		return executeProgram( nRemaining, sResolved, tHashbangArgs )
 	end
 
+	-- Read the whole file so it can be loaded (and reported on) here. sFirst was only peeked
+	-- for the hashbang, so re-open rather than keeping the handle across the recursion above.
+	local file, err = fs.open( sPath, "r" )
+	if not file then
+		return false, err or "No such file"
+	end
+	local sFirstLine = file.readLine() or ""
+	local sContents = sFirstLine .. "\n" .. ( file.readAll() or "" )
+	file.close()
+
 	local tRunEnv = setmetatable( createShellEnv( fs.getDir( sPath ) ), { __index = tEnv } )
 	tRunEnv.arg = tArgs
-	return os.run( tRunEnv, sPath, table.unpack( tArgs, 1, #tArgs ) )
+
+	local fnFile, sLoadError = load( sContents, "@/" .. sPath, nil, tRunEnv )
+	if not fnFile then
+		-- A syntax error. Run the source through our own parser: if it parses, the failure is
+		-- from the loader and worth showing; if it does not, the parser can say why.
+		if #sContents < 1024 * 128 then
+			local okParser, parser = pcall( dofile, "rom/modules/main/cc/internal/syntax/init.lua" )
+			if okParser and parser and parser.parse_program then
+				if parser.parse_program( sContents ) then
+					printError( sLoadError )
+				end
+			else
+				printError( sLoadError )
+			end
+		else
+			printError( sLoadError )
+		end
+		return false
+	end
+
+	-- Same protection as os.run, applied here because this path loads the chunk itself.
+	if settings.get( "bios.strict_globals", false ) then
+		getmetatable( tRunEnv ).__newindex = function( _, name )
+			error( "Attempt to create global " .. tostring( name ), 2 )
+		end
+	end
+
+	local ok, err, co = exception.try( fnFile, table.unpack( tArgs, 1, #tArgs ) )
+	if ok then
+		return true
+	end
+
+	if err and err ~= "" then
+		printError( err )
+		exception.report( err, co )
+	end
+	return false
 end
 
 -- Install shell API

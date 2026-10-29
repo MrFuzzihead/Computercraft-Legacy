@@ -530,3 +530,58 @@ Full suite: **1544 tests, 0 failures**.
 - `cc.internal.exception` / `error_printer` / `error_hints` / `syntax` — blocked on `debug`.
 - `cc.internal.import` / `event` / `menu` / `edit_runner` — needed only by later batches
   (`import` for `cc.pretty`-era programs, `menu`/`edit_runner` for Batch I).
+
+### Batch C, slice 2 — `debug` + modern error reporting
+
+Decided: install Cobalt's `DebugLib` (option 1), matching CC:Tweaked.
+
+**Why option 1 won.** My earlier preference for a restricted shim rested on a claim that
+`debug.getmetatable("")` reaches a metatable "global between all computers". That is not true for
+this runtime: Cobalt 0.9.9 stores it per state (`LuaState.stringMetatable`, read via
+`LuaString.getMetatable(state)`), and CC:Tweaked ships full `DebugLib` without even the
+`getmetatable("")` guard our `bios.lua` carries. The remaining difference is that programs can
+`setupvalue`/`setlocal` into the shell's own closures — self-tampering on one computer, not an
+escape, since API objects are Java fields on `CobaltCallback` rather than Lua upvalues. A shim
+would also have reimplemented `getinfo` frame semantics, i.e. risked breaking the one code path
+(tracebacks) that is hardest to test. Bonus: with `debug` present, `cc/expect` can name the
+calling function again (upstream behaviour) — not done yet.
+
+**Files**
+
+| File | Change |
+|---|---|
+| `core/lua/lib/cobalt/CobaltMachine.java` | `DebugLib.add(state)` alongside the five standard libraries |
+| `rom/modules/main/cc/internal/exception.lua` | **new**, verbatim from 1.120.2 |
+| `rom/modules/main/cc/internal/error_printer.lua` | **new**, verbatim |
+| `rom/modules/main/cc/internal/error_hints.lua` | **new**, verbatim |
+| `rom/modules/main/cc/internal/syntax/{init,lexer,parser,errors}.lua` | **new**, verbatim |
+| `rom/programs/shell` | loads programs itself, runs them under `exception.try`, and calls `exception.report`; on a syntax error runs the source through `cc.internal.syntax` first |
+
+### Public API impact
+
+| Change | Impact | Note |
+|---|---|---|
+| Global `debug` library | 🟡 | New global. Programs that feature-detect `if debug then` change path. Matches CC:Tweaked. |
+| Program runtime errors show the offending source line, its column and a hint | 🟡 | Was a one-line `printError(err)`. |
+| A failing program no longer unwinds the shell | 🟢 | `exception.try` runs the program in a coroutine, so the shell survives and reports. |
+
+### Deviations
+
+1. **`ErrorInfoLib` is not installed.** `error_hints` `pcall`s `require "cc.internal.error_info"`
+   and degrades when it is missing, which is what happens here.
+2. **`cc.internal.syntax` is loaded with `dofile`** rather than `require`, so the shell's own
+   `require` (a BIOS global here, unlike CC:T) is not needed for it.
+3. `rom/startup`'s MOTD and the `/startup` directory, `completion.build(..., many)` and
+   hidden-file completion are still outstanding (see below).
+
+### Coverage added
+
+`BiosBatchCHeadlessTest` gained three checks around a program that raises:
+
+| Check | Proves |
+|---|---|
+| `errors.message_reported` | `shell.run` returns false and the message reaches the terminal |
+| `errors.code_frame` | the failing source line is echoed — only possible if `debug.getinfo` frame/column lookup works |
+| `errors.no_internal_error` | the reporting path itself does not raise (it did once, via a missing `term.blit` in the test recorder, which is exactly the kind of thing that would kill a shell tab in game) |
+
+Full suite: **1544 tests, 0 failures**.

@@ -30,6 +30,7 @@ import org.squiddev.cobalt.function.ResumableVarArgFunction;
 import org.squiddev.cobalt.interrupt.InterruptAction;
 import org.squiddev.cobalt.lib.BaseLib;
 import org.squiddev.cobalt.lib.CoroutineLib;
+import org.squiddev.cobalt.lib.DebugLib;
 import org.squiddev.cobalt.lib.MathLib;
 import org.squiddev.cobalt.lib.StringLib;
 import org.squiddev.cobalt.lib.TableLib;
@@ -99,16 +100,21 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         // The state owns its global environment in Cobalt 0.9.
         LuaTable globals = this.globals = state.globals();
 
-        // Add basic libraries. CC: Tweaked uses CoreLibraries.debugGlobals(state) here, but that
-        // also installs DebugLib and Bit32Lib. ComputerCraft has always exposed just these five
-        // and supplies its own bitop, so the individual add() methods keep behaviour identical.
-        // These declare LuaError in Cobalt 0.9, but they cannot fail on a freshly built state.
+        // Add basic libraries. These declare LuaError in Cobalt 0.9, but they cannot fail on a
+        // freshly built state.
+        //
+        // DebugLib is installed because CC:Tweaked installs it (CoreLibraries.debugGlobals) and
+        // the ported error-reporting modules depend on debug.getinfo/getlocal/getupvalue. Bit32Lib
+        // is still omitted: ComputerCraft supplies its own bitop, and bios.lua defines a bit32
+        // shim on Lua 5.1. Cobalt keeps the string metatable per LuaState, so exposing debug
+        // cannot leak state between computers.
         try {
             BaseLib.add(state);
             TableLib.add(state);
             StringLib.add(state);
             MathLib.add(state);
             CoroutineLib.add(state);
+            DebugLib.add(state);
         } catch (LuaError e) {
             throw new RuntimeException("Failed to install standard libraries", e);
         }
@@ -119,7 +125,6 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         globals.rawset("load", PrefixLoader.create(0, globals));
         globals.rawset("loadstring", PrefixLoader.create(1, globals));
 
-        // if (Config.APIs.debug) globals.load(state, new DebugLib());
         // if (Config.APIs.profiler) globals.load(state, new ProfilerLib());
         if (ComputerCraft.bigInteger) BigIntegerValue.setup(globals);
         if (ComputerCraft.bitop) BitOpLib.setup(globals);
