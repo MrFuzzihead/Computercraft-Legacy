@@ -8,12 +8,17 @@
 -- bare name as a program to RUN, so a text file is parsed as Lua and fails with
 -- "syntax error near ...". Use `type <path>` to print one, or run this to read it via io.
 --
--- If it cannot find the file it says exactly what it looked for and what it can see, and it
--- reports SKIP rather than failing, so this also runs safely in CI where the file never exists.
+-- If it cannot find the file it reports SKIP (never FAIL, so it is safe in CI) along with what it
+-- looked for and what it can actually see.
+--
+-- NOTE: unlike the other in-game scripts this one does not clear the screen before printing the
+-- result. Its output is short, and the SKIP reason plus the directory listing ARE the result --
+-- clearing wiped exactly the information needed to diagnose a skip.
 
 local P, F, S = 0, 0, 0
 local tArgs = { ... }
-local fails = {}
+
+local fails, skips, notes = {}, {}, {}
 local function ok(label, cond, detail)
   if cond then
     P = P + 1
@@ -25,15 +30,24 @@ end
 local function eq(label, expected, got)
   ok(label, expected == got, "expected " .. tostring(expected) .. " got " .. tostring(got))
 end
-local function skip(label) S = S + 1 print("SKIP " .. label) end
-local function note(label) print("     " .. label) end
+local function skip(label)
+  S = S + 1
+  skips[#skips + 1] = label
+  print("SKIP " .. label)
+end
+local function note(label)
+  notes[#notes + 1] = label
+  print("     " .. label)
+end
+
 local function finish(name)
   local lines = { "RESULT " .. name }
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
-  for i = 1, #fails do lines[#lines + 1] = "  FAIL " .. fails[i] end
+  for _, f in ipairs(fails) do lines[#lines + 1] = "  FAIL " .. f end
+  for _, k in ipairs(skips) do lines[#lines + 1] = "  SKIP " .. k end
+  for _, n in ipairs(notes) do lines[#lines + 1] = "  NOTE " .. n end
 
-  term.clear()
-  term.setCursorPos(1, 1)
+  print("")
   for _, line in ipairs(lines) do print(line) end
 
   local h = fs.open("/batch-b-results.txt", "a")
@@ -54,15 +68,17 @@ local function isFile(path)
   return fs.exists(path) and not fs.isDir(path)
 end
 
--- Any file in the root or one directory down whose name looks like the one we asked for.
+-- Files in / or one directory down whose name looks like the one we asked for.
 local function findCandidates()
   local found = {}
-  local function consider(dir)
+  local function consider(dir, depth)
     local names = fs.list(dir)
+    table.sort(names)
     for _, name in ipairs(names) do
       local path = fs.combine(dir, name)
       if fs.isDir(path) then
-        if dir == "" then consider(path) end -- one level deep only
+        -- Two levels down covers /batchB/notes.txt and /a/b/whatever.txt.
+        if depth < 2 then consider(path, depth + 1) end
       else
         local lower = name:lower()
         if lower:find("manual", 1, true) or lower:find("batchb", 1, true) then
@@ -71,28 +87,46 @@ local function findCandidates()
       end
     end
   end
-  consider("")
+  consider("", 0)
   return found
 end
 
+-- Compact listing, capped so a busy disk cannot flood the screen.
 local function listing(dir)
   local names = fs.list(dir)
   if #names == 0 then return "(empty)" end
   table.sort(names)
-  return table.concat(names, "  ")
+  local out = {}
+  for i = 1, math.min(#names, 8) do out[i] = names[i] end
+  if #names > 8 then out[#out + 1] = "... " .. (#names - 8) .. " more" end
+  return table.concat(out, "  ")
+end
+
+local function describeTree()
+  note("what this computer can see:")
+  note("  /  " .. listing(""))
+  for _, name in ipairs(fs.list("")) do
+    local dir = fs.combine("", name)
+    if fs.isDir(dir) then
+      note("  " .. dir .. "/  " .. listing(dir))
+      for _, inner in ipairs(fs.list(dir)) do
+        local sub = fs.combine(dir, inner)
+        if fs.isDir(sub) then note("  " .. sub .. "/  " .. listing(sub)) end
+      end
+    end
+  end
 end
 
 -- ---------------------------------------------------------------------------
 -- Work out which file to check.
 
-local target = nil
-
-if tArgs[1] then
-  -- Explicit path wins.
+-- An explicit path wins, whether or not it exists (so a typo is reported precisely).
+local target
+if tArgs[1] ~= nil then
   target = shell.resolve(tArgs[1])
   if not fs.exists(target) then
     skip("no such file: " .. target)
-    note("You typed: " .. tArgs[1] .. "  (resolved to " .. target .. ")")
+    note("you passed " .. tArgs[1] .. ", which resolves to " .. target)
     target = nil
   elseif fs.isDir(target) then
     skip("that is a directory, not a file: " .. target)
@@ -104,27 +138,22 @@ else
   local candidates = findCandidates()
   if #candidates == 1 then
     target = candidates[1]
-    note("did not find " .. DEFAULT_PATH .. ", using " .. target .. " instead")
+    note("did not find " .. DEFAULT_PATH .. "; using " .. target .. " instead")
   elseif #candidates > 1 then
-    skip("several files could be the one you meant; pass one as an argument")
+    skip("several files could be the one you meant")
     for _, path in ipairs(candidates) do note("candidate: " .. path) end
+    note("re-run with one of them as an argument, e.g. b3_io_edit_check " .. candidates[1])
   else
-    skip("no " .. DEFAULT_PATH .. " and nothing similar in / or one directory down")
+    skip("no " .. DEFAULT_PATH .. " and nothing similar in / or one level down")
   end
 end
 
 if target == nil then
   print("")
-  print("What this program can see:")
-  print("  /  " .. listing(""))
-  for _, name in ipairs(fs.list("")) do
-    local dir = fs.combine("", name)
-    if fs.isDir(dir) then print("  " .. dir .. "/  " .. listing(dir)) end
-  end
+  describeTree()
   print("")
-  print("Run: edit /" .. NAME)
-  print("Then: Ctrl once -> Save, Ctrl once -> Exit, then run this again.")
-  print("Or point it at what you saved, e.g.  b3_io_edit_check /notes.txt")
+  print("To create it:  edit /" .. NAME .. "   (then Ctrl once -> Save, Ctrl -> Exit)")
+  print("Or point this at a file you already saved:  b3_io_edit_check <path>")
   finish("BATCH-B edit check")
   return
 end
@@ -136,6 +165,8 @@ local f, err = io.open(target)
 ok("io.open succeeded", f ~= nil, err)
 
 if not f then
+  print("")
+  describeTree()
   finish("BATCH-B edit check")
   return
 end

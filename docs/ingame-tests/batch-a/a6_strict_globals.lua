@@ -24,7 +24,14 @@ end
 local function eq(label, expected, got)
   ok(label, expected == got, "expected " .. tostring(expected) .. " got " .. tostring(got))
 end
-local function skip(label) S = S + 1 print("SKIP " .. label) end
+-- Skips are recorded as well as printed: finish() clears the screen, which would otherwise
+-- destroy the only explanation for a non-zero skipped count.
+local skips = {}
+local function skip(label)
+  S = S + 1
+  skips[#skips + 1] = label
+  print("SKIP " .. label)
+end
 local function section(n) print("== " .. n .. " ==") end
 -- Prints the summary, and also appends it to /batch-a-results.txt. The log matters because
 -- the manual drills printed afterwards scroll a 19-row screen, so the on-screen copy is not
@@ -33,6 +40,7 @@ local function finish(name)
   local lines = { "RESULT " .. name }
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for i = 1, #fails do lines[#lines + 1] = "  FAIL " .. fails[i] end
+  for i = 1, #skips do lines[#lines + 1] = "  SKIP " .. skips[i] end
 
   term.clear()
   term.setCursorPos(1, 1)
