@@ -172,7 +172,7 @@ The in-game scripts in [`ingame-tests/batch-a/`](ingame-tests/batch-a/) are also
 `BatchAIngameScriptsTest`, which boots the real BIOS and executes each one, so a broken in-game
 script fails the build instead of wasting a manual pass.
 
-Full suite: **1490 tests, 0 failures**, including `spotlessCheck`, `checkstyleMain` and
+Full suite: **1492 tests, 0 failures**, including `spotlessCheck`, `checkstyleMain` and
 `checkstyleTest`.
 
 ### Needs in-game validation

@@ -71,26 +71,25 @@ else
   multishell.setTitle(cur, oldTitle)
 
   section("launch a second tab")
-  -- The tab program reports back through a file rather than through the screen, because
-  -- its output lands in its own window. It also checks that the tab can see `multishell`:
-  -- launch() only passes the env you give it, so a bare {} leaves `multishell` nil inside
-  -- the tab (getCurrent() then evaluates to nil). That is a caller mistake, not a bug, and
-  -- the same applies to shell.openTab(), which passes the shell env for you.
-  local h = fs.open("/.a3_tab", "w")
-  h.write("local id = multishell and multishell.getCurrent()\n")
-  h.write("local f = fs.open(\"/.a3_tab_result\", \"w\")\n")
-  h.write("f.write(tostring(id))\n")
-  h.write("f.close()\n")
-  h.write("while true do sleep(1) end\n")
-  h.close()
+  -- Open a REAL shell tab, not a throwaway sleep loop: a background program that never
+  -- reads input looks exactly like a broken tab (typing does nothing, and the only way out
+  -- is Ctrl+T), which is misleading. shell.openTab() also passes the proper program env,
+  -- so the tab can see `multishell` -- launch({}, ...) would leave it nil.
+  local tabId
+  if shell and shell.openTab then
+    tabId = shell.openTab("shell")
+    ok("shell.openTab returned a tab id (" .. tostring(tabId) .. ")", type(tabId) == "number", type(tabId))
+  else
+    -- Not running under a shell (e.g. os.run from the BIOS): fall back to launch().
+    tabId = multishell.launch({ multishell = multishell }, "/rom/programs/shell")
+    ok(
+      "multishell.launch returned a tab id (" .. tostring(tabId) .. ")",
+      type(tabId) == "number",
+      type(tabId)
+    )
+  end
 
-  local tabId = multishell.launch({ multishell = multishell }, "/.a3_tab")
-  -- Report what launch() actually returned rather than just "not a number": this IS the
-  -- diagnostic a human needs if the tab id is unexpectedly nil.
-  ok("launch returned a tab id (" .. tostring(tabId) .. ")", type(tabId) == "number", type(tabId))
-
-  -- launch() resumes the new process and appends to the list synchronously, so neither the
-  -- count nor the tab result file needs a sleep().
+  -- launch() resumes the new process and appends to the list synchronously, so no sleep().
   ok(
     "tab count increased (" .. count0 .. " -> " .. tostring(multishell.getCount()) .. ")",
     multishell.getCount() > count0
@@ -98,15 +97,6 @@ else
 
   if type(tabId) == "number" then
     ok("the new tab has a title (" .. tostring(multishell.getTitle(tabId)) .. ")", multishell.getTitle(tabId) ~= nil)
-
-    if fs.exists("/.a3_tab_result") then
-      local r = fs.open("/.a3_tab_result", "r")
-      local reported = r.readAll()
-      r.close()
-      eq("the tab sees its own id via multishell.getCurrent()", tostring(tabId), reported)
-    else
-      ok("the tab program ran", false, "/.a3_tab_result was not written")
-    end
 
     section("focus switching")
     local before = multishell.getFocus()
@@ -120,12 +110,14 @@ else
       skip("focus restore (getFocus() was " .. tostring(before) .. ")")
     end
   else
-    skip("title, tab-env and focus checks (no tab id)")
+    skip("title and focus checks (no tab id)")
   end
 
-  fs.delete("/.a3_tab")
-  fs.delete("/.a3_tab_result")
-  ok("temporary tab files removed", not fs.exists("/.a3_tab"))
+  -- The extra tab is left open on purpose: it is the subject of the test, and this
+  -- version of multishell has no API to close a tab. The drill below says how to close it.
+  print("")
+  print("NOTE: this test left one extra shell tab open.")
+  print("It is a normal shell -- type in it. Close it with a held Ctrl+T (see drill).")
 end
 
 finish("BATCH-A-3 multishell")
@@ -133,24 +125,24 @@ finish("BATCH-A-3 multishell")
 -- ---------------------------------------------------------------------------
 -- Human drill, printed after finish() so the clear above cannot hide it.
 
-print("--- MANUAL DRILL: what this build actually supports ---")
-print("There are NO keyboard shortcuts for tabs in this build.")
-print("multishell only switches tabs on mouse_click, and the Java side")
-print("reserves Ctrl+T / Ctrl+R / Ctrl+S. Checking it, in order:")
+print("--- MANUAL DRILL (a second shell tab is already open) ---")
 print("")
-print("1. Type:  bg shell")
-print("   EXPECT: a second tab appears at the top, titled shell.")
-print("   (bg opens a tab; fg opens one and switches to it.)")
-print("2. CLICK the tab labels at the top to switch between them.")
-print("   EXPECT: the prompt follows the click. Arrow keys do nothing.")
-print("3. Tap Ctrl+T, then Ctrl+W. EXPECT: NOTHING happens.")
-print("   This is correct: no handler exists for Ctrl+W, and Ctrl+T")
-print("   needs a 1-second HOLD before it fires.")
-print("4. In a spare tab, HOLD Ctrl+T for about a second.")
-print("   EXPECT: the running program is terminated (a terminate")
-print("   event), then the tab shows Press any key and closes.")
-print("   Ctrl+R held = reboot, Ctrl+S held = shutdown. Do not test")
-print("   those here unless you are happy to reboot.")
+print("There are NO keyboard shortcuts for tabs in this build:")
+print("multishell switches tabs on mouse_click only, and the Java")
+print("side reserves Ctrl+T / Ctrl+R / Ctrl+S.")
+print("")
+print("1. CLICK the second tab label at the top.")
+print("   EXPECT: an empty prompt (banner + '/>').")
+print("   Then type:  print('a','b')")
+print("   EXPECT: a b   <- one space; that is the Batch A change.")
+print("2. CLICK back to the first tab.")
+print("   EXPECT: this report is still there and the prompt works.")
+print("3. CLICK the second tab again, then HOLD Ctrl+T for ~1s.")
+print("   EXPECT: the tab is terminated, shows Press any key,")
+print("   and then disappears. Tapping Ctrl+T does nothing.")
+print("   (Ctrl+W and arrow keys have no handler at all.)")
+print("4. Type:  bg shell    EXPECT: a new tab appears.")
+print("   Type:  fg shell    EXPECT: opens a tab AND switches to it.")
 print("5. In a remaining tab run:  help")
 print("   EXPECT: paged output still scrolls and prompts correctly;")
 print("   this is the path that exercises print/write after Batch A.")

@@ -40,7 +40,7 @@ Send me the `RESULT`/`FAIL` block of anything that does not come out clean.
 
 | File | Item | What it proves | Needs |
 |---|---|---|---|
-| `a3_multishell.lua` | 3 | Tabs launch, counts/titles work, a tab's env can see `multishell`, focus switches; then a drill for the things only a mouse can do. Skips cleanly without multishell. | Colour computer |
+| `a3_multishell.lua` | 3 | Tab creation/count/title/focus, then opens one real shell tab for the drill. Skips cleanly without multishell. | Colour computer |
 | `a4_print.lua` | 4 | `print` emits `a\tb` and keeps nil holes; `write` coerces numbers; `printError` restores colour; a tab is exactly **one column** wide. | — |
 | `a5_settings.lua` | 5 | Every BIOS-registered default, `getNames`, type enforcement, and persistence across a reboot (uses a throwaway `batcha.test` key, cleaned up after). | Two runs, one reboot |
 | `a6_strict_globals.lua` | 6 | `bios.strict_globals` blocks new globals via `os.run`, still allows reads, and is restored before exit. | — |
@@ -52,8 +52,14 @@ Send me the `RESULT`/`FAIL` block of anything that does not come out clean.
 
 ### 3 — multishell
 
-`a3_multishell` checks what can be scripted (launch, tab count, title, that the tab's env can
-see `multishell`, focus switching) and then prints a manual drill.
+`a3_multishell` checks what can be scripted (tab creation via `shell.openTab`, tab count, title,
+focus switching) and then opens **one extra shell tab on purpose** for the manual drill. Run the
+drill, then close it with a held Ctrl+T.
+
+The extra tab is a real shell, so it echoes what you type. An earlier version of this script left
+a background program that only slept, which looked identical to a broken computer: typing did
+nothing and the only way out was Ctrl+T. `BiosMultishellInputTest` now asserts that an opened tab
+actually runs typed commands, so that mistake cannot recur.
 
 **There are no keyboard shortcuts for tabs in this build, and there never were.** Verified
 against the source:
@@ -72,13 +78,20 @@ missing feature — the shortcut just does not exist in either version.
 
 Two things that look like bugs but are not:
 
-- **A tab printing `multishell.getCurrent()` as `nil`.** `multishell.launch(env, path)` only
-exposes what you put in `env`, so `launch({}, "/prog")` leaves `multishell` nil inside the tab.
-Pass `{ multishell = multishell }`, or use `bg`/`fg`, which pass the shell env for you. The
-script now asserts this explicitly.
+- **A tab you cannot type in.** If the tab is running a program that never calls `os.pullEvent`
+  (a `while true do sleep(1) end` loop, for example) it ignores input entirely and Ctrl+T is the
+  only way out. That is the program's behaviour, not multishell's. `a3_multishell` opens a real
+  shell for this reason.
 - **`SKIP getFocus before the menu is first selected`.** The shell's process is resumed inside
-`launchProcess()` before `selectProcess()` runs, so `getFocus()` is `nil` for anything run from
-`/startup`. Run `a3_multishell` from the prompt and it asserts the real value.
+  `launchProcess()` before `selectProcess()` runs, so `getFocus()` is `nil` for anything run from
+  `/startup`. Run `a3_multishell` from the prompt and it asserts the real value.
+
+Note also that `multishell.launch(env, path)` exposes only what you put in `env`: `launch({},
+"/prog")` leaves `multishell` nil inside the tab, so `multishell.getCurrent()` reads as nil. Pass
+`{ multishell = multishell }`, or use `shell.openTab`/`bg`/`fg`, which pass the shell env for you.
+
+Opening and closing tabs manually: `bg shell` opens one, `fg shell` opens and switches to one, and
+a **held** Ctrl+T inside a tab terminates its program (which ends the tab).
 
 ### 5 — the reboot
 
