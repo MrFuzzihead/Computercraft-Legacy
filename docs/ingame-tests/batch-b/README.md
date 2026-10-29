@@ -15,7 +15,7 @@ Then on that computer:
 |---|---|---|
 | `b1_io.lua` | API surface, read formats (`l`/`L`/`a`/`n`/counts/multi), `io.lines` autoclose, `seek`, `io.output`/`io.input` redirection, the `wb`-write fix, `stderr`, closed-handle errors. Cleans up after itself. | — |
 | `b2_io_manual.lua` | Typed input through `io.stdin:read()`, `io.read()`, `stdin:lines()`, `term.redirect` interaction, `paintutils.loadImage` on a bad file. | Keyboard |
-| `b3_io_edit_check.lua` | Reads `/batchb-manual.txt` back through `io` after you save it with `edit`, the same way the editor does. Reports SKIP in CI when the file is absent. | Run after `edit` |
+| `b3_io_edit_check.lua` | Reads the file you saved with `edit` back through `io`, the same way the editor does, and echoes what it found. Takes an optional path: `b3_io_edit_check /notes.txt`. Without one it looks for `/batchb-manual.txt`, then for anything with "manual"/"batchb" in the name in `/` or one directory down. If it finds nothing it prints a directory listing and SKIPs — so it is safe in CI. | Run after `edit` |
 
 Both append their summary to `/batch-b-results.txt`, so several runs can be reviewed at once with
 `type /batch-b-results.txt`.
@@ -29,6 +29,10 @@ Both append their summary to `/batch-b-results.txt`, so several runs can be revi
    choose **Exit**. Then run **`b3_io_edit_check`**, which reads the file back through `io` and
    prints what it found. `edit` reads with `io.open(...):read()` in a loop and writes through
    `io.open(path, "w")`.
+
+   `b3_io_edit_check` takes the path as an argument, so `b3_io_edit_check /batchB/notes.txt`
+   works if you saved somewhere else. If it reports SKIP it prints what it looked for and a
+   directory listing — send me that output rather than guessing.
 
    Do **not** type the bare path at the shell. The shell runs a program by name, so
    `/batchb-manual.txt` is executed as Lua and fails with `syntax error near ...` — that is the

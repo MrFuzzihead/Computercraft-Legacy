@@ -249,6 +249,29 @@ class IngameTestScriptsTest {
     }
 
     /**
+     * {@code b3_io_edit_check} skips when the file it expects is absent (which is the case in
+     * CI), so its positive path needs seeding by hand. Otherwise a broken io round-trip could
+     * hide behind a permanent SKIP.
+     */
+    @Test
+    void editCheckVerifiesASavedFile() throws Exception {
+        File hdd = freshHdd();
+        Files.write(
+            new File(hdd, "batchb-manual.txt").toPath(),
+            "first typed line\nsecond typed line\n".getBytes(StandardCharsets.UTF_8));
+
+        Run run = runScript(hdd, script("b3_io_edit_check"));
+        run.assertAllPassed("b3_io_edit_check (seeded)");
+
+        java.util.regex.Matcher m = Pattern.compile("passed (\\d+)")
+            .matcher(
+                run.summaries()
+                    .get(0));
+        assertTrue(m.find(), "no pass count in " + run.log);
+        assertTrue(Integer.parseInt(m.group(1)) >= 5, "the checks should have run, not been skipped: " + run.log);
+    }
+
+    /**
      * {@code a5_settings} is deliberately two-phase: it writes a throwaway key, saves, and asks for
      * a reboot. Running it twice against the same save directory simulates that reboot, including
      * the cleanup phase.
