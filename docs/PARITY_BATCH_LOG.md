@@ -359,3 +359,88 @@ Note for whoever runs this: **there are no keyboard shortcuts for tabs in this b
 at all. CC:Tweaked 1.120.2 behaves identically, so this is neither a regression nor a gap. Also
 note that `multishell.launch({}, path)` does not put `multishell` in the tab's env — a tab printed
 `multishell.getCurrent()` as `nil` for exactly that reason. `bg`/`fg` pass the shell env for you.
+
+---
+
+## Batch B — `io` library
+
+**Status:** implemented.
+
+**Files touched**
+
+| File | Change |
+|---|---|
+| `assets/computercraft/lua/rom/apis/io` | rewritten as a port of CC:Tweaked 1.120.2's `io.lua` |
+| `core/apis/FSAPI.java` | binary (`wb`/`ab`) handles now accept strings as well as single bytes |
+
+### Public API impact
+
+**No changes under `dan200.computercraft.api`.**
+
+Lua-visible surface:
+
+| Change | Impact | Note |
+|---|---|---|
+| Handles gain `seek`, `setvbuf`, `flush`, `writeLine` pass-through, and `__tostring` | 🟢 | `io.type(f)` still distinguishes `"file"` / `"closed file"`. |
+| `file:read` accepts Lua 5.1 formats: `l`, `L`, `a`, `n`, a `*` prefix, a byte count, and several formats per call | 🟢 | Previously only `*l`/`*a` on read handles. `n` is accepted but yields nil (unimplemented in CC). |
+| `io.stdin`, `io.stdout`, `io.stderr` | 🟢 | New. `stderr` writes in red and restores the previous colour. |
+| `io.input()` / `io.output()` return the current handle | 🟡 | Previously returned nothing; now returns the handle, matching Lua 5.1. |
+| `io.close()` / `io.flush()` return values | 🟡 | `close` returns `true`; closing a standard stream returns `nil, "attempt to close standard stream"` instead of silently doing nothing. |
+| `io.write` rejects non-string/number values | 🟡 | Was `tostring`-ing everything, so `io.write(true)` worked. Lua 5.1 also rejects it. |
+| `io.open` with an unsupported mode raises | 🟡 | Was `nil, "Unsupported mode"`. `fs.open` rejects the mode, and CC:Tweaked propagates that, so this is parity — but it is a Lua 5.1 incompatibility. |
+| `io.lines(path)` closes its own handle at EOF | 🟢 | `handle:lines()` still leaves the handle open. |
+| `io.output(path)` opens in `"wb"` | 🟡 | Upstream behaviour; see the FSAPI fix below. |
+| A closed handle raises on further use | 🟡 | Was silently ignored. |
+| **`fs.open(path, "wb"/"ab"):write("text")` now writes the text** | 🟢 | It only accepted a single byte number before and silently discarded strings. |
+
+### Deviations from CC:Tweaked
+
+1. **`require("cc.expect")` instead of `dofile(...)`.** Upstream's `io.lua` uses `dofile` because
+   CC:T's `require` belongs to the shell, not the BIOS. This BIOS defines `require` before any API
+   loads, and every other module here uses it, so the port does too.
+2. **`io.stdin:read("*L")` works.** Upstream hands `true` straight into `_G.read` as the
+   replace-character argument and raises. Terminal input has no trailing newline to preserve, so
+   the port wraps `readLine` and drops the flag.
+3. **`stdin:read("*a")` is nil** — inherited: the standard streams only provide `readLine`/`write`,
+   so there is no `readAll` to call. Same as upstream.
+4. **`file:write(1)` writes `"1"`, not `"1.0"`.** `io` converts values with Lua's `tostring`
+   before handing them to the fs handle, because this codebase's handles stringify a Java double.
+   Note that calling `fs.open(..., "w"):write(1)` directly still writes `1.0`: that is a
+   pre-existing `fs`-level discrepancy with CC:Tweaked, not something `io` can fix, and is left
+   out of this batch.
+5. Upstream's `"bad fileument #1"` typo in `io.input` is fixed.
+
+### Automated coverage
+
+| Test | Covers |
+|---|---|
+| `IOAPITest` (45 tests) | open/modes/argument checks, `l`/`L`/`a`/numeric/multi-format reads, `lines` (with and without autoclose, format pass-through), `seek` against a real file, write/append/chaining, standard streams, `io.input`/`io.output` getters and setters, `io.type`, closed-handle errors, `setvbuf`, error messages |
+| `FSAPITest.binaryWriteHandlesAcceptStringsAsWellAsBytes` | the `wb` fix, including that a single byte number still works |
+| `BiosBatchBHeadlessTest` (3 tests) | real BIOS: `io` loaded as an API table, `io.write`/`io.stderr` reaching the terminal, `/rom` file reads, `io.lines`, `io.output`/`io.input` redirection, `io.stdin` driven by simulated keystrokes, and `help` still printing through `io` |
+| `IngameTestScriptsTest` | now discovers every `docs/ingame-tests/**/*.lua` (skipping `*manual*`), so `b1_io` runs in CI too |
+
+Full suite: **1520 tests, 0 failures**.
+
+### Found while testing
+
+A unit harness that loads `io.lua` into the *shared* environment hangs forever: `io` defines a
+global `read`, and the stdin handle resolves `_G.read` at call time, so `stdin:read()` recurses
+until the JUnit timeout. In game this cannot happen because `os.loadAPI` gives each API a private
+environment. `IOAPITest` now emulates that (source loaded into a table with `__index = _G`, exposed
+as `io`), and `BiosBatchBHeadlessTest` covers the real `os.loadAPI` path.
+
+### Needs in-game validation
+
+The unattended half is `docs/ingame-tests/batch-b/b1_io.lua` (also run in CI). The interactive
+half is `b2_io_manual.lua`, plus these by hand:
+
+1. **Typing into `io.stdin`** — the harness injects synthetic `char`/`key` events; confirm on a
+   real keyboard that `io.stdin:read()`, `io.read()` and `io.stdin:lines()` behave the same.
+2. **`edit`** — `edit /tmp.txt`, write two lines, save, reopen. `edit` reads with
+   `io.open(...):read()` in a loop, so it exercises the ported `read` path with real input.
+3. **`help`** — `help intro` must page normally (it is the other bundled `io` reader).
+4. **`paint`** — `paint` and `paintutils.loadImage` use `io.open(...):read("*a")`.
+5. **A monitor** — `monitor right`, then `io.write("hi")` in the monitor shell; output must follow
+   the redirect.
+6. **A disk drive** (optional) — copy a file to a floppy and read it with `io.lines`; the hdd and
+   rom mounts are already covered, a disk is the remaining mount type.

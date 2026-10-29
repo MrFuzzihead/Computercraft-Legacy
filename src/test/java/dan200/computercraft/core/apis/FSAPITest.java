@@ -27,13 +27,10 @@ import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ILuaObject;
 import dan200.computercraft.api.lua.LuaException;
-import dan200.computercraft.api.peripheral.IPeripheral;
-import dan200.computercraft.core.computer.Computer;
-import dan200.computercraft.core.computer.IComputerEnvironment;
 import dan200.computercraft.core.filesystem.FileMount;
 import dan200.computercraft.core.filesystem.FileSystem;
 import dan200.computercraft.core.filesystem.FileSystemException;
-import dan200.computercraft.core.terminal.Terminal;
+import dan200.computercraft.testsupport.StubApiEnvironment;
 
 /**
  * Unit tests for the {@code fs} API methods in {@link FSAPI}.
@@ -83,7 +80,7 @@ class FSAPITest {
     void setUp() throws FileSystemException {
         FileMount mount = new FileMount(tempDir.toFile(), 1024 * 1024L); // 1 MiB
         fileSystem = new FileSystem("hdd", mount);
-        api = new FSAPI(new StubEnv(fileSystem));
+        api = new FSAPI(new StubApiEnvironment(fileSystem));
         api.startup();
     }
 
@@ -618,6 +615,23 @@ class FSAPITest {
         return (String) result[1];
     }
 
+    @Test
+    void binaryWriteHandlesAcceptStringsAsWellAsBytes() throws Exception {
+        // CC:Tweaked serves the text and binary modes with one handle class, so write() takes a
+        // string there too. Accepting only numbers here silently discarded everything written
+        // through io.output(), which opens its file in "wb".
+        Object[] opened = api.callMethod(null, METHOD_OPEN, new Object[] { "bin.dat", "wb" });
+        assertNotNull(opened);
+        ILuaObject handle = assertInstanceOf(ILuaObject.class, opened[0]);
+
+        // Index 0 is write for the wb/ab wrapper.
+        handle.callMethod(null, 0, new Object[] { "hello" });
+        handle.callMethod(null, 0, new Object[] { 33 }); // still accepts a single byte
+        closeHandle("wb", handle);
+
+        assertEquals("hello!", new String(Files.readAllBytes(tempDir.resolve("bin.dat")), StandardCharsets.UTF_8));
+    }
+
     /** Close a handle using the {@code close} index of the wrapper for {@code mode}. */
     private static void closeHandle(String mode, ILuaObject handle) throws LuaException, InterruptedException {
         int close;
@@ -638,95 +652,6 @@ class FSAPITest {
                 close = 1;
         }
         handle.callMethod(null, close, new Object[0]);
-    }
-
-    // =========================================================================
-    // Stubs
-    // =========================================================================
-
-    private static class StubEnv implements IAPIEnvironment {
-
-        private final FileSystem m_fs;
-
-        StubEnv(FileSystem fs) {
-            m_fs = fs;
-        }
-
-        @Override
-        public FileSystem getFileSystem() {
-            return m_fs;
-        }
-
-        @Override
-        public Computer getComputer() {
-            return null;
-        }
-
-        @Override
-        public int getComputerID() {
-            return 1;
-        }
-
-        @Override
-        public IComputerEnvironment getComputerEnvironment() {
-            return null;
-        }
-
-        @Override
-        public Terminal getTerminal() {
-            return null;
-        }
-
-        @Override
-        public void shutdown() {}
-
-        @Override
-        public void reboot() {}
-
-        @Override
-        public void queueEvent(String event, Object[] args) {}
-
-        @Override
-        public void setOutput(int side, int output) {}
-
-        @Override
-        public int getOutput(int side) {
-            return 0;
-        }
-
-        @Override
-        public int getInput(int side) {
-            return 0;
-        }
-
-        @Override
-        public void setBundledOutput(int side, int output) {}
-
-        @Override
-        public int getBundledOutput(int side) {
-            return 0;
-        }
-
-        @Override
-        public int getBundledInput(int side) {
-            return 0;
-        }
-
-        @Override
-        public void setPeripheralChangeListener(IAPIEnvironment.IPeripheralChangeListener listener) {}
-
-        @Override
-        public IPeripheral getPeripheral(int side) {
-            return null;
-        }
-
-        @Override
-        public String getLabel() {
-            return null;
-        }
-
-        @Override
-        public void setLabel(String label) {}
     }
 
     /** Minimal read-only {@link IMount} exposing only its root directory. */
