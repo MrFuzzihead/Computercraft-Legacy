@@ -21,7 +21,14 @@ end
 local function eq(label, expected, got)
   ok(label, expected == got, "expected " .. tostring(expected) .. " got " .. tostring(got))
 end
-local function skip(label) S = S + 1 print("SKIP " .. label) end
+-- Skips are recorded as well as printed: finish() clears the screen, which would otherwise
+-- destroy the only explanation for a non-zero skipped count.
+local skips = {}
+local function skip(label)
+  S = S + 1
+  skips[#skips + 1] = label
+  print("SKIP " .. label)
+end
 local function section(n) print("== " .. n .. " ==") end
 -- Prints the summary, and also appends it to /batch-a-results.txt. The log matters because
 -- the manual drills printed afterwards scroll a 19-row screen, so the on-screen copy is not
@@ -30,6 +37,7 @@ local function finish(name)
   local lines = { "RESULT " .. name }
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for i = 1, #fails do lines[#lines + 1] = "  FAIL " .. fails[i] end
+  for i = 1, #skips do lines[#lines + 1] = "  SKIP " .. skips[i] end
 
   term.clear()
   term.setCursorPos(1, 1)
@@ -191,3 +199,11 @@ eq("serialiseJSON", "true", textutils.serialiseJSON(true))
 eq("unserialiseJSON", 7, textutils.unserialiseJSON("7"))
 
 finish("BATCH-A-8 JSON")
+
+-- FINAL SUMMARY
+-- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
+-- scroll it out of view. Repeat the outcome as the last line so it is always visible without
+-- scrolling. (Prompted by a run where only the drill was visible.)
+print("")
+print("RESULT BATCH-A-8 JSON: passed " .. P .. "   failed " .. F
+  .. (F > 0 and "   -- failures also logged to the results file" or ""))

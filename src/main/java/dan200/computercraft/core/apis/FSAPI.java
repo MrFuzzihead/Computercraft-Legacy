@@ -446,9 +446,18 @@ public class FSAPI implements ILuaAPI {
                 switch (method) {
                     case 0:
                         try {
-                            if (args.length > 0 && args[0] instanceof Number) {
-                                int number = ((Number) args[0]).intValue();
-                                writer.write(number);
+                            // Binary handles accept strings as well as single bytes, matching
+                            // CC:Tweaked, where one WriteHandle serves both the text and binary
+                            // modes. Only accepting numbers here silently discarded data written
+                            // through io.output(), which opens in "wb".
+                            if (args.length > 0 && args[0] != null) {
+                                if (args[0] instanceof Number) {
+                                    writer.write(((Number) args[0]).intValue());
+                                } else {
+                                    byte[] bytes = args[0] instanceof byte[] ? (byte[]) args[0]
+                                        : BinaryConverter.toBytes(args[0].toString());
+                                    for (byte b : bytes) writer.write(b & 0xFF);
+                                }
                             }
 
                             return null;
