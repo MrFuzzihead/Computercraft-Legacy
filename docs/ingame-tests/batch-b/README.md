@@ -23,8 +23,10 @@ Both append their summary to `/batch-b-results.txt`, so several runs can be revi
 
 1. **Typing.** CI injects synthetic `char`/`key` events. Run `b2_io_manual.lua` and answer the
    prompts with a real keyboard.
-2. **`edit /batchb-manual.txt`** — write two lines, save (hold Ctrl then press S), reopen.
-   `edit` reads with `io.open(...):read()` in a loop.
+2. **`edit /batchb-manual.txt`** — write two lines, then save and exit. This build has no
+   Ctrl+S chord: press **Ctrl once** to open the menu, choose **Save**, press Ctrl once more and
+   choose **Exit**. Then `type /batchb-manual.txt` and check both lines print. `edit` reads with
+   `io.open(...):read()` in a loop, and writes through `io.open(path, "w")`.
 3. **`help intro`** — must page normally; it is the other bundled `io` reader.
 4. **`paint`** — `paintutils.loadImage` uses `io.open(...):read("*a")`. Load a real `.nfp` image.
 5. **A monitor** — `monitor right`, then `io.write("hi")` in the monitor's shell. Output must
