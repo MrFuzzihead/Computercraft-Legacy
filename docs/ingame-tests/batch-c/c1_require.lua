@@ -74,7 +74,12 @@ local function recorder()
   rec.clear = function() end
   rec.isColour = function() return false end
   rec.setTextColour = function() end
+  -- term.redirect stubs any missing native method, and both spellings are native.
+  rec.setTextColor = function() end
+  rec.setBackgroundColor = function() end
   rec.getTextColour = function() return 1 end
+  rec.getTextColor = function() return 1 end
+  rec.getBackgroundColor = function() return 1 end
   rec.setBackgroundColour = function() end
   rec.getBackgroundColour = function() return 1 end
   rec.setCursorBlink = function() end

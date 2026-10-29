@@ -1,0 +1,21 @@
+Use "set" to see and change the computer's settings.
+Use "edit" to create and change programs.
+Use "help" to learn about the built-in programs and APIs.
+Use "programs" to list every program installed on this computer.
+Use "peripherals" to see what is attached to this computer.
+Use "ls" to list the files in the current directory.
+Files beginning with a "." are hidden from "ls" by default.
+Use "cd" to move between directories, and "mkdir" to create one.
+Use "label set" to give this computer a name.
+Use a modem to connect this computer to others.
+Use "rednet" or "gps" with a modem to talk to, or locate, other computers.
+With a monitor attached, "monitor" runs a program on its screen.
+With a speaker attached, programs can play sounds.
+An advanced computer has colours, a mouse and multiple tabs.
+Programs in the "startup" folder run automatically when the computer boots.
+Hold Ctrl and press T to stop a running program.
+Hold Ctrl and press R to reboot the computer.
+Hold Ctrl and press S to shut the computer down.
+Use a floppy disk to carry programs between computers.
+"copy", "move" and "delete" accept several paths at once.
+Use "pastebin put" to upload a program, and "pastebin get" to fetch one.

@@ -1,12 +1,32 @@
 
 function printUsage()
-	print( "Usage: monitor <name> <program> <arguments>" )
+	print( "Usage:" )
+	print( "  monitor <name> <program> <arguments>" )
+	print( "  monitor scale <name> <scale>" )
 	return
 end
 
 local tArgs = { ... }
-if #tArgs < 2 then
+if #tArgs < 2 or ( tArgs[1] == "scale" and #tArgs < 3 ) then
 	printUsage()
+	return
+end
+
+-- "monitor scale <name> <scale>" sets the text scale, which must be between 0.5 and 5.
+if tArgs[1] == "scale" then
+	local sScaleName = tArgs[2]
+	if peripheral.getType( sScaleName ) ~= "monitor" then
+		print( "No monitor named " .. sScaleName )
+		return
+	end
+
+	local nScale = tonumber( tArgs[3] )
+	if nScale == nil or nScale < 0.5 or nScale > 5 then
+		print( "Invalid scale: " .. tostring( tArgs[3] ) )
+		return
+	end
+
+	peripheral.call( sScaleName, "setTextScale", nScale )
 	return
 end
 

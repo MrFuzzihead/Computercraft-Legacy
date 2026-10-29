@@ -71,6 +71,9 @@ That backport is substantial, and predates the Minecraft
   - backported Lua ROM modules under
     assets/computercraft/lua/rom/modules/main/cc, which carry
     SPDX-License-Identifier: MPL-2.0 headers
+  - the backported ROM programs assets/computercraft/lua/rom/programs/about
+    and .../motd, which likewise carry SPDX-License-Identifier: MPL-2.0
+    headers (the remaining ROM programs are CCPL, as decompiled from 1.75)
 
 Files sourced from CC: Tweaked are licensed under the Mozilla Public
 License 2.0. The full text is in LICENSE-MPL-2.0. MPL-2.0 is a

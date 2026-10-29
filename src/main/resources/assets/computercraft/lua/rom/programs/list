@@ -9,11 +9,14 @@ end
 
 -- Sort into dirs/files, and calculate column count
 local tAll = fs.list( sDir )
+
+-- Hidden entries are those whose name starts with a dot; list.show_hidden reveals them.
+local bShowHidden = settings.get( "list.show_hidden" )
 local tFiles = {}
 local tDirs = {}
 
 for n, sItem in pairs( tAll ) do
-	if string.sub( sItem, 1, 1 ) ~= "." then
+	if bShowHidden or string.sub( sItem, 1, 1 ) ~= "." then
 		local sPath = fs.combine( sDir, sItem )
 		if fs.isDir( sPath ) then
 			table.insert( tDirs, sItem )
