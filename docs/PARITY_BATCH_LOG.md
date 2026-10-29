@@ -168,7 +168,11 @@ the real `package.path`, `settings.define` running before `settings.load`, `os.r
 env, and `bios.strict_globals` end to end. Each check must report exactly once, so a check that
 stops running fails the build.
 
-Full suite: **1488 tests, 0 failures**, including `spotlessCheck`, `checkstyleMain` and
+The in-game scripts in [`ingame-tests/batch-a/`](ingame-tests/batch-a/) are also run by
+`BatchAIngameScriptsTest`, which boots the real BIOS and executes each one, so a broken in-game
+script fails the build instead of wasting a manual pass.
+
+Full suite: **1490 tests, 0 failures**, including `spotlessCheck`, `checkstyleMain` and
 `checkstyleTest`.
 
 ### Needs in-game validation
