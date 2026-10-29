@@ -241,6 +241,9 @@ local function report(err, thread, source_map)
         for _ = 1, line - 1 do handle.readLine() end
 
         line_contents = handle.readLine()
+        -- Local fix: upstream never closes this handle, so every reported error leaks a file
+        -- handle on the failing program (and blocks deleting it). Caught by the in-game test.
+        handle.close()
     end
 
     -- Could not determine the line. Bail.

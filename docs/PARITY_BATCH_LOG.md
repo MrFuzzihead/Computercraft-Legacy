@@ -634,3 +634,32 @@ Full suite: **1555 tests, 0 failures**.
 
 Complete. Deferred to other batches: `motd` itself and the missing help topics (Batch D), and
 `cc.internal.import`/`event`/`menu`/`edit_runner` (only needed by later batches).
+
+### Batch C — in-game pack, and a bug it found
+
+`docs/ingame-tests/batch-c/` (auto-discovered by `IngameTestScriptsTest`):
+
+| File | Covers |
+|---|---|
+| `c1_require.lua` | require rooted at the program's directory (flat, nested, cached, isolated per run), missing-module messages, hashbangs (interpreter, argument order, `arg[0]`, body not executed, missing interpreter, shell guard), `.lua` stripping, error frames, completion `many` + `shell.autocomplete_hidden` |
+| `c2_require_manual.lua` | `/startup` directory across a reboot (sorted order), `shell.allow_startup`, scripted hidden-completion checks, then a Tab drill |
+
+**Bug found by `c1_require`: file-handle leak on every reported error.**
+
+Upstream's `cc.internal.exception.report()` opens the failing program to echo the offending source
+line and never closes it:
+
+```lua
+local handle = fs.open(frame.source:sub(3), "r")
+for _ = 1, line - 1 do handle.readLine() end
+line_contents = handle.readLine()
+-- no close
+```
+
+Symptom in game: after a reported error the program's own file could not be deleted
+(`Access denied`), and each reported error permanently consumed one of the computer's file handles
+— eventually `Too many open files`. Two control checks in `c1_require` (a never-run file, and a
+successfully-run file) both delete fine, which pinned it to the error path.
+
+Fixed locally by closing the handle, with a comment marking the deviation. The test now asserts
+that a program's file can be deleted after it errored, so a regression here fails the build.
