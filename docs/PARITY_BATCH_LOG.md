@@ -663,3 +663,72 @@ successfully-run file) both delete fine, which pinned it to the error path.
 
 Fixed locally by closing the handle, with a comment marking the deviation. The test now asserts
 that a program's file can be deleted after it errored, so a regression here fails the build.
+
+---
+
+## Batch D — ROM programs and resources (slice 1)
+
+**Status:** slice implemented; the larger programs are still to do.
+
+**Files**
+
+| File | Change |
+|---|---|
+| `rom/programs/about` | **new** (MPL-2.0, upstream) |
+| `rom/programs/motd` | **new** (MPL-2.0, upstream) |
+| `rom/programs/peripherals` | **new** |
+| `rom/programs/set` | **new** |
+| `rom/motd.txt` | **new** — rewritten for this mod, see below |
+| `rom/programs/clear` | now supports `screen` / `palette` / `all` |
+| `rom/programs/monitor` | now supports `scale <name> <scale>` |
+| `rom/programs/list` | honours `list.show_hidden` |
+| `rom/help/{about,motd,set}` | **new** topics |
+| `NOTICE` (+ `src/main/resources/NOTICE`) | records the two MPL programs |
+
+### Public API impact
+
+No `dan200.computercraft.api` changes. Lua-visible:
+
+| Change | Impact | Note |
+|---|---|---|
+| `about`, `motd`, `peripherals`, `set` programs | 🟢 | New programs. `shell.programs` and completion pick them up automatically. |
+| `clear palette` / `clear all` | 🟢 | Previously `clear` ignored its arguments and always cleared the screen. A bare `clear` behaves as before. |
+| `monitor scale <name> <n>` | 🟢 | New subcommand; rejects values outside 0.5–5. |
+| `list` hides dot files unless `list.show_hidden` | 🟡 | Dot files were already hidden; the setting now reveals them. |
+| MOTD on boot | 🟢 | The Batch C hook now has a program to run. `motd.enable` defaults to true on normal computers. |
+
+### Deviations
+
+1. **`rom/motd.txt` is not upstream's.** The CC:Tweaked file advertises `tweaked.cc` and
+   `forums.computercraft.cc`, and tells the user to drag files onto the computer — Batch J, and
+   impossible on vanilla LWJGL2. Replaced with tips that hold for this mod (settings, `edit`,
+   `programs`, `peripherals`, monitor/speaker, Ctrl+T/R/S, floppies, multi-path file programs).
+2. **No 2-argument `term.setPaletteColour(colour, rgb24)`.** `clear palette` works the same way
+   upstream's does — `nativePaletteColour` returns `r, g, b` and is passed straight through as the
+   remaining arguments — so the packed form is not needed. The feasibility audit's Batch E item
+   remains open, and this batch does not add it.
+3. `set` uses `cc.pretty` via `require`, which works because Batch C gives each program its own
+   `require`.
+
+### Coverage
+
+`docs/ingame-tests/batch-d/d1_programs.lua` (also run in CI):
+
+| Check | Notes |
+|---|---|
+| `about` | prints the CraftOS version and `_HOST` |
+| `motd` | one line, several lines (random pick), missing `motd.path` |
+| `peripherals` | runs and prints a heading |
+| `set` | no args lists settings, `<name>` shows one, `<name> <value>` sets, `nil` unsets, a wrong-typed value is rejected |
+| `list.show_hidden` | dot files hidden by default, revealed when set |
+| `clear` | `screen`/`palette`/`all`/usage; `clear palette` visibly restores a changed palette entry |
+| `monitor scale` | applies 1.5, rejects 9 — `SKIP` when no monitor is attached |
+
+Full suite: **1555 tests, 0 failures** (the in-game pack runs inside it).
+
+### Still open in Batch D
+
+- `http/wget`, `pocket/equip`, `pocket/unequip`, `fun/speaker`
+- `copy`/`move`/`delete`/`mkdir`: multi-path support and read-only/mount-root guards
+- `import` (upstream's `rom/programs/import`)
+- `rom/modules/turtle` directory
