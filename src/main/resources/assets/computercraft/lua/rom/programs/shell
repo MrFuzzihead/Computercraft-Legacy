@@ -35,6 +35,33 @@ else
 	bgColour = colours.black
 end
 
+-- cc.require builds a private package/require pair for each program, rooted at that
+-- program's directory. Ported from CC:Tweaked; see rom/modules/main/cc/require.lua.
+local make_package
+
+local function createShellEnv( sDir )
+	if not make_package then
+		-- Loaded lazily: nothing here needs it until a program is actually run.
+		make_package = dofile( "rom/modules/main/cc/require.lua" ).make
+	end
+
+	local tRunEnv = { shell = shell, multishell = multishell }
+	tRunEnv.require, tRunEnv.package = make_package( tRunEnv, sDir )
+	return tRunEnv
+end
+
+-- The first line of a file, or nil if it cannot be read.
+local function peekFirstLine( sPath )
+	local file = fs.open( sPath, "r" )
+	if not file then return nil end
+	local sLine = file.readLine and file.readLine() or nil
+	file.close()
+	return sLine
+end
+
+-- Forward declaration: executeProgram needs tokenise, which is defined below it.
+local executeProgram
+
 local function run( _sCommand, ... )
 	local sPath = shell.resolveProgram( _sCommand )
 	if sPath ~= nil then
@@ -42,9 +69,9 @@ local function run( _sCommand, ... )
 		if multishell then
 		    multishell.setTitle( multishell.getCurrent(), fs.getName( sPath ) )
 		end
-		local tRunEnv = setmetatable( {}, { __index = tEnv } )
-		tRunEnv.arg = { [0] = sPath, ... }
-   		local result = os.run( tRunEnv, sPath, ... )
+		local tArgs = { ... }
+		tArgs[0] = sPath
+   		local result = executeProgram( 8, sPath, tArgs )
 		tProgramStack[#tProgramStack] = nil
 		if multishell then
 		    if #tProgramStack > 0 then
@@ -74,6 +101,51 @@ local function tokenise( ... )
         bQuoted = not bQuoted
     end
     return tWords
+end
+
+-- Runs a program from sPath in its own environment, honouring a #! hashbang on the first
+-- line. Hashbangs may recurse, so nRemaining bounds the depth (upstream uses 8 as well).
+--
+-- The normal path still goes through os.run, which owns the strict-globals handling and
+-- the error printing; only the #! case is handled here.
+executeProgram = function( nRemaining, sPath, tArgs )
+	local sFirst = peekFirstLine( sPath )
+	if sFirst and string.sub( sFirst, 1, 2 ) == "#!" then
+		nRemaining = nRemaining - 1
+		if nRemaining <= 0 then
+			return false, "Hashbang recursion depth limit reached when loading file: " .. sPath
+		end
+
+		local tHashbangArgs = tokenise( string.sub( sFirst, 3 ) )
+		local sInterpreter = table.remove( tHashbangArgs, 1 )
+		if not sInterpreter then
+			return false, "Empty hashbang in file: " .. sPath
+		end
+
+		local sResolved = shell.resolveProgram( sInterpreter )
+		if not sResolved then
+			return false, "Hashbang program not found: " .. sInterpreter
+		elseif sResolved == "rom/programs/shell" and #tHashbangArgs == 0 then
+			-- "#!/rom/programs/shell" would expand to "shell <program>", which runs the
+			-- program again: an infinite loop. Guard against the obvious case.
+			return false, "Cannot use the shell as a hashbang program"
+		end
+
+		-- Pass an absolute path so the interpreter's own shell.resolve() calls do not prefix
+		-- it with the current directory.
+		table.insert( tHashbangArgs, "/" .. sPath )
+		for n = 1, #tArgs do
+			table.insert( tHashbangArgs, tArgs[n] )
+		end
+		-- arg[0] names the interpreter as written, which is what a shebang interpreter expects
+		-- (upstream does the same with originalHashbangPath).
+		tHashbangArgs[0] = sInterpreter
+		return executeProgram( nRemaining, sResolved, tHashbangArgs )
+	end
+
+	local tRunEnv = setmetatable( createShellEnv( fs.getDir( sPath ) ), { __index = tEnv } )
+	tRunEnv.arg = tArgs
+	return os.run( tRunEnv, sPath, table.unpack( tArgs, 1, #tArgs ) )
 end
 
 -- Install shell API
@@ -168,6 +240,10 @@ function shell.programs( _bIncludeHidden )
                 local sFile = tList[n]
 				if not fs.isDir( fs.combine( sPath, sFile ) ) and
 				   (_bIncludeHidden or string.sub( sFile, 1, 1 ) ~= ".") then
+					-- A file called "list.lua" is the program "list".
+					if #sFile > 4 and string.sub( sFile, -4 ) == ".lua" then
+						sFile = string.sub( sFile, 1, -5 )
+					end
 					tItems[ sFile ] = true
 				end
 			end

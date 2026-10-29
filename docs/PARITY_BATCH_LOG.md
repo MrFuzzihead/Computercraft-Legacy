@@ -448,3 +448,85 @@ half is `b2_io_manual.lua`, plus these by hand:
    the redirect.
 6. **A disk drive** (optional) — copy a file to a floppy and read it with `io.lines`; the hdd and
    rom mounts are already covered, a disk is the remaining mount type.
+
+---
+
+## Batch C — `cc.require`, shell environment, hashbangs (slice 1)
+
+**Status:** slice implemented; error-reporting half deferred pending a decision on `debug`.
+
+**Files touched**
+
+| File | Change |
+|---|---|
+| `rom/modules/main/cc/require.lua` | **new** — `cc.require` ported from 1.120.2 |
+| `rom/modules/main/cc/internal/tiny_require.lua` | **new** — verbatim upstream |
+| `rom/programs/shell` | per-program `require`/`package`, `#!` hashbangs, `.lua` stripping in `shell.programs` |
+
+### Public API impact
+
+No `dan200.computercraft.api` changes.
+
+| Change | Impact | Note |
+|---|---|---|
+| Programs get their own `require`/`package` | 🟢 | Rooted at the program's directory. Nothing was injected before, so this is additive. |
+| `#!` on the first line of a program | 🟢 | The named interpreter runs with the program path appended, then the original arguments. Depth-limited to 8. |
+| `shell.programs()` strips a `.lua` suffix | 🟡 | `list.lua` is now listed as `list`, and no longer twice. |
+| Modules see the program's env, not `_G` | 🟢 | Standard Lua behaviour; a module's globals land in the program env. |
+
+### Deviations from CC:Tweaked
+
+1. **`debug.getregistry()` is guarded.** Upstream copies the global `package.loaded` registry via
+   `debug.getregistry()._LOADED`. This runtime installs no `debug` library, so the lookup is
+   skipped when `debug` is absent instead of raising.
+2. **Hashbang programs still run through `os.run`.** Upstream's shell loads the chunk itself so it
+   can read the file once; here the first line is peeked for `#!` and the normal path is left to
+   `os.run`, which owns the strict-globals handling and error printing. One extra file open per
+   program run, in exchange for a much smaller diff.
+3. **Error reporting is not ported yet.** Upstream's shell uses
+   `cc.internal.exception.try`/`report`, and on a syntax error runs the source through
+   `cc.internal.syntax` to decide whether to show the compiler's message. Both need the `debug`
+   library — see the decision below.
+
+### The `debug` decision (blocks the rest of Batch C)
+
+`cc.internal.exception` and `cc.internal.error_hints` call `debug.getinfo(thread, offset, "Sl")`,
+`debug.getlocal`, `debug.getupvalue`, `debug.getregistry` and `debug.getmetatable`. Cobalt has
+`DebugLib`, and CC:Tweaked installs it (`CoreLibraries.debugGlobals` plus `Bit32Lib`), but this mod
+deliberately installs only Base/Table/String/Math/Coroutine, and `bios.lua` goes out of its way to
+block `getmetatable("")` so programs cannot reach the shared string metatable.
+
+Options:
+
+1. **Install `DebugLib`** (one line, matches CC:Tweaked). Unlocks `cc.internal.exception`,
+   `error_printer`, `error_hints`, `cc.internal.syntax` and the upstream shell's error paths
+   verbatim. Cost: every program can now call `debug.*`, including `debug.getmetatable("")` and
+   `debug.sethook`. Whether that is safe depends on whether Cobalt 0.9 keeps the string metatable
+   per-state; worth checking before enabling.
+2. **Port only the non-debug parts** and keep the current `printError(err)` reporting. Batch C
+   completes except for tracebacks/hints.
+3. **Ship a restricted `debug` shim** exposing only `getinfo`/`getlocal`/`getupvalue`/`getregistry`,
+   enough for the error modules and for `cc.require`'s registry lookup, without `sethook` or
+   `setmetatable`.
+
+Recommendation: option 3 if the goal is modern error output without widening the sandbox;
+option 1 if matching CC:Tweaked's runtime exactly matters more.
+
+### Automated coverage
+
+| Test | Covers |
+|---|---|
+| `CcRequireTest` (18 tests) | `searchpath` template precedence, nested names, custom separators, failure messages; `require` relative to the package dir, extensionless and `init` modules, caching, `nil`→`true`, env isolation, `preload` precedence, missing modules, require cycles, sentinel-after-error; `package` surface |
+| `BiosBatchCHeadlessTest` (2 tests, 15 checks) | real BIOS + shell: a program requiring its neighbour, nested modules, cache within a run vs isolation across runs, missing-module errors; hashbang interpreter resolution, body not executed, argument forwarding, `arg[0]`, missing interpreter, the shell-as-interpreter guard; `.lua` stripping |
+| `ShellAPITest` (37 tests) | preamble extended for the new peek/lazy-load path; all existing shell behaviour unchanged |
+
+Full suite: **1544 tests, 0 failures**.
+
+### Still to do in Batch C
+
+- `completion.build(..., many = true)` (our `cc/shell/completion.lua` has `build` without `many`).
+- Shell startup settings, the `/startup` directory, and the MOTD hook (`rom/startup`).
+- Hidden-file completion wired to `shell.autocomplete_hidden`.
+- `cc.internal.exception` / `error_printer` / `error_hints` / `syntax` — blocked on `debug`.
+- `cc.internal.import` / `event` / `menu` / `edit_runner` — needed only by later batches
+  (`import` for `cc.pretty`-era programs, `menu`/`edit_runner` for Batch I).
