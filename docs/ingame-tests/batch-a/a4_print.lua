@@ -165,3 +165,11 @@ print("")
 print("If you see a box/question mark instead of a space, report it.")
 
 finish("BATCH-A-4 print layout")
+
+-- FINAL SUMMARY
+-- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
+-- scroll it out of view. Repeat the outcome as the last line so it is always visible without
+-- scrolling. (Prompted by a run where only the drill was visible.)
+print("")
+print("RESULT BATCH-A-4 print layout: passed " .. P .. "   failed " .. F
+  .. (F > 0 and "   -- failures also logged to the results file" or ""))

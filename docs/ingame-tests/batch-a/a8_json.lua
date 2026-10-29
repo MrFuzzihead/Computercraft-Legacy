@@ -191,3 +191,11 @@ eq("serialiseJSON", "true", textutils.serialiseJSON(true))
 eq("unserialiseJSON", 7, textutils.unserialiseJSON("7"))
 
 finish("BATCH-A-8 JSON")
+
+-- FINAL SUMMARY
+-- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
+-- scroll it out of view. Repeat the outcome as the last line so it is always visible without
+-- scrolling. (Prompted by a run where only the drill was visible.)
+print("")
+print("RESULT BATCH-A-8 JSON: passed " .. P .. "   failed " .. F
+  .. (F > 0 and "   -- failures also logged to the results file" or ""))

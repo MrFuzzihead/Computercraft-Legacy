@@ -141,3 +141,11 @@ if phase ~= "second" then
   print("NOW REBOOT (Ctrl+R) and run a5_settings again.")
   print("Phase 2 will verify that " .. KEY .. "=42 survived.")
 end
+
+-- FINAL SUMMARY
+-- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
+-- scroll it out of view. Repeat the outcome as the last line so it is always visible without
+-- scrolling. (Prompted by a run where only the drill was visible.)
+print("")
+print("RESULT BATCH-A-5 settings (: passed " .. P .. "   failed " .. F
+  .. (F > 0 and "   -- failures also logged to the results file" or ""))

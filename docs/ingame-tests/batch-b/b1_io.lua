@@ -248,3 +248,11 @@ print("4. With a disk drive and floppy:  copy /rom/help/intro /disk/intro")
 print("   EXPECT: succeeds (io is not involved, but it is the same fs path).")
 print("")
 print("Report anything that errors or prints a stack trace.")
+
+-- FINAL SUMMARY
+-- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
+-- scroll it out of view. Repeat the outcome as the last line so it is always visible without
+-- scrolling. (Prompted by a run where only the drill was visible.)
+print("")
+print("RESULT BATCH-B io: passed " .. P .. "   failed " .. F
+  .. (F > 0 and "   -- failures also logged to the results file" or ""))

@@ -148,9 +148,20 @@ print("--- STILL TO CHECK BY HAND ---")
 print("1. edit /batchb-manual.txt  -- write two lines, then save and exit.")
 print("   To save: press Ctrl ONCE to open the menu (this build has no")
 print("   Ctrl+S chord), choose Save, then Ctrl once more and choose Exit.")
-print("   Then: type /batchb-manual.txt   EXPECT: both lines print.")
+print("   Then run:  b3_io_edit_check   to have this pack verify the file.")
+print("   Do NOT type the bare path: the shell RUNS a program by name, so")
+print("   /batchb-manual.txt would be executed as Lua and fail with a")
+print("   syntax error. To print a text file, use:  type /batchb-manual.txt")
 print("2. help intro")
 print("   EXPECT: the topic pages normally.")
 print("3. On a monitor: monitor right, then io.write('hi') in the monitor shell.")
 print("   EXPECT: 'hi' appears on the monitor, not the computer.")
 print("Report any error or stack trace.")
+
+-- FINAL SUMMARY
+-- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
+-- scroll it out of view. Repeat the outcome as the last line so it is always visible without
+-- scrolling. (Prompted by a run where only the drill was visible.)
+print("")
+print("RESULT BATCH-B io (manual): passed " .. P .. "   failed " .. F
+  .. (F > 0 and "   -- failures also logged to the results file" or ""))
