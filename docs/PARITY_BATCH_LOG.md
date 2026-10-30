@@ -793,3 +793,52 @@ Full suite: **1555 tests, 0 failures**.
 Complete. Deliberately excluded: `import` (see above). The `speaker play` WAV/DFPWM path and the
 pocket-computer equip flow need real hardware, so they are in the pack's manual drill rather than
 the automated checks.
+
+---
+
+## Batch E — Terminal/API polish
+
+**Status:** implemented.
+
+**Files**
+
+| File | Change |
+|---|---|
+| `core/apis/TermAPI.java` | `setPaletteColour(colour, rgb24)` overload; `blit` accepts uppercase hex |
+| `shared/peripheral/monitor/MonitorPeripheral.java` | the same packed-colour overload for monitors |
+| `rom/apis/window` | palette setters forward any arity, so the packed form survives a `term.redirect` |
+| `rom/apis/colors` | `toBlit` validates its argument and range |
+| `rom/apis/paintutils` | `drawLine` validates `startY` (it checked `startX` twice) and no longer leaks `maxX`/`minY`/`maxY` as globals |
+
+### Public API impact
+
+No `dan200.computercraft.api` changes.
+
+| Change | Impact | Note |
+|---|---|---|
+| `term.setPaletteColour(colour, 0xRRGGBB)` | 🟢 | Matches `colours.packRGB`; the 4-argument form is unchanged. Also on monitors and windows. |
+| `term.blit` with `A`–`F` | 🟢 | Previously raised `Invalid colour`. Lowercase still works, and the string is stored as given (the renderer lower-cases per character). |
+| `colors.toBlit(non-number)` | 🟡 | Now raises a type error. |
+| `colors.toBlit(0)` / `toBlit(> 0xffff)` | 🟡 | Now raises `Colour out of range`. Values in between keep the old floor(log2) mapping. |
+| `paintutils.drawLine` with a non-numeric `startY` | 🟡 | Now raises the documented error instead of failing inside `math.floor`. |
+| `paintutils.drawLine` no longer defines `maxX`/`minY`/`maxY` | 🟢 | They are locals now; a program relying on those globals was relying on a leak. |
+
+### Notes
+
+- The feasibility audit listed "`term.setPaletteColour(colour, rgb8)`" as missing. It was, but the
+  earlier investigation for `clear palette` showed `nativePaletteColour` returns `r, g, b` in both
+  1.120 and this ROM, so upstream's `clear` never used the packed form. The overload is still worth
+  having because `colors.packRGB` produces exactly that shape, and CC:Tweaked accepts both.
+- Two existing tests pinned the old case-sensitive `blit` behaviour (`checkColour("0F")` throwing,
+  and `"feA"` as an invalid colour). Both were updated, since the change is deliberate.
+
+### Coverage
+
+| Test | Covers |
+|---|---|
+| `TermAPITest` (+5) | uppercase `blit` (text and background colours), packed palette colour, three-channel form still working, too-few arguments, channel range validation |
+| `LuaTerminalPolishTest` (11, new) | `toBlit` palette mapping, range rejection, type rejection, floor behaviour, top-of-range; `drawLine` rejecting `startY`/`endX`/others, not leaking globals, still drawing the right pixels, rejecting numeric strings |
+| `MonitorPeripheralTest` (updated) | uppercase accepted in `checkColour`, and the invalid-colour set no longer contains `A` |
+| `docs/ingame-tests/batch-e/e1_terminal.lua` | all of the above through the real terminal API, in CI |
+
+Full suite: **1571 tests, 0 failures**.

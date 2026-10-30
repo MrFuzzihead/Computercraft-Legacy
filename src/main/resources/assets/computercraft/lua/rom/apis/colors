@@ -56,18 +56,21 @@ function unpackRGB( rgb )
 end
 
 function toBlit( color )
+    if type( color ) ~= "number" then
+        error( "bad argument #1 (number expected, got " .. type( color ) .. ")", 2 )
+    end
+
     -- O(1) fast path for the 16 valid color bitmasks.
     local result = tHex[ color ]
     if result then return result end
-    -- Fallback for non-power-of-two inputs (behavior is undefined per spec,
-    -- but we stay consistent with what a log2 floor would give).
-    local index = 0
-    local c = color
-    while c > 1 do
-        c = math.floor( c / 2 )
-        index = index + 1
+
+    -- Matches CC:Tweaked: anything outside 1..0xffff is an error rather than a guess.
+    if color < 1 or color > 0xffff then
+        error( "Colour out of range", 2 )
     end
-    return string.format( "%x", index )
+
+    -- Non-power-of-two inputs still map to the bit below, as math.log(color, 2) floors.
+    return string.format( "%x", math.floor( math.log( color, 2 ) ) )
 end
 
 function fromBlit( char )

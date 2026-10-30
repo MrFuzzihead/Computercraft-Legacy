@@ -351,7 +351,8 @@ class TermAPITest {
             .toString();
         terminal.clearChanged();
 
-        for (String invalid : new String[] { "g", "z", "A", "F", " ", "\n", "\u0000", "\u00e9", "\uff10" }) {
+        // Uppercase A-F are valid now, so they are no longer in the invalid set.
+        for (String invalid : new String[] { "g", "z", "G", " ", "\n", "\u0000", "\u00e9", "\uff10" }) {
             for (int argument = 1; argument <= 2; argument++) {
                 Object[] args = { "xyz", "012", "fed" };
                 args[argument] = "0f" + invalid;
@@ -400,6 +401,53 @@ class TermAPITest {
                 .substring(2, 18));
         assertEquals(18, terminal.getCursorX());
         assertEquals(1, terminal.getCursorY());
+    }
+
+    @Test
+    void blitAcceptsUppercaseHexColours() throws LuaException {
+        // CC:Tweaked lower-cases each character, so uppercase is valid too.
+        terminal.setCursorPos(0, 0);
+        assertNull(api.callMethod(null, 18, new Object[] { "ab", "FC", "0A" }));
+        assertEquals(
+            "FC",
+            terminal.getTextColourLine(0)
+                .toString()
+                .substring(0, 2),
+            "the colour string is stored as given; the renderer lower-cases it");
+        assertEquals(
+            "0A",
+            terminal.getBackgroundColourLine(0)
+                .toString()
+                .substring(0, 2));
+    }
+
+    @Test
+    void setPaletteColourAcceptsAPacked24BitColour() throws LuaException {
+        // setPaletteColour(colour, 0xRRGGBB), as colours.packRGB produces.
+        assertNull(api.callMethod(null, 22, new Object[] { 1.0, (double) 0xFF8000 }));
+        double[] rgb = terminal.getPaletteColour(0);
+        assertEquals(1.0, rgb[0], 1e-6, "red channel");
+        assertEquals(128.0 / 255.0, rgb[1], 1e-6, "green channel");
+        assertEquals(0.0, rgb[2], 1e-6, "blue channel");
+    }
+
+    @Test
+    void setPaletteColourStillAcceptsSeparateChannels() throws LuaException {
+        assertNull(api.callMethod(null, 22, new Object[] { 1.0, 0.25, 0.5, 0.75 }));
+        double[] rgb = terminal.getPaletteColour(0);
+        assertEquals(0.25, rgb[0], 1e-6);
+        assertEquals(0.5, rgb[1], 1e-6);
+        assertEquals(0.75, rgb[2], 1e-6);
+    }
+
+    @Test
+    void setPaletteColourRejectsTooFewArguments() {
+        assertThrows(LuaException.class, () -> api.callMethod(null, 22, new Object[] { 1.0 }));
+    }
+
+    @Test
+    void setPaletteColourStillValidatesTheChannels() {
+        assertThrows(LuaException.class, () -> api.callMethod(null, 22, new Object[] { 1.0, 1.5, 0.0, 0.0 }));
     }
 
     @Test
