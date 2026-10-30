@@ -1001,3 +1001,89 @@ there: both the registry lookup and the reflective invoke now catch `Throwable` 
 `ReflectiveOperationException | LinkageError`), and log at warn rather than debug. An optional,
 LGPL-3.0 integration must not be able to take a core call like `turtle.inspect` down with it — not
 via a missing class, a signature change, or a broken static initialiser.
+
+---
+
+## Batch G — Commands
+
+`CommandAPI.java`. Five items, of which three were exactly as the audit described and two needed
+re-scoping after checking against the 1.20 reference (the same pattern as Batch C's oversized
+verdicts).
+
+### G1 — `getDimension()`
+
+New method, index 6, appended so the pre-existing indices stay stable for any program that pokes at
+`commands[6]` (nothing does, but appending is free).
+
+1.7.10 has no dimension *registry*, so the name is derived:
+
+| id | name |
+|---|---|
+| 0 | `minecraft:overworld` |
+| -1 | `minecraft:the_nether` |
+| 1 | `minecraft:the_end` |
+| other | the provider's own `getDimensionName()`, lowercased with spaces → underscores |
+
+The naming rule is split out as `dimensionName(int id, String providerName)` — pure, no world — with
+`dimensionName(World)` as a one-line wrapper. That is what makes it unit-testable: a mod dimension
+cannot be exercised from a bare JVM, but the *rule* can.
+
+### G2 — dimension arguments
+
+`getBlockInfo` and `getBlockInfos` accepted only a numeric id. They now accept a name too, via
+`resolveDimension(arg, fallback)`:
+
+* a `Number` → the id, unchanged (full back-compat);
+* `minecraft:overworld` / `overworld` / `minecraft:the_nether` / `the_nether` / `nether` /
+  `minecraft:the_end` / `the_end` / `end`, case-insensitively;
+* otherwise the loaded worlds are scanned by `dimensionName` (so mod dimensions work by their own
+  name), and a miss raises `Unknown dimension`.
+
+Both call sites lost their duplicated `infoHasDim4`/`infoHasDim5` marshalling blocks in favour of one
+`worldFor(arg, fallback)` helper.
+
+### G3 — `getBlockInfos` traversal order
+
+Was `x → y → z`. Now `y → z → x`, matching upstream, so a program can index with
+`x + z*width + y*width*depth + 1`. This is a **breaking change for any stored index**, which is why
+the in-game pack asserts the formula against eight single-block lookups rather than just counting
+entries.
+
+### G4 — `commands.list` — re-scoped
+
+The audit asked for "prefix filter → child-command listing". Upstream walks Brigadier's literal
+command tree. **1.7.10 has no command tree**: `ICommandManager.getCommands()` is a flat map of
+single-word names, and subcommands are parsed inside each `ICommand.processCommand`. There is no
+public child list to return, and deriving one from `getCommandUsage` strings would be guesswork.
+
+So `commands.list` keeps prefix filtering, and the in-game pack asserts *that* — an honest limitation
+recorded here instead of a plausible-looking implementation that would be wrong on mod commands.
+
+### G5 — `getEntities` — implemented as a documented subset
+
+Two paths:
+
+* `@p`, `@r`, `@a` and player names → `PlayerSelector.matchPlayers`, i.e. **Forge's own parser**,
+  including the `x`/`y`/`z`/`r`/`rm`/`m`/`c`/`l`/`team` filters. Reimplementing that would be a
+  source of divergence with no benefit.
+* `@e[…]` → a small scanner over `loadedEntityList` supporting `type=`, `distance=`/`r=`, `rm=`,
+  `x=`/`y=`/`z=` and `limit=`, with `..N` / `N..M` range syntax.
+
+Anything 1.7.10 has no equivalent for (`tag=`, `nbt=`, `scores=`, `predicate=`, `@s`) **raises**
+`Unsupported selector filter: <key>`. Silently matching everything would be strictly worse than an
+error: a script would get a plausible list of the wrong entities.
+
+Result shape matches upstream's `entity_details`: `name`, `displayName`, and `health`/`maxHealth` for
+living entities. `name` is `EntityList.getEntityString` lowercased and deliberately **not**
+namespaced — 1.7.10 has no entity registry id, so prefixing `minecraft:` would mislabel every mod
+entity.
+
+### Verification
+
+`CommandDimensionTest` — 13 tests over `dimensionName` and `resolveDimension`: vanilla ids,
+provider-name normalisation, id fallback, numeric pass-through, modern/bare/legacy aliases,
+case-insensitivity, the fallback argument, unknown names, and non-string arguments.
+
+In-game: `docs/ingame-tests/batch-g/g1_commands.lua`, which covers the four items that need a live
+server (dimension lookup, name arguments, range ordering, selectors) and writes
+`/batch-g-results.txt` so the transcript survives a terminal that cannot scroll.
