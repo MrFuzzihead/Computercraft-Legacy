@@ -12,6 +12,7 @@ import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
+import dan200.computercraft.shared.util.BlockStateBridge;
 import dan200.computercraft.shared.util.WorldUtil;
 
 public class TurtleInspectCommand implements ITurtleCommand {
@@ -42,10 +43,8 @@ public class TurtleInspectCommand implements ITurtleCommand {
                 Map<Object, Object> table = new HashMap<>();
                 table.put("name", "minecraft:air");
                 table.put("metadata", 0);
-                // MC 1.7.10 has no BlockState / named-property API (introduced in 1.8).
-                // The opaque metadata integer above is the only block-state information
-                // available at this level; state is always empty on this platform.
-                table.put("state", new HashMap<Object, Object>());
+                // Named states need GTNHLib; without it this degrades to { metadata = 0 }.
+                table.put("state", BlockStateBridge.metadataFallback(0));
                 return TurtleCommandResult.success(new Object[] { table });
             } else {
                 return TurtleCommandResult.failure("No block to inspect");
@@ -55,12 +54,14 @@ public class TurtleInspectCommand implements ITurtleCommand {
             String name = Block.blockRegistry.getNameForObject(block);
             int metadata = world.getBlockMetadata(newPosition.posX, newPosition.posY, newPosition.posZ);
             Map<Object, Object> table = new HashMap<>();
-            table.put("name", name);
+            table.put("name", name != null ? name : "minecraft:air");
             table.put("metadata", metadata);
-            // MC 1.7.10 has no BlockState / named-property API (introduced in 1.8).
-            // The opaque metadata integer above is the only block-state information
-            // available at this level; state is always empty on this platform.
-            table.put("state", new HashMap<Object, Object>());
+            // GTNHLib registers named properties for many blocks (and ETFR for some of its
+            // own); without it, or for unregistered blocks, this is { metadata = n }.
+            table.put(
+                "state",
+                BlockStateBridge
+                    .getState(world, newPosition.posX, newPosition.posY, newPosition.posZ, block, metadata));
             return TurtleCommandResult.success(new Object[] { table });
         }
     }

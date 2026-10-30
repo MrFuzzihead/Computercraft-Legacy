@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import net.minecraft.inventory.IInventory;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
@@ -16,6 +15,7 @@ import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.api.peripheral.IPeripheralTargeted;
 import dan200.computercraft.shared.util.InventoryUtil;
+import dan200.computercraft.shared.util.ItemDetail;
 
 /**
  * Generic peripheral that wraps any {@link IInventory} tile entity and exposes
@@ -94,7 +94,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         for (int i = 0; i < inv.getSizeInventory(); i++) {
                             ItemStack stack = inv.getStackInSlot(i);
                             if (stack != null) {
-                                result.put(i + 1, makeBasicDetail(stack));
+                                result.put(i + 1, ItemDetail.basic(stack));
                             }
                         }
                         return new Object[] { result };
@@ -116,7 +116,7 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                         if (stack == null) {
                             return new Object[] { null };
                         }
-                        return new Object[] { makeFullDetail(stack) };
+                        return new Object[] { ItemDetail.full(stack) };
                     }
                 }) };
             }
@@ -131,7 +131,15 @@ public class InventoryPeripheral implements IPeripheralTargeted {
                     public Object[] execute() throws LuaException {
                         IInventory inv = getInventory();
                         validateSlot(inv, slot);
-                        return new Object[] { inv.getInventoryStackLimit() };
+                        int inventoryLimit = inv.getInventoryStackLimit();
+                        ItemStack stack = inv.getStackInSlot(slot - 1);
+                        // CC:Tweaked reports the smaller of the item's own stack size and the
+                        // inventory's limit for an occupied slot; an empty slot only has the
+                        // inventory limit to report.
+                        int limit = stack != null && stack.stackSize > 0
+                            ? Math.min(stack.getMaxStackSize(), inventoryLimit)
+                            : inventoryLimit;
+                        return new Object[] { limit };
                     }
                 }) };
             }
@@ -342,29 +350,5 @@ public class InventoryPeripheral implements IPeripheralTargeted {
             from.markDirty();
         }
         return moved;
-    }
-
-    /**
-     * Returns a basic item detail map ({@code name}, {@code count}, {@code damage})
-     * suitable for use in the {@code list()} result table.
-     */
-    private static Map<Object, Object> makeBasicDetail(ItemStack stack) {
-        Map<Object, Object> detail = new HashMap<>();
-        detail.put("name", Item.itemRegistry.getNameForObject(stack.getItem()));
-        detail.put("count", stack.stackSize);
-        detail.put("damage", stack.getItemDamage());
-        return detail;
-    }
-
-    /**
-     * Returns a full item detail map ({@code name}, {@code count}, {@code damage},
-     * {@code maxCount}, {@code displayName}) suitable for use in
-     * {@code getItemDetail()}.
-     */
-    private static Map<Object, Object> makeFullDetail(ItemStack stack) {
-        Map<Object, Object> detail = makeBasicDetail(stack);
-        detail.put("maxCount", stack.getMaxStackSize());
-        detail.put("displayName", stack.getDisplayName());
-        return detail;
     }
 }
