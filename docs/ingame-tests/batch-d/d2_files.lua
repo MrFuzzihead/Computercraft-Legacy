@@ -23,6 +23,7 @@ local function skip(label)
 end
 local function section(n) print("== " .. n .. " ==") end
 local function finish(name)
+  _batchResultName = name
   local lines = { "RESULT " .. name }
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for _, f in ipairs(fails) do lines[#lines + 1] = "  FAIL " .. f end
@@ -257,3 +258,12 @@ print("6. With a speaker: speaker play <file.dfpwm>   (see 'help speaker')")
 print("   and: speaker sounds -- check 'speaker sound minecraft:block.note_block.pling'")
 print("7. With http enabled: wget https://example.com/  EXPECT: refuses to save (a directory URL).")
 print("8. On a pocket computer: pocket/equip with an ender modem in the inventory.")
+
+-- CraftOS terminals have no scrollback, so the verdict and any failures have to be the LAST
+-- lines printed: everything above is pushed off the screen by the drill.
+print("")
+for i = 1, math.min(#fails, 8) do print("  FAIL " .. fails[i]) end
+if #fails > 8 then print("  ... and " .. (#fails - 8) .. " more -- open the results file") end
+for i = 1, math.min(#skips, 3) do print("  SKIP " .. skips[i]) end
+-- The verdict is the very last line, so it is always visible.
+print("RESULT " .. tostring(_batchResultName) .. ": passed " .. P .. "   failed " .. F .. "   skipped " .. S)

@@ -123,6 +123,42 @@ class IngameTestScriptsTest {
             return out;
         }
 
+        /**
+         * The verdict must be the last non-blank line on screen.
+         *
+         * <p>
+         * CraftOS terminals have no scrollback, so a script that prints its manual drill *after*
+         * the summary leaves the reader with no way to see the result. That happened in three
+         * batches before this check existed.
+         * </p>
+         */
+        void assertVerdictIsLastOnScreen(String script) {
+            assertTrue(screen.contains("RESULT "), script + " never printed a verdict. Screen was:\n" + screen);
+
+            // Walk up from the bottom, ignoring blank lines and the shell prompt that is redrawn
+            // once the program exits (" >" or "dir>").
+            String lastContent = "";
+            for (String line : reverse(screen.split("\\n"))) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.matches("[^\\s]*>")) continue;
+                lastContent = trimmed;
+                break;
+            }
+
+            // The verdict wraps on a 51-column terminal, so any of its parts may be the last line.
+            assertTrue(
+                lastContent.contains("RESULT ") || lastContent.contains("passed ")
+                    || lastContent.contains("failed ")
+                    || lastContent.contains("skipped "),
+                script + " printed something after its verdict: \"" + lastContent + "\". Screen was:\n" + screen);
+        }
+
+        private static String[] reverse(String[] lines) {
+            String[] out = new String[lines.length];
+            for (int i = 0; i < lines.length; i++) out[i] = lines[lines.length - 1 - i];
+            return out;
+        }
+
         void assertAllPassed(String script) {
             List<String> summaries = summaries();
             assertFalse(
@@ -244,6 +280,7 @@ class IngameTestScriptsTest {
                 .replace(".lua", "");
             Run run = runScript(freshHdd(), scriptFile);
             run.assertAllPassed(name);
+            run.assertVerdictIsLastOnScreen(name);
         }
         assertFalse(scripts.isEmpty());
     }

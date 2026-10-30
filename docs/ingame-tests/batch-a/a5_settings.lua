@@ -37,6 +37,7 @@ local function section(n) print("== " .. n .. " ==") end
 -- the manual drills printed afterwards scroll a 19-row screen, so the on-screen copy is not
 -- always the last thing visible. Review the log with:  type /batch-a-results.txt
 local function finish(name)
+  _batchResultName = name
   local lines = { "RESULT " .. name }
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for i = 1, #fails do lines[#lines + 1] = "  FAIL " .. fails[i] end
@@ -150,10 +151,11 @@ if phase ~= "second" then
   print("Phase 2 will verify that " .. KEY .. "=42 survived.")
 end
 
--- FINAL SUMMARY
--- The RESULT block above is printed before the drill, and a 19-row screen plus the drill can
--- scroll it out of view. Repeat the outcome as the last line so it is always visible without
--- scrolling. (Prompted by a run where only the drill was visible.)
+-- CraftOS terminals have no scrollback, so the verdict and any failures have to be the LAST
+-- lines printed: everything above is pushed off the screen by the drill.
 print("")
-print("RESULT BATCH-A-5 settings (: passed " .. P .. "   failed " .. F
-  .. (F > 0 and "   -- failures also logged to the results file" or ""))
+for i = 1, math.min(#fails, 8) do print("  FAIL " .. fails[i]) end
+if #fails > 8 then print("  ... and " .. (#fails - 8) .. " more -- open the results file") end
+for i = 1, math.min(#skips, 3) do print("  SKIP " .. skips[i]) end
+-- The verdict is the very last line, so it is always visible.
+print("RESULT " .. tostring(_batchResultName) .. ": passed " .. P .. "   failed " .. F .. "   skipped " .. S)

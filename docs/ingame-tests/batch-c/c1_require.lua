@@ -25,6 +25,7 @@ end
 local function note(label) print("     " .. label) end
 local function section(n) print("== " .. n .. " ==") end
 local function finish(name)
+  _batchResultName = name
   local lines = { "RESULT " .. name }
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for _, f in ipairs(fails) do lines[#lines + 1] = "  FAIL " .. f end
@@ -286,3 +287,12 @@ print("   then type a path and TAB again -- hidden files should now appear.")
 print("4. Run a program with a syntax error to see the parser report:")
 print("   echo 'if true then' > /broken ; /broken")
 print("Report anything that errors or prints a stack trace.")
+
+-- CraftOS terminals have no scrollback, so the verdict and any failures have to be the LAST
+-- lines printed: everything above is pushed off the screen by the drill.
+print("")
+for i = 1, math.min(#fails, 8) do print("  FAIL " .. fails[i]) end
+if #fails > 8 then print("  ... and " .. (#fails - 8) .. " more -- open the results file") end
+for i = 1, math.min(#skips, 3) do print("  SKIP " .. skips[i]) end
+-- The verdict is the very last line, so it is always visible.
+print("RESULT " .. tostring(_batchResultName) .. ": passed " .. P .. "   failed " .. F .. "   skipped " .. S)
