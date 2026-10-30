@@ -5,8 +5,11 @@
 -- b2_io_manual.lua, which CI skips.
 
 local P, F, S = 0, 0, 0
+local _transcript = {}
 local fails = {}
 local function ok(label, cond, detail)
+  _transcript[#_transcript + 1] = (cond and "OK   " or "FAIL ") .. label
+    .. ((not cond and detail ~= nil) and ("  [" .. tostring(detail) .. "]") or "")
   if cond then
     P = P + 1
   else
@@ -21,6 +24,7 @@ end
 -- destroy the only explanation for a non-zero skipped count.
 local skips = {}
 local function skip(label)
+  _transcript[#_transcript + 1] = "SKIP " .. label
   S = S + 1
   skips[#skips + 1] = label
   print("SKIP " .. label)

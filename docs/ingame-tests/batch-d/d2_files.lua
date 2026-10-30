@@ -4,8 +4,10 @@
 -- the http API report SKIP rather than failing, so the same script is meaningful anywhere.
 
 local P, F, S = 0, 0, 0
-local fails, skips = {}, {}
+local fails, skips, _transcript = {}, {}, {}
 local function ok(label, cond, detail)
+  _transcript[#_transcript + 1] = (cond and "OK   " or "FAIL ") .. label
+    .. ((not cond and detail ~= nil) and ("  [" .. tostring(detail) .. "]") or "")
   if cond then
     P = P + 1
   else
@@ -17,6 +19,7 @@ local function eq(label, expected, got)
   ok(label, expected == got, "expected " .. tostring(expected) .. " got " .. tostring(got))
 end
 local function skip(label)
+  _transcript[#_transcript + 1] = "SKIP " .. label
   S = S + 1
   skips[#skips + 1] = label
   print("SKIP " .. label)
@@ -28,6 +31,7 @@ local function finish(name)
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for _, f in ipairs(fails) do lines[#lines + 1] = "  FAIL " .. f end
   for _, k in ipairs(skips) do lines[#lines + 1] = "  SKIP " .. k end
+  for _, line in ipairs(_transcript) do lines[#lines + 1] = "    " .. line end
 
   term.clear()
   term.setCursorPos(1, 1)
