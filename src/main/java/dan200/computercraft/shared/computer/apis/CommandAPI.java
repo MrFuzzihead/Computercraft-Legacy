@@ -21,6 +21,7 @@ import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.shared.computer.blocks.TileCommandComputer;
+import dan200.computercraft.shared.util.BlockStateBridge;
 import dan200.computercraft.shared.util.NBTUtil;
 import dan200.computercraft.shared.util.WorldUtil;
 
@@ -111,12 +112,14 @@ public class CommandAPI implements ILuaAPI {
             metadata = world.getBlockMetadata(x, y, z);
         }
 
-        Map<Object, Object> stateTable = new HashMap<>();
-        stateTable.put("metadata", metadata);
-
         Map<Object, Object> table = new HashMap<>();
         table.put("name", name);
-        table.put("state", stateTable);
+        // Named states need GTNHLib; without it this degrades to { metadata = n }.
+        table.put(
+            "state",
+            y >= 0 && y < world.getHeight()
+                ? BlockStateBridge.getState(world, x, y, z, world.getBlock(x, y, z), metadata)
+                : BlockStateBridge.metadataFallback(metadata));
 
         if (y >= 0 && y < world.getHeight()) {
             TileEntity te = world.getTileEntity(x, y, z);

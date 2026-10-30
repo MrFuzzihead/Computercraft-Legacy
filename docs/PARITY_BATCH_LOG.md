@@ -842,3 +842,71 @@ No `dan200.computercraft.api` changes.
 | `docs/ingame-tests/batch-e/e1_terminal.lua` | all of the above through the real terminal API, in CI |
 
 Full suite: **1571 tests, 0 failures**.
+
+---
+
+## Batch F — Item/block detail
+
+**Status:** implemented. HogUtils tags deliberately excluded (owner decision: not a widely used
+mod); everything else from the audit's Batch F list is in.
+
+**Files**
+
+| File | Change |
+|---|---|
+| `shared/util/ItemDetail.java` | **new** — the shared detail builder used by both `turtle.getItemDetail` and `inventory.getItemDetail` |
+| `shared/util/NBTHash.java` | **new** — stable `nbt` hash |
+| `shared/util/BlockStateBridge.java` | **new** — GTNHLib block states by reflection, metadata fallback |
+| `shared/peripheral/inventory/InventoryPeripheral.java` | uses the shared builder; `getItemLimit` is now per-item |
+| `shared/turtle/apis/TurtleAPI.java` | `getItemDetail` delegates to the shared builder |
+| `shared/turtle/core/TurtleInspectCommand.java` | `state` comes from the bridge |
+| `shared/computer/apis/CommandAPI.java` | `getBlockInfo(s)` `state` comes from the bridge |
+
+### Public API impact
+
+No `dan200.computercraft.api` changes. Lua-visible:
+
+| Change | Impact | Note |
+|---|---|---|
+| `getItemDetail` gains `nbt`, `maxDamage`, `durability`, `lore`, `unbreakable`, `potionEffects`, `mapColor`, `itemGroups`, `enchantments` | 🟢 | All additive. `damage` still appears for damageable items. |
+| `inventory.list` entries gain `nbt` | 🟡 | Basic detail now matches CC:Tweaked's (name, count, hash), plus the existing `damage`. |
+| `inventory.getItemLimit` reports `min(stackSize, inventoryLimit)` for occupied slots | 🟡 | Was always the inventory limit. Empty slots are unchanged. |
+| `turtle.inspect` / `commands.getBlockInfo` `state` | 🟡 | Was always `{}`. Now `{ metadata = n }`, or named properties when GTNHLib is installed. |
+| `inventory.getItemDetail` gains `enchantments` | 🟢 | It previously only had them on the turtle path. |
+
+### Deviations and limits
+
+1. **The `nbt` digest is not byte-identical to CC:Tweaked's.** Upstream hashes the NBT wire format
+   via a canonical writer; 1.7.10 has none (`NBTBase.write` is package-private, `NBTTagList` has no
+   generic index accessor). `NBTHash` hashes a canonical *text* encoding instead: sorted compound
+   keys, type-tagged scalars, list order preserved. Same NBT → same hash; a 1.20 server would
+   report a different digest for the same stack, which only matters for cross-version comparison.
+2. **`lore` entries are plain strings.** 1.7.10 has no JSON text components, so nothing is parsed.
+3. **`potionEffects[].name` is the unlocalised name minus `potion.`** (e.g. `moveSpeed`), because
+   1.7.10 has no effect registry id.
+4. **`durability` is reconstructed** as `round(13 - 13 * damage / maxDamage) / 13`, since there is
+   no `getBarWidth`.
+5. **`mapColor` is only present for block items**, matching upstream, and is the 24-bit
+   `MapColor.colorValue`.
+6. **GTNHLib is read by reflection only** — nothing links at compile time, GTNHLib is LGPL-3.0 and
+   stays optional. `BlockStateBridge` resolves `BlockPropertyRegistry.getBlockState(IBlockAccess,
+   int, int, int)` once, then `BlockState.forEachValue(BiConsumer)` for typed values. Enums are
+   reported by lowercased name; any failure falls back to metadata rather than breaking `inspect`.
+7. **HogUtils tags are not implemented** (owner decision). The `tags` field is therefore absent
+   rather than empty, so a program can distinguish "no tags available" from "no tags".
+
+### Coverage
+
+| Test | Covers |
+|---|---|
+| `NBTHashTest` (12) | null → null, empty tag hashes, lowercase hex, key-order independence (including nested compounds), distinct values/keys/types, list order preserved, nested lists, and that hashing does not consume the list |
+| `BlockStateBridgeTest` (5) | metadata fallback shape, zero/high metadata, null world falls back, and `hasGtnhLib()` is false on the test classpath |
+| `docs/ingame-tests/batch-f/f1_item_detail.lua` | the fields themselves, on a real turtle: stone's name/count/maxCount/displayName/mapColor/itemGroups, chest `getItemDetail`/`getItemLimit`, damageable items' `damage`/`maxDamage`/`durability`, `commands.getBlockInfo` state, `turtle.inspectDown`, and whether named GTNHLib properties are present |
+
+Full suite: **1588 tests, 0 failures**.
+
+### Needs in-game validation
+
+Everything in the automated pack, plus the six manual items in
+`docs/ingame-tests/batch-f/README.md` — mainly the fields that need specially-crafted items
+(custom name, lore, potion, unbreakable) and the GTNHLib success path.
