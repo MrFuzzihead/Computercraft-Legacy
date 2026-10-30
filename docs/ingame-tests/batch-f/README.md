@@ -13,40 +13,56 @@ place the real fields are checked.
 
 ```bat
 copy docs\ingame-tests\batch-f\*.lua "run\client\saves\<World>\computer\<id>\"
+copy docs\ingame-tests\readlog_manual.lua "run\client\saves\<World>\computer\<id>\"
 ```
 
-Needs **a turtle** (for `turtle.getItemDetail`/`inspect`) and benefits from a **chest** above it.
-`commands.getBlockInfo` and the stamina of the checks are skipped on machines without them.
+Then type **`f1_item_detail`** at the shell.
 
-Put a stack of stone in turtle slot 1 before starting; slots 2+ are used opportunistically.
+It adapts to whatever the computer is:
 
-Every check is written to `/batch-f-results.txt`, not just the failures, so a run can be read in
-full afterwards:
+| Present | What runs | Otherwise |
+|---|---|---|
+| An **inventory peripheral** (`peripheral.find("inventory")`) | item detail and `getItemLimit` | SKIP, with a reason |
+| A **turtle** | `turtle.getItemDetail` (basic *and* the `(1, true)` form) plus `inspectDown` | SKIP |
+| A **command computer** | `commands.getBlockInfo` state | SKIP |
 
-    readlog_manual                     -- pages /batch-f-results.txt a screen at a time
-    readlog_manual /batch-d-results.txt
-    edit /batch-f-results.txt          -- scrolls with the arrow keys
+A *vanilla* chest is **not** an inventory peripheral, so a plain computer with just a chest will
+report only skips. That is expected, not a failure. Run it on a turtle with something in slot 1, or
+next to a modded inventory.
 
-Copy `docsingame-testseadlog_manual.lua` alongside the batch scripts.
+Each group of checks runs inside `pcall`, so a crash becomes a `FAIL <group> crashed [...]` line and
+the log is still written — an earlier version could die before writing anything.
 
-The verdict is the last line on screen (`RESULT BATCH-F item detail: passed N failed M`), with any
-`FAIL`/`SKIP` lines above it. Results also land in `/batch-f-results.txt`.
+## Reading the results
+
+Every check is appended to `/batch-f-results.txt`, not just the failures:
+
+```
+readlog_manual                        -- pages /batch-f-results.txt a screen at a time
+readlog_manual /batch-d-results.txt   -- any other batch's log
+edit /batch-f-results.txt             -- opens it; arrow keys scroll
+type /batch-f-results.txt             -- dumps it (scrolls past quickly)
+```
+
+The log holds the `RESULT` block followed by one line per check (`OK` / `FAIL` / `SKIP`), so a run
+can be reviewed line by line afterwards.
 
 ## Manual checks the script cannot make
 
-0. **`getItemDetail(slot, true)`** — the second argument is required for the full shape. Upstream
-   defaults `detailed` to **false**, so `turtle.getItemDetail(1)` returns only name/count/damage
+1. **`getItemDetail(slot, true)`** — the second argument is required for the full shape. Upstream
+   defaults `detailed` to **false**, so `turtle.getItemDetail(1)` returns only `name`/`count`/`damage`
    (and the nbt hash). The script checks both forms.
-1. **`displayName`** — name a sword on an anvil, put it in slot 1, and confirm the custom name.
-2. **`potionEffects`** — a speed potion should report `name = "moveSpeed"`, a `displayName`, and a
+2. **`displayName`** — name a sword on an anvil, put it in slot 1, and confirm the custom name.
+3. **`potionEffects`** — a speed potion should report `name = "moveSpeed"`, a `displayName`, and a
    `duration` in seconds.
-3. **`lore`** — an item with anvil lore should list the lines as plain strings (1.7.10 has no JSON
+4. **`lore`** — an item with anvil lore should list the lines as plain strings (1.7.10 has no JSON
    text components, so this is the raw text).
-4. **`unbreakable`** — creative-only items should set `unbreakable = true`.
-5. **`nbt` hash stability** — two identical stacks must share a hash; rename one and it must change.
-6. **GTNHLib** — with GTNHLib installed, `turtle.inspectDown().state` should carry named properties
-   (e.g. `facing`, `half`) instead of only `metadata`. Without GTNHLib it must still work and report
-   `state.metadata`.
+5. **`unbreakable`** — creative-only items should set `unbreakable = true`.
+6. **`nbt` hash stability** — two identical stacks must share a hash; rename one and it must change.
+7. **GTNHLib** — with GTNHLib installed, `turtle.inspectDown().state` should carry named properties
+   (e.g. `facing`, `half`) instead of only `metadata`. The script prints
+   `GTNHLib named properties present: ...` when it sees them, and otherwise asserts the
+   `state.metadata` fallback, so either outcome produces a definite line in the log.
 
 ## Notes
 

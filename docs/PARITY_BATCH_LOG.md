@@ -954,3 +954,27 @@ if (!modLoaded() && !classPresent()) return ABSENT;
   compile classpath entirely, which is stronger than `IsModLoaded` alone can be.
 
 Full suite: **1588 tests, 0 failures**.
+
+### Batch F follow-up 2 — the in-game script reported only skips and left no file
+
+Reported: "I still see skips and I don't see an output file in Computer 1."
+
+Two separate problems, both in the test rather than in the feature:
+
+1. **Everything skipped on a plain computer.** Every check was gated on `turtle`, so a non-turtle
+   computer produced nothing but skips. A *vanilla* chest is not an inventory peripheral, which is
+   why a chest did not help. `f1_item_detail.lua` now adapts instead:
+   - an inventory peripheral (`peripheral.find("inventory")`) drives the item-detail and
+     `getItemLimit` checks;
+   - a turtle adds `turtle.getItemDetail` (basic *and* the `(1, true)` form) and `inspectDown`;
+   - a command computer adds `commands.getBlockInfo`.
+   Each absent capability is a named SKIP, and the script prints which inventory peripheral it used.
+2. **A crash lost the log entirely.** `finish()` was only reached if every check completed, so an
+   exception anywhere meant no `/batch-f-results.txt` at all. Each group of checks now runs inside
+   `pcall` via a `group(name, fn)` helper: a crash becomes a `FAIL <group> crashed [...]` line and
+   the log is still written. The script also prints the log path at the end.
+
+Both are visible in the log now, so a future "it did nothing" report can be answered from
+`/batch-f-results.txt` alone.
+
+Full suite: **1588 tests, 0 failures**.
