@@ -180,17 +180,27 @@ public class MonitorPeripheral implements IPeripheral {
             }
             case 22:
             case 23: {
-                // setPaletteColor(color, r, g, b)
-                if (args.length < 4 || !(args[0] instanceof Double)
-                    || !(args[1] instanceof Double)
-                    || !(args[2] instanceof Double)
-                    || !(args[3] instanceof Double)) {
+                // setPaletteColor(color, rgb24) or setPaletteColor(color, r, g, b)
+                if (args.length < 2 || !(args[0] instanceof Double) || !(args[1] instanceof Double)) {
                     throw new LuaException("Expected number, number, number, number");
                 }
                 int paletteIdx = TermAPI.parseColour(new Object[] { args[0] }, true);
-                double r = (Double) args[1];
-                double g = (Double) args[2];
-                double b = (Double) args[3];
+                double r;
+                double g;
+                double b;
+                if (args.length == 2) {
+                    int rgb = (int) ((Double) args[1]).doubleValue();
+                    r = ((rgb >> 16) & 0xFF) / 255.0;
+                    g = ((rgb >> 8) & 0xFF) / 255.0;
+                    b = (rgb & 0xFF) / 255.0;
+                } else {
+                    if (!(args[2] instanceof Double) || !(args[3] instanceof Double)) {
+                        throw new LuaException("Expected number, number, number, number");
+                    }
+                    r = (Double) args[1];
+                    g = (Double) args[2];
+                    b = (Double) args[3];
+                }
                 if (r < 0 || r > 1) throw new LuaException("'r' value must be between 0 and 1");
                 if (g < 0 || g > 1) throw new LuaException("'g' value must be between 0 and 1");
                 if (b < 0 || b > 1) throw new LuaException("'b' value must be between 0 and 1");

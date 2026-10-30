@@ -55,8 +55,11 @@ public class TermAPI implements ILuaAPI {
      *                      character is not a valid blit colour character
      */
     public static String checkColour(String colour) throws LuaException {
+        // CC:Tweaked accepts the hex digits in either case (its renderer lower-cases each
+        // character before looking it up), so "FFFFFFFFFFFFFFFF" is valid.
         for (int i = 0; i < colour.length(); i++) {
-            if (BASE16.indexOf(colour.charAt(i)) < 0) {
+            char c = Character.toLowerCase(colour.charAt(i));
+            if (BASE16.indexOf(c) < 0) {
                 throw new LuaException("Invalid colour");
             }
         }
@@ -235,17 +238,28 @@ public class TermAPI implements ILuaAPI {
             }
             case 22:
             case 23: {
-                // setPaletteColor(color, r, g, b)
-                if (args.length < 4 || !(args[0] instanceof Double)
-                    || !(args[1] instanceof Double)
-                    || !(args[2] instanceof Double)
-                    || !(args[3] instanceof Double)) {
+                // setPaletteColor(color, rgb24) or setPaletteColor(color, r, g, b)
+                if (args.length < 2 || !(args[0] instanceof Double) || !(args[1] instanceof Double)) {
                     throw new LuaException("Expected number, number, number, number");
                 }
                 int paletteIdx22 = parseColour(new Object[] { args[0] }, true);
-                double r22 = (Double) args[1];
-                double g22 = (Double) args[2];
-                double b22 = (Double) args[3];
+                double r22;
+                double g22;
+                double b22;
+                if (args.length == 2) {
+                    // A single 24-bit colour, as colours.packRGB produces.
+                    int rgb = (int) ((Double) args[1]).doubleValue();
+                    r22 = ((rgb >> 16) & 0xFF) / 255.0;
+                    g22 = ((rgb >> 8) & 0xFF) / 255.0;
+                    b22 = (rgb & 0xFF) / 255.0;
+                } else {
+                    if (!(args[2] instanceof Double) || !(args[3] instanceof Double)) {
+                        throw new LuaException("Expected number, number, number, number");
+                    }
+                    r22 = (Double) args[1];
+                    g22 = (Double) args[2];
+                    b22 = (Double) args[3];
+                }
                 if (r22 < 0 || r22 > 1) throw new LuaException("'r' value must be between 0 and 1");
                 if (g22 < 0 || g22 > 1) throw new LuaException("'g' value must be between 0 and 1");
                 if (b22 < 0 || b22 > 1) throw new LuaException("'b' value must be between 0 and 1");

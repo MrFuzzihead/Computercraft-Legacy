@@ -339,12 +339,13 @@ function create( parent, nX, nY, nWidth, nHeight, bStartVisible )
     end
 
     -- Palette functions — delegate directly to parent terminal.
-    function window.setPaletteColor(colour, r, g, b)
-        parent.setPaletteColor(colour, r, g, b)
+    -- Forward any arity: the API accepts either (colour, rgb24) or (colour, r, g, b).
+    function window.setPaletteColor(colour, ...)
+        parent.setPaletteColor(colour, ...)
     end
 
-    function window.setPaletteColour(colour, r, g, b)
-        parent.setPaletteColour(colour, r, g, b)
+    function window.setPaletteColour(colour, ...)
+        parent.setPaletteColour(colour, ...)
     end
 
     function window.getPaletteColor(colour)
