@@ -188,9 +188,10 @@ end
 
 if isTurtle then
   group("inspectDown", function()
-    local below = turtle.inspectDown()
-    if below == nil then
-      skip("turtle.inspectDown (nothing below the turtle)")
+    -- A failed turtle command returns false plus a message, not nil, so index only a table.
+    local below, reason = turtle.inspectDown()
+    if type(below) ~= "table" then
+      skip("turtle.inspectDown returned " .. tostring(below) .. " (" .. tostring(reason) .. ")")
       return
     end
     ok("inspectDown reports a name", type(below.name) == "string", below.name)
