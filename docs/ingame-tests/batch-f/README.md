@@ -20,11 +20,23 @@ Needs **a turtle** (for `turtle.getItemDetail`/`inspect`) and benefits from a **
 
 Put a stack of stone in turtle slot 1 before starting; slots 2+ are used opportunistically.
 
+Every check is written to `/batch-f-results.txt`, not just the failures, so a run can be read in
+full afterwards:
+
+    readlog_manual                     -- pages /batch-f-results.txt a screen at a time
+    readlog_manual /batch-d-results.txt
+    edit /batch-f-results.txt          -- scrolls with the arrow keys
+
+Copy `docsingame-testseadlog_manual.lua` alongside the batch scripts.
+
 The verdict is the last line on screen (`RESULT BATCH-F item detail: passed N failed M`), with any
 `FAIL`/`SKIP` lines above it. Results also land in `/batch-f-results.txt`.
 
 ## Manual checks the script cannot make
 
+0. **`getItemDetail(slot, true)`** — the second argument is required for the full shape. Upstream
+   defaults `detailed` to **false**, so `turtle.getItemDetail(1)` returns only name/count/damage
+   (and the nbt hash). The script checks both forms.
 1. **`displayName`** — name a sword on an anvil, put it in slot 1, and confirm the custom name.
 2. **`potionEffects`** — a speed potion should report `name = "moveSpeed"`, a `displayName`, and a
    `duration` in seconds.

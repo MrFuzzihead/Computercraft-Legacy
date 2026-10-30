@@ -8,6 +8,7 @@ import java.util.function.BiConsumer;
 import net.minecraft.block.Block;
 import net.minecraft.world.IBlockAccess;
 
+import cpw.mods.fml.common.Loader;
 import dan200.computercraft.ComputerCraft;
 
 /**
@@ -72,6 +73,11 @@ public final class BlockStateBridge {
 
     private static Object registry() {
         if (registryLookup == null) {
+            if (!modLoaded() && !classPresent()) {
+                registryLookup = ABSENT;
+                return registryLookup;
+            }
+
             try {
                 Class<?> registryClass = Class.forName(REGISTRY);
                 registryLookup = registryClass
@@ -85,6 +91,45 @@ public final class BlockStateBridge {
             }
         }
         return registryLookup;
+    }
+
+    /**
+     * Whether Forge reports GTNHLib as loaded.
+     *
+     * <p>
+     * A cheap gate: {@link Loader#isModLoaded} reads the mod list and never loads a class, so
+     * nothing touches GTNHLib until it is actually installed. It is wrapped because
+     * {@code Loader} is uninitialised in unit tests and in any non-FML entry point.
+     * </p>
+     *
+     * @return {@code true} when GTNHLib is in the mod list
+     */
+    private static boolean modLoaded() {
+        try {
+            return Loader.isModLoaded("gtnhlib");
+        } catch (Throwable t) {
+            // No FML (unit tests): fall through to the class check.
+            return false;
+        }
+    }
+
+    /**
+     * Whether the registry class is on the classpath.
+     *
+     * <p>
+     * Belt and braces for {@link #modLoaded()}: if the mod id ever differs from "gtnhlib", the
+     * class being present still enables the bridge. Absence is the only thing that disables it.
+     * </p>
+     *
+     * @return {@code true} when {@code BlockPropertyRegistry} resolves
+     */
+    private static boolean classPresent() {
+        try {
+            Class.forName(REGISTRY, false, BlockStateBridge.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
     }
 
     /**

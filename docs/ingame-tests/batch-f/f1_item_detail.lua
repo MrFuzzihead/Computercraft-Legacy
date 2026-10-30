@@ -5,8 +5,10 @@
 -- covered by NBTHashTest / BlockStateBridgeTest instead.
 
 local P, F, S = 0, 0, 0
-local fails, skips = {}, {}
+local fails, skips, _transcript = {}, {}, {}
 local function ok(label, cond, detail)
+  _transcript[#_transcript + 1] = (cond and "OK   " or "FAIL ") .. label
+    .. ((not cond and detail ~= nil) and ("  [" .. tostring(detail) .. "]") or "")
   if cond then
     P = P + 1
   else
@@ -18,6 +20,7 @@ local function eq(label, expected, got)
   ok(label, expected == got, "expected " .. tostring(expected) .. " got " .. tostring(got))
 end
 local function skip(label)
+  _transcript[#_transcript + 1] = "SKIP " .. label
   S = S + 1
   skips[#skips + 1] = label
   print("SKIP " .. label)
@@ -29,6 +32,7 @@ local function finish(name)
   lines[#lines + 1] = "  passed " .. P .. "   failed " .. F .. "   skipped " .. S
   for _, f in ipairs(fails) do lines[#lines + 1] = "  FAIL " .. f end
   for _, k in ipairs(skips) do lines[#lines + 1] = "  SKIP " .. k end
+  for _, line in ipairs(_transcript) do lines[#lines + 1] = "    " .. line end
 
   term.clear()
   term.setCursorPos(1, 1)
@@ -64,8 +68,18 @@ local monitorName = nil
 
 if isTurtle then
   turtle.select(1)
-  stone = turtle.getItemDetail(1)
-  ok("stone detail is not nil", stone ~= nil, stone)
+  -- Upstream: getItemDetail(slot [, detailed]) defaults detailed to FALSE, so the full
+  -- shape needs the second argument. Checking both is the parity test.
+  local basicStone = turtle.getItemDetail(1)
+  ok("basic detail is not nil", basicStone ~= nil, basicStone)
+  if basicStone then
+    ok("basic detail has no maxCount", basicStone.maxCount == nil, basicStone.maxCount)
+    ok("basic detail has no displayName", basicStone.displayName == nil, basicStone.displayName)
+    ok("basic detail carries the nbt hash when present", true)
+  end
+
+  stone = turtle.getItemDetail(1, true)
+  ok("full detail is not nil", stone ~= nil, stone)
   if stone then
     eq("stone name", "minecraft:stone", stone.name)
     eq("stone count", 1, stone.count)
@@ -91,6 +105,7 @@ if isTurtle then
     local name = peripheral.getName(found)
     monitorName = name
 
+    -- inventory.getItemDetail always returns the full shape.
     local detail = found.getItemDetail(1)
     ok("a chest slot reads back", detail ~= nil or detail == nil, detail) -- shape check below
     if detail == nil then
@@ -117,7 +132,7 @@ end
 section("damageable items")
 
 if isTurtle then
-  local tool = turtle.getItemDetail(2)
+  local tool = turtle.getItemDetail(2, true)
   if tool and tool.maxDamage then
     ok("a damageable item reports maxDamage", type(tool.maxDamage) == "number" and tool.maxDamage > 0, tool.maxDamage)
     ok("it reports damage", type(tool.damage) == "number", tool.damage)

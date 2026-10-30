@@ -910,3 +910,47 @@ Full suite: **1588 tests, 0 failures**.
 Everything in the automated pack, plus the six manual items in
 `docs/ingame-tests/batch-f/README.md` — mainly the fields that need specially-crafted items
 (custom name, lore, potion, unbreakable) and the GTNHLib success path.
+
+### Batch F follow-up — log the whole transcript, and gate GTNHLib on the mod list
+
+Two changes after the first in-game attempt.
+
+**1. My test asserted the wrong shape.** Upstream's `turtle.getItemDetail(slot [, detailed])`
+defaults `detailed` to **false**, so `turtle.getItemDetail(1)` returns only name/count/damage (plus
+the nbt hash). `f1_item_detail.lua` now checks both forms explicitly — the basic one must *lack*
+`maxCount`/`displayName`, the `(1, true)` one must have everything — which is a stronger parity test
+than before.
+
+**2. Every check is now logged, not just the failures.** Each script records `OK`/`FAIL`/`SKIP`
+with its detail into a transcript that `finish()` appends to the results file. Since terminals have
+no scrollback, that file is the only way to review a run:
+
+```
+    readlog_manual /batch-f-results.txt    -- pages it a screen at a time
+    edit /batch-f-results.txt              -- arrows scroll
+```
+
+`docs/ingame-tests/readlog_manual.lua` is the new paged reader (`*_manual` keeps CI away from it),
+and `docs/ingame-tests/README.md` is a top-level index for all six packs.
+
+**3. GTNHLib detection: `Loader.isModLoaded` first, reflection second.**
+
+`BlockStateBridge` now gates its reflective probe on `Loader.isModLoaded("gtnhlib")`, with a
+class-presence fallback:
+
+```java
+if (!modLoaded() && !classPresent()) return ABSENT;
+```
+
+- `Loader.isModLoaded` reads Forge's mod list and **never loads a class**, so nothing touches
+  GTNHLib when it is not installed — the cheapest possible check, and it is the idiomatic 1.7.10
+  soft-dependency test.
+- It is wrapped in `try/catch (Throwable)` because `Loader` is uninitialised in unit tests and in
+  any non-FML entry point; there it simply reports false.
+- The class-presence fallback means a wrong mod id cannot silently disable the bridge: absence of
+  the class is the only thing that turns it off.
+- The API itself is still reached reflectively. That is not a preference — `compileOnly` against
+  GTNHLib would work, but GTNHLib is LGPL-3.0 and optional, and reflection keeps it out of the
+  compile classpath entirely, which is stronger than `IsModLoaded` alone can be.
+
+Full suite: **1588 tests, 0 failures**.
