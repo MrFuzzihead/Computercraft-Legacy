@@ -978,3 +978,26 @@ Both are visible in the log now, so a future "it did nothing" report can be answ
 `/batch-f-results.txt` alone.
 
 Full suite: **1588 tests, 0 failures**.
+
+### Batch F follow-up 3 — `inspectDown crashed`
+
+Reported: `FAIL inspectDown crashed`.
+
+The cause was the test, not the mod: **a failed turtle command returns `false` plus a message, not
+`nil`** (e.g. `No block to inspect` when there is nothing beneath the turtle). The script checked
+`below == nil`, so it fell through to `below.name` on a boolean and threw. It now indexes only when
+`type(below) == "table"` and reports the reason otherwise:
+
+```lua
+local below, reason = turtle.inspectDown()
+if type(below) ~= "table" then
+  skip("turtle.inspectDown returned " .. tostring(below) .. " (" .. tostring(reason) .. ")")
+  return
+end
+```
+
+`BlockStateBridge` was hardened at the same time, because the same class of surprise would be worse
+there: both the registry lookup and the reflective invoke now catch `Throwable` (not
+`ReflectiveOperationException | LinkageError`), and log at warn rather than debug. An optional,
+LGPL-3.0 integration must not be able to take a core call like `turtle.inspect` down with it — not
+via a missing class, a signature change, or a broken static initialiser.

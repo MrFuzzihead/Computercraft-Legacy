@@ -155,9 +155,11 @@ public final class BlockStateBridge {
                 Object converted = convert(value);
                 if (converted != null) state.put(name, converted);
             });
-        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
-            // A misbehaving bridge must never break inspect(); fall back to metadata.
-            ComputerCraft.logger.debug("Could not read a GTNHLib block state", e);
+        } catch (Throwable t) {
+            // Same reasoning: a misbehaving bridge must never break inspect(); fall back to
+            // metadata. Throwable rather than Exception so an incompatible GTNHLib version cannot
+            // take a core API down with it.
+            ComputerCraft.logger.warn("Could not read a GTNHLib block state; using metadata instead", t);
             return null;
         }
 
