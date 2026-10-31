@@ -1375,3 +1375,27 @@ scrolling, continuation prompt). `docs/ingame-tests/batch-i/README.md` records e
 lives where, so "the tests pass" is never mistaken for "the colours are right".
 
 Full suite: **1654 tests, 0 failures.**
+
+### PageUp / PageDown on the GTNH client — outside this repository
+
+Reported in game: PageUp/PageDown do nothing in `edit`, while the wheel and Up/Down work.
+`keyprobe_manual.lua` (added for this) shows they produce **no key event at all** — not an unknown
+code, nothing — while Up, Down, Home and End arrive normally.
+
+What that rules out, and in:
+
+* `edit` handles them: `elseif param == keys.pageUp` / `keys.pageDown`.
+* The ROM expects the LWJGL2 codes (`rom/apis/keys`: `pageUp` = 201, `pageDown` = 209).
+* Nothing in this mod translates or filters key codes: no reference to `pageUp`/`KEY_PRIOR` anywhere
+  in `src/main/java`, `WidgetTerminal.keyTyped` forwards every `key > 0`, and `GuiComputer` extends
+  `GuiContainer` without intercepting them.
+
+The client runs **lwjgl3ify 3.0.33** (confirmed from the launch classpath in
+`run/client/logs/fml-client-latest.log`), whose input path is SDL-based
+(`Keyboard.addSdlKeyEvent`) with LWJGL2 codes reconstructed by name. The key never reaches the game,
+so it is lost in that layer, which is not part of this repository.
+
+Consequences: page-scrolling in `edit` works on a Java 8/LWJGL2 client and not on this one; the wheel
+and Up/Down paths are unaffected, and the scrolling check in `i2_highlighting` now uses the wheel —
+which is also the path that exercises the state-seeding code, so nothing is unverified because of
+this. Recorded in `docs/ingame-tests/batch-i/README.md` so it is not rediscovered as a mod bug.

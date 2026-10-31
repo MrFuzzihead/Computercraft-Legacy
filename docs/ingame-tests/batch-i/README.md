@@ -71,6 +71,16 @@ The script writes files into `/batch-i-visual` and prints a numbered list. In or
   it. It reports `Unsupported HTTP method: PATCH` (Batch H).
 * **`edit` colours with the real lexer**, so a *short* quoted string never carries colour onto the
   next line — that is Lua's own rule, not a bug. Only `[[ ]]` and `--[[ ]]` span lines.
+* **PageUp / PageDown never arrive on the GTNH/lwjgl3ify client.** Reported in game and confirmed
+  with `keyprobe_manual.lua`: `pageUp`/`pageDown` produce *no key event at all*, while Up, Down, Home
+  and End arrive normally. The chain is `SDL key code -> lwjgl3ify Keyboard (LWJGL2 codes) -> key
+  event -> keys.pageUp (201)`. Nothing in this repository translates or filters key codes — the ROM's
+  `keys` table uses the LWJGL2 codes 201/209, `WidgetTerminal` forwards every `key > 0` it is given,
+  and `GuiComputer` does not intercept them — so the event is lost in lwjgl3ify's SDL input path,
+  outside this repository. Page scrolling in `edit` therefore works on a Java 8/LWJGL2 client and not
+  on this one; the mouse wheel and Up/Down are unaffected. To confirm where it is lost, open
+  Options -> Controls, click a keybind and press PageUp: if the game cannot see it either, it is the
+  platform, not the mod.
 * **`help`'s markdown renderer triggers on `.md` names or on a `#` heading line.** The topics shipped
   in this repository are extensionless plain text and only some use headings, so most of them render
   plain. That is deliberate: upstream's `.md`-only gate would never trigger here.
