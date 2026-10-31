@@ -1527,3 +1527,64 @@ a real reply.
 Worth noting the shape of this failure: a *skip* hid a broken check. A skipped group and a passing
 group look the same in a summary line, which is why the live report ("2 skips") was the only signal
 that the geometry group never ran.
+
+---
+
+## Batch M — pocket and peripheral type polish
+
+Three items, and the pocket one turned out to be a real gap rather than polish.
+
+### M1 — `pocket.equipBack` for every local upgrade
+
+`equipBack` accepted **only a plain wireless modem** and returned `false, "No upgrade to equip"` for
+everything else, while the code that *creates* a pocket computer from its NBT knew about six
+upgrades. So a pocket computer could be built with a speaker and then refuse to have one equipped —
+the two paths were written separately and had drifted.
+
+The mapping now lives in one class, `PocketUpgrades`:
+
+* `upgradeFor(PeripheralType)` — item type to NBT id;
+* `isUpgrade(int)` / `nameOf(int)`;
+* `createPeripheral(int, ItemStack)` — NBT id to the peripheral, including the NPC interface, which
+  reads its settings from the stack.
+
+`PocketAPI.equipBack` walks the player's inventory and installs whatever the table recognises;
+`unequipBack` returns **the item for the upgrade actually installed** (it used to always return a
+wireless modem, so unequipping a speaker gave you a modem); `isEquipped` answers for any upgrade.
+`ItemPocketComputer`'s NBT-rebuild chain now uses the same table, so the two paths cannot drift
+again.
+
+The NBT ids are on-disk values — 1 modem, 2 ender modem, 3 speaker, 4 chat box, 5 NPC detector,
+6 NPC interface — and a test pins them, because renumbering would silently convert every saved
+upgrade into a different one.
+
+### M2 — `peripheral_hub`
+
+The wired modem's peripheral is now an `IMultiTypePeripheral` reporting `{"modem", "peripheral_hub"}`.
+`"modem"` stays first so code reading only the first return value keeps working; `PeripheralAPI`
+already knew how to return several types for a directly attached peripheral.
+
+### M3 — remote multi-type propagation
+
+`getTypeRemote` returned one type. Now:
+
+* `RemotePeripheralWrapper` records every type of the remote (primary first);
+* the Lua `getTypeRemote` returns **one value per type**, like `peripheral.getType` does locally;
+* `hasTypeRemote` checks the whole set, so `hasTypeRemote(name, "peripheral_hub")` is true for a
+  remote wired modem;
+* `getTypeRemote`'s string form (used elsewhere) is now `;`-joined, which is the convention the
+  existing multi-value split already expected.
+
+### Verification
+
+* `PocketUpgradesTest` — 11 tests: every item type maps to its id, the on-disk ids are pinned,
+  non-upgrade items are rejected, each upgrade builds its own peripheral, the ender modem remains a
+  `PocketModemPeripheral` subclass (existing `instanceof` checks rely on it), and out-of-range NBT is
+  not an upgrade.
+* `WiredModemTypesTest` — 6 tests: the type list is `modem` then `peripheral_hub`, the primary type
+  matches `getType()`, the peripheral class implements `IMultiTypePeripheral`, and both the string and
+  array forms of the remote call exist.
+* `docs/ingame-tests/batch-m/` covers what needs a cable or a player inventory, with the pocket
+  round-trip (equip → leave → re-enter → still the right peripheral) staged as the key manual check.
+
+Full suite: **1714 tests, 0 failures**.
