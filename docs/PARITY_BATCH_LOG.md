@@ -1336,3 +1336,22 @@ The script now checks the calendar message on those days and runs the file-based
 Full suite: **1653 tests, 0 failures**.
 
 Batch I is now complete against the audit's list.
+
+### Batch I part 2 follow-up — two more bugs in my own highlighting
+
+Re-reading the highlighting turned up two defects in what I had just written:
+
+1. **Seeding the state for scrolled-off lines drew them.** `redrawText` walked lines `1..scrollY` to
+   work out what state the first visible line starts in, by calling the drawing function — so those
+   lines were written at the cursor position and corrupted the visible screen whenever the file was
+   scrolled and a fresh state was needed. The lexer walk is now split out as `lexLine(nLine, draw)`,
+   and seeding passes `draw = false`.
+2. **The scrolled-past branch of `redrawLines` did nothing.** It incremented the line counter and
+   claimed to update the state below, but never computed anything, so a change above the viewport
+   could leave the first visible line coloured with a stale state. It now jumps to the first visible
+   line and forces one full pass from there.
+
+Both are the kind of thing that only shows up when a file is scrolled and a long comment is edited —
+i.e. exactly the case the highlighting exists for, and exactly what a green test suite would not
+notice. `aBlankLineInsideALongCommentKeepsItsState` now pins the related behaviour (an empty line
+inside `--[[ ]]` must keep the state, or the comment stops being coloured from the first blank line).

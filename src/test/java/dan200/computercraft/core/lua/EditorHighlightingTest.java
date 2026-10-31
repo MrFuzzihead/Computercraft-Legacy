@@ -293,6 +293,28 @@ class EditorHighlightingTest {
     }
 
     @Test
+    void aBlankLineInsideALongCommentKeepsItsState() throws Exception {
+        // A blank line inside --[[ ]] must not drop the continuation, or the comment stops being
+        // coloured from the first empty line onwards.
+        LuaRomTestSupport.Capture capture = runWithLexer("""
+            local tokens = require("cc.internal.syntax.parser").tokens
+            local lex_one = require("cc.internal.syntax.lexer").lex_one
+            local ctx = { line = function() end, report = function() end }
+
+            local _, _, _, _, cont = lex_one(ctx, '--[[ opening', 1)
+            if not cont then _capture("no continuation", "start") return end
+
+            -- An empty line, exactly as the editor would feed it.
+            local token, finish, _, cont2 = cont[1](ctx, '', table.unpack(cont, 2))
+            _capture(tostring(token == tokens.COMMENT), tostring(cont2 ~= nil), tostring(finish))
+            """);
+
+        assertEquals(3, capture.args.length, "captured: " + java.util.Arrays.toString(capture.args));
+        assertEquals("true", capture.string(0), "an empty line inside a comment is still a comment");
+        assertEquals("true", capture.string(1), "the state must survive an empty line");
+    }
+
+    @Test
     void theLexerAndParserExposeWhatTheEditorRequires() throws Exception {
         LuaRomTestSupport.Capture capture = runWithLexer("""
             local parser = require("cc.internal.syntax.parser")

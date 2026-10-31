@@ -172,7 +172,7 @@ starting from the state the previous line left behind.
 @tparam number nLine the line number to draw
 @return The continuation state for the line after this one.
 ]]
-local function writeHighlighted( nLine )
+local function lexLine( nLine, bDraw )
 	local sContents = tLines[ nLine ]
 	local nPos, nToken, nFinish
 
@@ -189,11 +189,13 @@ local function writeHighlighted( nLine )
 	local nColour = term.getTextColour()
 	while nToken do
 		local newColour = tokenColours[ nToken ] or textColour
-		if newColour ~= nColour then
+		if bDraw and newColour ~= nColour then
 			term.setTextColour( newColour )
 			nColour = newColour
 		end
-		term.write( string.sub( sContents, nPos, nFinish ) )
+		if bDraw then
+			term.write( string.sub( sContents, nPos, nFinish ) )
+		end
 
 		nPos = nFinish + 1
 		-- A continuation means the lexer stopped at the end of the line.
@@ -202,9 +204,24 @@ local function writeHighlighted( nLine )
 		nToken, _, nFinish, _, sState = lex_one( lexContext, sContents, nPos )
 	end
 
-	term.write( string.sub( sContents, nPos ) )
-	term.setTextColour( textColour )
+	if bDraw then
+		term.write( string.sub( sContents, nPos ) )
+		term.setTextColour( textColour )
+	end
 	return sState or false
+end
+
+--[[- Draws one line, returning the lexer state the next line starts in.
+
+Colouring is driven by the real lexer rather than by pattern matching, which is what keeps a
+multi-line string or a long comment coloured on every line it covers: each line is lexed starting
+from the state the previous line left behind.
+
+@tparam number nLine the line number to draw
+@return The continuation state for the line after this one.
+]]
+local function writeHighlighted( nLine )
+	return lexLine( nLine, true )
 end
 
 local tCompletions
@@ -270,9 +287,13 @@ local function redrawLines( _nLine, _nEndY )
     while ( bChanged or _nLine <= _nEndY ) and _nLine - scrollY < h do
         local nScreenY = _nLine - scrollY
         if nScreenY < 1 then
-            -- Scrolled past; only its state matters, and that is updated below.
-            _nLine = _nLine + 1
-        else
+            -- Above the viewport: drawing it would write over the visible screen, so skip to the
+            -- first visible line and force a full redraw from there.
+            _nLine = scrollY + 1
+            bChanged = true
+            nScreenY = 1
+        end
+        do
             term.setCursorPos( 1 - scrollX, nScreenY )
             term.clearLine()
 
@@ -309,7 +330,7 @@ local function redrawText()
     if tLineLexStates[ scrollY + 1 ] == nil then
         for i = 1, scrollY do
             if tLines[ i ] == nil then break end
-            tLineLexStates[ i + 1 ] = writeHighlighted( i )
+            tLineLexStates[ i + 1 ] = lexLine( i, false )
         end
     end
     redrawLines( scrollY + 1, scrollY + h - 1 )
