@@ -78,8 +78,7 @@ local function readChunk()
         if more == nil or more == "" then
             return input
         end
-        input = input .. "
-" .. more
+        input = input .. "\n" .. more
     end
 end
 

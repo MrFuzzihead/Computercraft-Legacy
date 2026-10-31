@@ -75,6 +75,10 @@ That backport is substantial, and predates the Minecraft
     motd} and .../programs/{fun/speaker,pocket/equip,pocket/unequip}, which
     likewise carry SPDX-License-Identifier: MPL-2.0 headers (the remaining ROM
     programs are CCPL, as decompiled from 1.75)
+  - the ROM module assets/computercraft/lua/rom/modules/main/cc/internal/
+    event.lua, ported from CC: Tweaked's cc/internal/event.lua (MPL-2.0;
+    the file states this in its own header). It is loaded by rom/programs/help
+    to discard the char event left behind by a keypress.
 
 Files sourced from CC: Tweaked are licensed under the Mozilla Public
 License 2.0. The full text is in LICENSE-MPL-2.0. MPL-2.0 is a

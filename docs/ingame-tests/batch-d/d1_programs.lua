@@ -97,6 +97,28 @@ ok("about reports the host", aboutText:find(tostring(_HOST), 1, true) ~= nil, ab
 -- ---------------------------------------------------------------------------
 section("motd")
 
+-- motd honours four calendar dates with a fixed message and ignores motd.path entirely on them, so
+-- the file-based checks below only make sense on any other day. Without this guard the script failed
+-- on 1 January, 24 December, 31 October and 28 April -- which is how it was found, on Halloween.
+local today = os.date("*t")
+local specialDay = (today.month == 1 and today.day == 1)
+  or (today.month == 12 and today.day == 24)
+  or (today.month == 10 and today.day == 31)
+  or (today.month == 4 and today.day == 28)
+
+if specialDay then
+  -- On those dates the fixed message *is* the correct behaviour, so check that instead.
+  local specialText = capture(function() shell.run("/rom/programs/motd") end)
+  ok("motd prints its calendar message", #specialText > 0, specialText)
+  ok(
+    "motd ignores motd.path on a calendar date",
+    specialText:find("Spooky", 1, true) ~= nil
+      or specialText:find("Happy new year", 1, true) ~= nil
+      or specialText:find("Merry X-mas", 1, true) ~= nil
+      or specialText:find("Ed Balls", 1, true) ~= nil,
+    specialText
+  )
+else
 -- motd prints a random line from motd.path, so point it at a file we control.
 writeFile("/c_motd.txt", "only one message\n")
 settings.set("motd.path", "/c_motd.txt")
@@ -111,6 +133,7 @@ ok(
   manyText:find("line one", 1, true) ~= nil or manyText:find("line two", 1, true) ~= nil,
   manyText
 )
+end
 
 settings.set("motd.path", "/does-not-exist")
 local missingText, missingOk = capture(function() shell.run("/rom/programs/motd") end)

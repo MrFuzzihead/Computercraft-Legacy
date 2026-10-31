@@ -1279,3 +1279,60 @@ deliberately does **not** drive `multishell`, because that needs event pumping t
 cannot do; the interactive rendering is in the script's manual drill.
 
 Full suite: **1646 tests, 0 failures**.
+
+### Batch I part 2 — `edit` syntax highlighting
+
+`edit` now colours with the real lexer (`cc.internal.syntax.lexer.lex_one`) instead of per-line
+pattern matching, and carries the lexer's **continuation state** from line to line. That is what
+makes a `[[` long string or a `--[[ ]]` long comment stay coloured on every line it covers: each line
+is lexed starting from the state the previous one left behind.
+
+* `tLineLexStates` holds the state each line starts in (`false` = nothing outstanding). It is
+  initialised on load, kept aligned when lines are inserted or removed, and reset on `load()`.
+* `redrawLines(line, endLine)` draws from `line`, then keeps going while the state handed to the
+  next line differs from the one recorded for it — so opening or closing a long comment on the
+  edited line re-colours exactly the lines that changed, and stops at the bottom of the screen.
+* `redrawText()` seeds the state for lines above the viewport once, because the first visible line
+  can begin part-way through a long string.
+* Token colours come from a table keyed by token id (strings red, comments green, numbers magenta,
+  keywords the theme's keyword colour), with grey fallbacks on non-colour terminals.
+* The old regex highlighter and its `tKeywords` table are gone.
+
+The keyword list is written out explicitly rather than derived from `tokens`, because `tokens`
+contains non-keyword entries and a derived list would colour identifiers.
+
+### Bugs found by the new ROM compile test
+
+`EditorHighlightingTest` compiles every ROM program, API and module. It immediately caught two
+things that no test had covered, both introduced by the editor work above:
+
+1. **`rom/programs/edit` did not compile**: a doc comment mentioned `` `--[[ ]]` `` *inside* a
+   `--[[- ... ]]` block, and the inner `]]` closed the outer comment. Lua calls this "nesting of
+   [[...]] is deprecated".
+2. **`rom/programs/lua` did not compile**: the continuation join was written as
+   `input .. "<newline>" .. more`, a real newline inside a string literal, instead of `"\n"`. The
+   REPL would have failed to load at all.
+
+Neither would have been caught by the in-game script (which cannot drive the editor) nor by any
+existing test, because nothing compiled the ROM. That test stays.
+
+### A date-dependent test, found by accident
+
+The suite failed on 31 October: `motd` prints a fixed message on 1 January, 24 December,
+**31 October** and 28 April, ignoring `motd.path`, so `d1_programs`' two motd assertions failed.
+The script now checks the calendar message on those days and runs the file-based checks otherwise.
+
+### Verification
+
+* `EditorHighlightingTest` — 7 tests: every ROM Lua file compiles (with the compiler's message when
+  it does not), the continuation protocol round-trips for long strings and long comments, a closed
+  long comment/string leaves no state, a *short* string leaves no state across lines (Lua's real
+  behaviour — short strings end at the newline), and the lexer/parser expose the names `edit` uses.
+* Lexer modules need `cc.pretty` and `cc.internal.syntax.errors` loaded too, and that error table
+  reads `colours` at load time, so the test prelude stubs `colours`/`term`. A missing module
+  otherwise shows up as "never reached _capture", which is why the harness now wraps the body in
+  `pcall` and captures the error.
+
+Full suite: **1653 tests, 0 failures**.
+
+Batch I is now complete against the audit's list.
