@@ -1454,3 +1454,57 @@ unknown).
   one, and checks the error paths (`banana`, `999999`, `explode`, no subcommand).
 
 Full suite: **1682 tests, 0 failures**.
+
+---
+
+## Batch L — GPS accuracy
+
+The audit marked this optional and low priority, on the grounds that local `gps host` and
+`gps locate` already interoperate. That much was true — but the **dedupe** is not an
+interoperability nicety, it is a correctness fix, and implementing it was cheap.
+
+### What changed
+
+| Before | After |
+|---|---|
+| `locate` opened the computer's own id as its channel, and pinged with `reply = computerId` | opens `CHANNEL_GPS` (65534) and pings with `reply = CHANNEL_GPS` |
+| replies matched `sChannel == computerId` | matched `sChannel == CHANNEL_GPS and sReplyChannel == CHANNEL_GPS` |
+| every reply appended a fix | a fix within **1 block** of one already held **replaces** it |
+| no validation | replies without `nDistance`, or with non-numeric coordinates, are rejected |
+
+**Why the dedupe matters:** the old code took `tFixes[#tFixes]` as the third fix, so a single host
+that answered three times filled all three slots and the client trilaterated three ranges measured
+from *one* place — producing a confident, wrong position. Modern CraftOS caps the list at three and
+replaces near-duplicates, which is what this now does: three replies from one host leave one slot
+filled, so trilateration never runs and a lone host cannot fake an answer.
+
+The **host** program also gained the `nDistance` check: a ping with no distance cannot be measured
+from, so answering it is pointless.
+
+### Verification
+
+`GpsLocateTest` — 15 tests that load the **real** `rom/apis/gps` chunk with a stubbed
+`os`/`peripheral` and a scripted `modem_message` queue. That is what makes the interesting cases
+arrangeable at all:
+
+* the ping goes out on 65534 with reply channel 65534; the channel is opened and closed, and one that
+  was already open is left alone;
+* three distinct hosts → exact position; a zero-distance reply answers immediately;
+* **three replies from one host → `nil`**; two hosts plus a repeat → `nil`;
+* replies on the wrong channel, from another modem, without a distance, or malformed → ignored;
+* timeout ends the search and still closes the channel; the chunk transmits exactly once.
+
+Three mistakes were mine, not the code's, and each is worth recording:
+
+1. The ROM chunks install **globals**; `bios` is what groups them into `gps`/`vector`. My harness
+   called `gps.locate`, which does not exist inside the chunk.
+2. `vector` keeps its table local and exports only `new` as a global, so the stub had to be
+   `vector = { new = new }`.
+3. My first geometry put the listener out of the hosts' plane. With three ranges the solution is a
+   **pair** of points mirrored in that plane, so "ambiguous position" was the correct answer — the
+   test was wrong, not `locate`.
+
+`docs/ingame-tests/batch-l/` covers the live half, and deliberately performs no blocking calls: a
+headless run has no timers, so `gps.locate(timeout)` would hang it.
+
+Full suite: **1697 tests, 0 failures**.
