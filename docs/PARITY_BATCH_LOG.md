@@ -1399,3 +1399,58 @@ Consequences: page-scrolling in `edit` works on a Java 8/LWJGL2 client and not o
 and Up/Down paths are unaffected, and the scrolling check in `i2_highlighting` now uses the wheel —
 which is also the path that exercises the state-seeding code, so nothing is unverified because of
 this. Recorded in `docs/ingame-tests/batch-i/README.md` so it is not rediscovered as a mod bug.
+
+---
+
+## Batch K — Admin command
+
+New `dan200.computercraft.shared.command.CommandComputerCraft`, registered from the existing
+`FMLServerStartingEvent` handler. Three of the audit's four subcommands; the fourth is deliberately
+not ported, with the reason recorded rather than faked.
+
+| Subcommand | Behaviour |
+|---|---|
+| `dump` | every loaded computer, nearest-first for a player; instance id, computer id, on/off, label, position |
+| `dump <instanceID>` | one computer's detail, including its peripherals by side |
+| `turn-on <instanceID...>` | powers computers on, reporting how many actually changed state |
+| `shutdown <instanceID...>` | the same, the other way |
+
+Op-only (`getRequiredPermissionLevel()` = 2): every one of these manipulates somebody else's
+computer.
+
+Computers are addressed by **instance id** (the block's identity, stable across reboots), not by the
+computer id a program can change. Both are printed by `dump` so the two are never confused — that is
+the mistake this command exists to make impossible.
+
+### Not ported, on purpose
+
+* **`track`** — upstream's is built on Micrometer metrics and per-task aggregation, and 1.7.10 has no
+  equivalent. A version that printed invented numbers would be worse than no command at all. The
+  runtime does keep per-lane start times in `ComputerThread`, so a "which computers are busy, and for
+  how long" substitute is possible as a separate item — but it would be a new feature, not parity.
+* **`computer-folder`** — 1.20 only (opens a desktop folder).
+* **`tp`, `view`, `queue`** — depend on 1.20's command-computer queue and spectator view.
+
+### Testability, and one design change it forced
+
+The command works entirely off `ComputerCraft.serverComputerRegistry`, and `ServerComputer` can be
+mocked, so the whole surface is unit-testable: **28 tests** in `CommandComputerCraftTest` cover
+metadata, argument parsing, the listing, the detail block, peripheral naming, the power actions and
+the ordering.
+
+One thing resisted testing: `World.provider` is a **final field** in 1.7.10, so a mocked world cannot
+report a dimension name, which left the position formatting unreachable. Rather than reflect into a
+final field, the formatting was split out as a pure
+`describePosition(String dimension, ChunkCoordinates position)` — the caller supplies the name. That
+is better code and it is now covered directly (`"10, 64, -3 in The Nether"`, and `?` when the name is
+unknown).
+
+### Verification
+
+* `CommandComputerCraftTest` — 28 tests.
+* `docs/ingame-tests/batch-k/k1_admin_command.lua` — the parts a unit test cannot reach: that the
+  command is *registered* at all, that it runs through `commands.exec` on a real server, and a
+  readable record of the output. It reads its own instance id out of `dump` rather than hard-coding
+  one, and checks the error paths (`banana`, `999999`, `explode`, no subcommand).
+
+Full suite: **1682 tests, 0 failures**.

@@ -349,6 +349,8 @@ public class ComputerCraft {
     @EventHandler
     public void onServerStarting(FMLServerStartingEvent event) {
         ItemTreasureDisk.registerDungeonLoot();
+        // /computercraft: list, turn on and shut down computers.
+        event.registerServerCommand(new dan200.computercraft.shared.command.CommandComputerCraft());
     }
 
     @EventHandler
