@@ -13,6 +13,15 @@ if fs.exists( sPath ) and fs.isDir( sPath ) then
 	return
 end
 
+-- Create files with the configured extension by default (edit.default_extension, e.g. "lua").
+-- Only applies to a *new* file whose name has no extension, so an existing path is never changed.
+if not fs.exists( sPath ) and not string.find( sPath, "%." ) then
+	local sExtension = settings.get( "edit.default_extension" )
+	if type( sExtension ) == "string" and sExtension ~= "" then
+		sPath = sPath .. "." .. sExtension
+	end
+end
+
 local x,y = 1,1
 local w,h = term.getSize()
 local scrollX, scrollY = 0,0
@@ -164,7 +173,14 @@ local nCompletion
 
 local tCompleteEnv = _ENV
 local function complete( sLine )
-    local nStartPos = string.find( sLine, "[a-zA-Z0-9_%.]+$" )
+    -- edit.autocomplete (on by default) can be turned off for people who want a plain editor.
+    if settings.get( "edit.autocomplete", true ) == false then
+        return nil
+    end
+
+    -- Include ':' so a method name after a dot-chain is completed as a whole ("table.ins" ->
+    -- "table.insert" rather than completing "ins" on its own).
+    local nStartPos = string.find( sLine, "[a-zA-Z0-9_%.:]+$" )
     if nStartPos then
         sLine = string.sub( sLine, nStartPos )
     end
