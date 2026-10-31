@@ -1087,3 +1087,99 @@ case-insensitivity, the fallback argument, unknown names, and non-string argumen
 In-game: `docs/ingame-tests/batch-g/g1_commands.lua`, which covers the four items that need a live
 server (dimension lookup, name arguments, range ordering, selectors) and writes
 `/batch-g-results.txt` so the transcript survives a terminal that cannot scroll.
+
+---
+
+## Batch H — Networking and concurrency
+
+Five items: the `redirect` option, websocket options/timeout, private-address blocking,
+`rednet.lookup` timeout plus `MAX_ID_CHANNELS`, and `parallel.spawn` / the empty-argument hang /
+error source info. Two were exactly as described, one was already done, and two needed real work.
+
+### H1 — `http` `redirect` option
+
+The option was absent, and adding it exposed a worse problem: **Java's own follow-redirects never
+re-enter our validation**. With `HttpURLConnection` left to follow them, a public URL that redirects
+to `http://192.168.1.1/` bypasses the domain patterns *and* the address rule — so the redirect
+option would have been a hole rather than a feature.
+
+`HTTPRequest` now follows redirects itself:
+
+* `setInstanceFollowRedirects(false)`, then a loop over `Location` for 301/302/303/307/308;
+* every hop is re-validated through `checkURL` (domain patterns) and `PrivateAddresses.check`;
+* 303 switches the method to `GET`, other codes keep it;
+* the hop budget is 16, as upstream, and a redirect to the same URL is ignored so the budget is not
+  the only thing preventing a loop;
+* only `http`/`https` targets are followed — a `file:` or `jar:` `Location` is not chased, and
+  returning `null` keeps the 3xx response visible to Lua instead of failing the request.
+
+`redirect` defaults to `true` and is plumbed through the table form of `http.get` / `http.post` /
+`http.request` as argument 9 of the native call.
+
+### H2 — Private / CGNAT / link-local blocking
+
+New `PrivateAddresses`, mirroring CC:Tweaked's `$private` address predicate:
+
+* the four `InetAddress` helpers (any-local, loopback, link-local, site-local) plus multicast;
+* the IANA special-purpose ranges that those helpers miss, kept as `network/bits` **data** so the
+  list can be read against the registry: CGNAT `100.64.0.0/10`, `192.0.0.0/24`, the three TEST-NET
+  blocks, `192.88.99.0/24`, `198.18.0.0/15`, `64:ff9b::/96`, `64:ff9b:1::/48`, `2001::/23` and
+  `fc00::/7`;
+* the check is on the **resolved address**, not the host name, so `my-router.example.com` pointing
+  at `192.168.1.1` is caught;
+* it runs on the HTTP worker thread, where DNS already happens, so it never blocks a computer
+  thread — this is why it is not in `checkURL`;
+* **deny by default**, with `http_allow_local` to restore the old behaviour for LAN servers. That is
+  a behaviour change for anyone with a local web server, and it is deliberate: a computer could
+  otherwise read the server's own machine, its LAN, and a cloud metadata endpoint at
+  `169.254.169.254`.
+
+The three existing HTTP test classes serve from `127.0.0.1`, so they now set `http_allow_local`
+around their runs and restore it afterwards.
+
+### H3 — `http.websocket` options table and timeout
+
+Both entry points accepted only `(url, headers)`. They now also accept
+`{ url =, headers =, timeout = }`, with field validation before any connection is attempted.
+
+The bug this uncovered: `http.websocket({ url = ... })` **hung forever**, because the event loop
+compared `evUrl == _url` against the *table* while the event carries a string. The real URL is now
+resolved first and compared instead. The handshake timeout is passed through to `WebSocketRequest`
+and clamped to 120 s, so a huge value cannot pin a pool slot.
+
+### H4 — `rednet.lookup` timeout — already present
+
+`lookup` already bounds itself with a 2 second timer. No change beyond a comment recording it, so
+the next audit does not re-open it.
+
+### H5 — `rednet` `MAX_ID_CHANNELS`
+
+Computer IDs are used directly as modem channels, but a channel is 16-bit: an ID above 65535 would
+wrap or be rejected inside the modem. The ID is now mapped into 1..65535 (`((id-1) % 65535) + 1`) for
+the computer's own channel, the reply channel, and `send`'s recipient. `MAX_ID_CHANNELS` is published
+as a constant. `broadcast` still uses 65535, which the mapping reproduces exactly.
+
+### H6 — `parallel.spawn`, empty arguments, error source
+
+`rom/apis/parallel` is now upstream's implementation, adapted:
+
+* **`spawn`**: `waitForAll` passes every function a `spawn` argument, so work can be fanned out
+  dynamically; calling it outside `waitForAll` raises `Cannot spawn new functions outside of
+  waitForAll`;
+* **empty arguments**: `waitForAny()` and `waitForAll()` with no functions now return immediately
+  instead of pulling events for ever. `waitForAny()` returns 0;
+* **error source info**: errors are re-raised through `cc.internal.exception.wrap_error` with the
+  failing coroutine, so the shell can point at the line that broke rather than at `parallel`.
+
+### Verification
+
+* `HTTPRedirectTest` — 17 tests: which statuses redirect, absolute/relative `Location` resolution,
+  the same-URL guard, non-http targets, and end-to-end follow/no-follow/303/hop-budget against a
+  real local server.
+* `PrivateAddressesTest` — 18 tests: every added range with its boundary cases, literal-vs-name
+  detection (so `127.example.com` is never mistaken for an address), and the config flag.
+* `docs/ingame-tests/batch-h/h1_networking.lua` — the `parallel` and `rednet` halves, which need
+  `os`/`peripheral` and so cannot run on the headless machine, plus the socket-level `http` checks
+  in its manual drill.
+
+Full suite: **1636 tests, 0 failures**.

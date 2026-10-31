@@ -81,6 +81,7 @@ class HTTPRequestStatusTest {
     private static final int RESPONSE_GET_HEADERS = 5;
 
     private static String savedWhitelist;
+    private static boolean savedAllowLocal;
     private static String savedBlacklist;
     private static int savedThreads;
     private static int savedTimeout;
@@ -91,6 +92,10 @@ class HTTPRequestStatusTest {
 
     @BeforeAll
     static void saveConfig() {
+        // The tests serve HTTP from 127.0.0.1, which the local-address rule
+        // refuses by default; production config decides this.
+        savedAllowLocal = ComputerCraft.http_allow_local;
+        ComputerCraft.http_allow_local = true;
         savedWhitelist = ComputerCraft.http_whitelist;
         savedBlacklist = ComputerCraft.http_blacklist;
         savedThreads = ComputerCraft.http_threads;
@@ -100,6 +105,7 @@ class HTTPRequestStatusTest {
 
     @AfterAll
     static void restoreConfig() {
+        ComputerCraft.http_allow_local = savedAllowLocal;
         ComputerCraft.http_whitelist = savedWhitelist;
         ComputerCraft.http_blacklist = savedBlacklist;
         ComputerCraft.http_threads = savedThreads;

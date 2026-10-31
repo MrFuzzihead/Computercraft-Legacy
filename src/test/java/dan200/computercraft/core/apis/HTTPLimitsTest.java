@@ -46,6 +46,7 @@ import dan200.computercraft.api.lua.LuaException;
 class HTTPLimitsTest {
 
     private static String savedWhitelist;
+    private static boolean savedAllowLocal;
     private static String savedBlacklist;
     private static int savedMaxRequests;
     private static int savedMaxWebsockets;
@@ -55,6 +56,10 @@ class HTTPLimitsTest {
 
     @BeforeAll
     static void saveConfig() {
+        // The tests serve HTTP from 127.0.0.1, which the local-address rule
+        // refuses by default; production config decides this.
+        savedAllowLocal = ComputerCraft.http_allow_local;
+        ComputerCraft.http_allow_local = true;
         savedWhitelist = ComputerCraft.http_whitelist;
         savedBlacklist = ComputerCraft.http_blacklist;
         savedMaxRequests = ComputerCraft.http_max_requests;
@@ -78,6 +83,7 @@ class HTTPLimitsTest {
 
     @AfterAll
     static void restoreConfig() {
+        ComputerCraft.http_allow_local = savedAllowLocal;
         ComputerCraft.http_whitelist = savedWhitelist;
         ComputerCraft.http_blacklist = savedBlacklist;
         ComputerCraft.http_max_requests = savedMaxRequests;

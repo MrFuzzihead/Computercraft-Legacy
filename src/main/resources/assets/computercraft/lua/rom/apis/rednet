@@ -2,6 +2,19 @@
 CHANNEL_BROADCAST = 65535
 CHANNEL_REPEAT = 65533
 
+-- Computer IDs are also used as modem channels, but a channel is a 16-bit value: an ID above
+-- 65535 would wrap (or be rejected) inside the modem, so the ID is mapped into 1..65535 the same
+-- way upstream does. With servers whose IDs stay below 65535 this is the identity.
+MAX_ID_CHANNELS = 65535
+
+local function idToChannel( nId )
+    return ((nId - 1) % MAX_ID_CHANNELS) + 1
+end
+
+local function ownChannel()
+    return idToChannel( os.getComputerID() )
+end
+
 local tReceivedMessages = {}
 local tReceivedMessageTimeouts = {}
 local tHostnames = {}
@@ -13,7 +26,7 @@ function open( sModem )
 	if peripheral.getType( sModem ) ~= "modem" then
 		error( "No such modem: "..sModem, 2 )
 	end
-	peripheral.call( sModem, "open", os.getComputerID() )
+	peripheral.call( sModem, "open", ownChannel() )
 	peripheral.call( sModem, "open", CHANNEL_BROADCAST )
 end
 
@@ -45,7 +58,7 @@ function isOpen( sModem )
             error( "expected string", 2 )
         end
         if peripheral.getType( sModem ) == "modem" then
-            return peripheral.call( sModem, "isOpen", os.getComputerID() ) and peripheral.call( sModem, "isOpen", CHANNEL_BROADCAST )
+            return peripheral.call( sModem, "isOpen", ownChannel() ) and peripheral.call( sModem, "isOpen", CHANNEL_BROADCAST )
         end
     else
         -- Check if any modem is open
@@ -66,8 +79,8 @@ function send( nRecipient, message, sProtocol )
     tReceivedMessages[ nMessageID ] = true
     tReceivedMessageTimeouts[ os.startTimer( 30 ) ] = nMessageID
 
-    -- Create the message
-    local nReplyChannel = os.getComputerID()
+    -- Create the message. The reply channel is the sender's ID mapped into channel space.
+    local nReplyChannel = ownChannel()
     local tMessage = {
         nMessageID = nMessageID,
         nRecipient = nRecipient,
@@ -83,9 +96,10 @@ function send( nRecipient, message, sProtocol )
     else
         -- Send on all open modems, to the target and to repeaters
         local sent = false
+        local nChannel = idToChannel( nRecipient )
         for n,sModem in ipairs( peripheral.getNames() ) do
             if isOpen( sModem ) then
-                peripheral.call( sModem, "transmit", nRecipient, nReplyChannel, tMessage );
+                peripheral.call( sModem, "transmit", nChannel, nReplyChannel, tMessage );
                 peripheral.call( sModem, "transmit", CHANNEL_REPEAT, nReplyChannel, tMessage );
                 sent = true
             end
@@ -174,6 +188,9 @@ function lookup( sProtocol, sHostname )
         end
     end
 
+    -- lookup() already bounds itself with a 2 second timer below, so a protocol with no
+    -- responder returns instead of waiting for ever.
+
     if not isOpen() then
         if tResults then
             return table.unpack( tResults )
@@ -231,7 +248,7 @@ function run()
 		if sEvent == "modem_message" then
 			-- Got a modem message, process it and add it to the rednet event queue
     		local sModem, nChannel, nReplyChannel, tMessage = p1, p2, p3, p4
-		    if isOpen( sModem ) and ( nChannel == os.getComputerID() or nChannel == CHANNEL_BROADCAST ) then
+		    if isOpen( sModem ) and ( nChannel == ownChannel() or nChannel == CHANNEL_BROADCAST ) then
     			if type( tMessage ) == "table" and tMessage.nMessageID then
 	    			if not tReceivedMessages[ tMessage.nMessageID ] then
 		    			tReceivedMessages[ tMessage.nMessageID ] = true

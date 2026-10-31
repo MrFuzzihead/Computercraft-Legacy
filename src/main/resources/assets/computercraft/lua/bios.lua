@@ -719,11 +719,14 @@ if http then
     end
 
     -- wrapRequest: performs a synchronous HTTP request and waits for the result.
-    -- args: url, post body, headers, method verb, timeout (seconds), binary flag
+    -- args: url, post body, headers, method verb, timeout (seconds), binary flag,
+    --       redirect flag
     -- Returns: response on success; nil, errMsg, [responseOnError] on failure.
-    local function wrapRequest( _url, _post, _headers, _method, _timeout, _binary )
+    local function wrapRequest( _url, _post, _headers, _method, _timeout, _binary, _redirect )
         local requestID = allocateRequestID()
-        local ok, err = nativeHTTPRequest( _url, _post, _headers, _method, _timeout, _binary, requestID, true )
+        local ok, err = nativeHTTPRequest(
+            _url, _post, _headers, _method, _timeout, _binary, requestID, true, _redirect ~= false
+        )
         if ok then
             -- Like other blocking APIs, unrelated events are not buffered here.
             -- Use parallel or http.request when other events must be handled.
@@ -768,31 +771,39 @@ if http then
     end
 
     -- http.get(url [, headers [, binary]])
-    -- http.get({ url=, headers=, binary=, timeout= })
+    -- http.get({ url=, headers=, binary=, timeout=, redirect= })
     http.get = function( _url, _headers, _binary )
         if type( _url ) == "table" then
             local opts = _url
-            return wrapRequest( opts.url, nil, opts.headers, nil, opts.timeout, opts.binary )
+            return wrapRequest( opts.url, nil, opts.headers, nil, opts.timeout, opts.binary, opts.redirect )
         end
         return wrapRequest( _url, nil, _headers, nil, nil, _binary )
     end
 
     -- http.post(url, body [, headers [, binary]])
-    -- http.post({ url=, body=, headers=, method=, binary=, timeout= })
+    -- http.post({ url=, body=, headers=, method=, binary=, timeout=, redirect= })
     http.post = function( _url, _post, _headers, _binary )
         if type( _url ) == "table" then
             local opts = _url
-            return wrapRequest( opts.url, opts.body or "", opts.headers, opts.method, opts.timeout, opts.binary )
+            return wrapRequest(
+                opts.url, opts.body or "", opts.headers, opts.method, opts.timeout, opts.binary, opts.redirect
+            )
         end
         return wrapRequest( _url, _post or "", _headers, nil, nil, _binary )
     end
 
     -- http.request(url [, body [, headers [, method [, timeout [, binary]]]]])
-    -- http.request({ url=, body=, headers=, method=, timeout=, binary= })
+    -- http.request({ url=, body=, headers=, method=, timeout=, binary=, redirect= })
+    --
+    -- `redirect` defaults to true, matching upstream. Set redirect = false to see the 3xx
+    -- response itself; otherwise redirects are followed (up to 16) and every hop is
+    -- re-checked against the domain patterns and the local-address rule.
     http.request = function( _url, _post, _headers, _method, _timeout, _binary )
         if type( _url ) == "table" then
             local opts = _url
-            local ok, err = nativeHTTPRequest( opts.url, opts.body, opts.headers, opts.method, opts.timeout, opts.binary )
+            local ok, err = nativeHTTPRequest(
+                opts.url, opts.body, opts.headers, opts.method, opts.timeout, opts.binary, nil, false, opts.redirect ~= false
+            )
             if not ok then
                 os.queueEvent( "http_failure", opts.url, err )
             end
@@ -816,24 +827,50 @@ if http then
 
     local nativeWebsocket = http.websocket
 
+    -- Both websocket entry points accept (url [, headers]) or a single options table
+    -- { url =, headers =, timeout = }. The timeout is in seconds and covers the handshake.
+    local function websocketArgs( _url, _headers )
+        if type( _url ) == "table" then
+            local opts = _url
+            if type( opts.url ) ~= "string" then
+                error( "bad field 'url' (string expected, got " .. type( opts.url ) .. ")", 3 )
+            end
+            if opts.headers ~= nil and type( opts.headers ) ~= "table" then
+                error( "bad field 'headers' (table expected, got " .. type( opts.headers ) .. ")", 3 )
+            end
+            if opts.timeout ~= nil and type( opts.timeout ) ~= "number" then
+                error( "bad field 'timeout' (number expected, got " .. type( opts.timeout ) .. ")", 3 )
+            end
+            return opts.url, opts.headers, opts.timeout
+        end
+        if type( _url ) ~= "string" then
+            error( "bad argument #1 (string expected, got " .. type( _url ) .. ")", 3 )
+        end
+        return _url, _headers, nil
+    end
+
     http.websocketAsync = function( _url, _headers )
-        local ok, err = nativeWebsocket( _url, _headers )
+        local url, headers, timeout = websocketArgs( _url, _headers )
+        local ok, err = nativeWebsocket( url, headers, nil, timeout )
         if not ok then
-            os.queueEvent( "websocket_failure", _url, err )
+            os.queueEvent( "websocket_failure", url, err )
         end
     end
 
     http.websocket = function( _url, _headers )
+        -- Resolve the real url first: comparing the events against a table would never match,
+        -- which is what an `http.websocket({ url = ... })` call used to do -- it hung forever.
+        local url, headers, timeout = websocketArgs( _url, _headers )
         local requestID = allocateRequestID()
-        local ok, err = nativeWebsocket( _url, _headers, requestID )
+        local ok, err = nativeWebsocket( url, headers, requestID, timeout )
         if not ok then
             return false, err
         end
         while true do
             local event, evUrl, param, eventID = os.pullEvent()
-            if event == "websocket_success" and evUrl == _url and eventID == requestID then
+            if event == "websocket_success" and evUrl == url and eventID == requestID then
                 return param
-            elseif event == "websocket_failure" and evUrl == _url and eventID == requestID then
+            elseif event == "websocket_failure" and evUrl == url and eventID == requestID then
                 return false, param
             end
         end
