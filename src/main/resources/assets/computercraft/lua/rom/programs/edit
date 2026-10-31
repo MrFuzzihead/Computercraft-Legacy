@@ -305,12 +305,15 @@ local function redrawLines( _nLine, _nEndY )
                 writeCompletion( sContents )
             end
 
-            -- Record the state for the next line, and re-highlight if it moved.
+            -- Always record the state for the next line: leaving it nil would make that line lex
+            -- from scratch next time, losing the comment/string it is inside. Re-highlight the
+            -- following lines only when a state we already knew has moved.
             if sContinuation == nil then sContinuation = false end
             local sPrevious = tLineLexStates[ _nLine + 1 ]
-            if sPrevious ~= nil and not sameState( sPrevious, sContinuation ) then
+            local bKnown = sPrevious ~= nil
+            if not bKnown or not sameState( sPrevious, sContinuation ) then
                 tLineLexStates[ _nLine + 1 ] = sContinuation
-                bChanged = true
+                bChanged = bKnown
             else
                 bChanged = false
             end

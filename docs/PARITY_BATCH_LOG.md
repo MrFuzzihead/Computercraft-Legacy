@@ -1355,3 +1355,23 @@ Both are the kind of thing that only shows up when a file is scrolled and a long
 i.e. exactly the case the highlighting exists for, and exactly what a green test suite would not
 notice. `aBlankLineInsideALongCommentKeepsItsState` now pins the related behaviour (an empty line
 inside `--[[ ]]` must keep the state, or the comment stops being coloured from the first blank line).
+
+### Batch I final double-check
+
+Re-reading the finished highlighting found one more defect, and the in-game pack was split to match
+what can actually be asserted.
+
+**Bug: the state for the next line was only recorded when a previous value existed.** The condition
+was `if sPrevious ~= nil and not sameState(...)`, so a line drawn for the first time never cached its
+state — and the *next* time it was drawn it lexed from scratch, losing the comment or string it was
+inside. It now always records, and only continues the downward redraw when a state that was already
+known has moved.
+
+**Coverage split.** CraftOS offers no way to read a character's colour back, so no script can assert
+that a line was coloured. `i2_highlighting` therefore automates the thing that *determines* the
+colours — the per-line token sequence from `cc.internal.syntax`, including the multi-line state and
+the blank-line-inside-a-comment case — and stages the twelve visual checks (colours, section menu,
+scrolling, continuation prompt). `docs/ingame-tests/batch-i/README.md` records exactly which check
+lives where, so "the tests pass" is never mistaken for "the colours are right".
+
+Full suite: **1654 tests, 0 failures.**
