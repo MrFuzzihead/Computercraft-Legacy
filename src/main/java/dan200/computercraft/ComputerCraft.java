@@ -110,6 +110,7 @@ public class ComputerCraft {
     public static int http_max_download = 16 * 1024 * 1024;
     public static int http_threads = 8;
     public static int http_timeout = 30000;
+    public static boolean http_allow_local = false;
     public static boolean disable_lua51_features = false;
     public static boolean enableCommandBlock = false;
     public static boolean turtlesNeedFuel = true;
@@ -198,6 +199,9 @@ public class ComputerCraft {
         prop = config.get("general", "http_timeout", http_timeout);
         prop.comment = "The default time (in milliseconds) to wait for a HTTP request before giving up. Set to 0 for no timeout.";
         http_timeout = Math.max(0, prop.getInt());
+        prop = config.get("general", "http_allow_local", http_allow_local);
+        prop.comment = "Allow HTTP and websocket requests to private, loopback, link-local and CGNAT addresses. Leave false to stop computers reaching the server's own network (routers, cloud metadata, LAN services).";
+        http_allow_local = prop.getBoolean(http_allow_local);
         prop = config.get("general", "disable_lua51_features", disable_lua51_features);
         prop.comment = "Set this to true to disable Lua 5.1 functions that will be removed in a future update. Useful for ensuring forward compatibility of your programs now.";
         disable_lua51_features = prop.getBoolean(disable_lua51_features);

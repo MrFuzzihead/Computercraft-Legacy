@@ -34,6 +34,7 @@ import dan200.computercraft.api.lua.LuaException;
 class HTTPRequestCorrelationTest {
 
     private String savedWhitelist;
+    private boolean savedAllowLocal;
     private String savedBlacklist;
     private int savedMaxRequests;
     private int savedMaxWebsockets;
@@ -44,6 +45,9 @@ class HTTPRequestCorrelationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        // The test server runs on 127.0.0.1, which the local-address rule refuses by default.
+        savedAllowLocal = ComputerCraft.http_allow_local;
+        ComputerCraft.http_allow_local = true;
         savedWhitelist = ComputerCraft.http_whitelist;
         savedBlacklist = ComputerCraft.http_blacklist;
         savedMaxRequests = ComputerCraft.http_max_requests;
@@ -76,6 +80,7 @@ class HTTPRequestCorrelationTest {
     void tearDown() {
         if (api != null) api.shutdown();
         if (server != null) server.stop(0);
+        ComputerCraft.http_allow_local = savedAllowLocal;
         ComputerCraft.http_whitelist = savedWhitelist;
         ComputerCraft.http_blacklist = savedBlacklist;
         ComputerCraft.http_max_requests = savedMaxRequests;

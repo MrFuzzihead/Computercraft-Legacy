@@ -1,61 +1,134 @@
+-- A simple way to run several functions at once.
+--
+-- Functions are not actually executed simultaneously: this module switches between them whenever
+-- they yield (whenever they call coroutine.yield, or anything that yields -- os.pullEvent,
+-- os.sleep, rednet.receive, most of the turtle API, and so on).
+--
+-- Each function gets its own copy of the event queue for events it consumes, so os.sleep in one
+-- does not swallow events that another one is waiting for.
+--
+-- Behaviour mirrors CC:Tweaked's parallel API (rom/apis/parallel.lua): zero functions return
+-- immediately rather than hanging, errors are wrapped with their source thread so the shell can
+-- point at the line that failed, and waitForAll can spawn new functions while it runs.
 
-local function create( first, ... )
-	if first ~= nil then
-	    if type( first ) ~= "function" then
-    		error( "Expected function, got "..type( first ), 3 )
-    	end
- 		return coroutine.create(first), create( ... )
+local expect = require("cc.expect").expect
+local exception = require("cc.internal.exception")
+
+-- Run until any of the functions finishes.
+--
+-- If a function errors, the error propagates from here, carrying the thread it came from so
+-- error_printer can show the original line instead of a bare message.
+function waitForAny(...)
+    local barrier_ctx = { co = coroutine.running() }
+
+    local functions = table.pack(...)
+    local threads = {}
+    for i = 1, functions.n do
+        local fn = functions[i]
+        expect(i, fn, "function")
+        threads[i] = {
+            co = coroutine.create(function() return exception.try_barrier(barrier_ctx, fn) end),
+            filter = nil,
+        }
     end
-    return nil
-end
 
-local function runUntilLimit( _routines, _limit )
-    local count = #_routines
-    local living = count
-    
-    local tFilters = {}
-    local eventData = {}
+    local count = functions.n
+    -- Nothing to wait on. Returning 0 (rather than pulling events forever) is the fix for the
+    -- empty-argument hang: parallel.waitForAny() used to block until the computer was killed.
+    if count < 1 then return 0 end
+
+    local event = { n = 0 }
     while true do
-    	for n=1,count do
-    		local r = _routines[n]
-    		if r then
-    			if tFilters[r] == nil or tFilters[r] == eventData[1] or eventData[1] == "terminate" then
-	    			local ok, param = coroutine.resume( r, table.unpack(eventData) )
-					if not ok then
-						error( param, 0 )
-					else
-						tFilters[r] = param
-					end
-					if coroutine.status( r ) == "dead" then
-						_routines[n] = nil
-						living = living - 1
-						if living <= _limit then
-							return n
-						end
-					end
-				end
-    		end
-    	end
-		for n=1,count do
-    		local r = _routines[n]
-			if r and coroutine.status( r ) == "dead" then
-				_routines[n] = nil
-				living = living - 1
-				if living <= _limit then
-					return n
-				end
-			end
-		end
-    	eventData = { os.pullEventRaw() }
+        for i = 1, count do
+            local thread = threads[i]
+            if thread.filter == nil or thread.filter == event[1] or event[1] == "terminate" then
+                local ok, param = coroutine.resume(thread.co, table.unpack(event, 1, event.n))
+                if not ok then error(exception.wrap_error(param, thread.co), 0) end
+
+                -- Abort as soon as this one is finished.
+                if coroutine.status(thread.co) == "dead" then return i end
+
+                thread.filter = param
+            end
+        end
+
+        event = table.pack(os.pullEventRaw())
     end
 end
 
-function waitForAny( ... )
-    local routines = { create( ... ) }
-    return runUntilLimit( routines, #routines - 1 )
-end
+-- Run several functions until all of them are finished.
+--
+-- Every function receives a `spawn` argument, which can be called to start further functions in
+-- parallel from inside the wait. That is how a program can fan out work dynamically instead of
+-- building the whole list up front.
+--
+-- If a function errors, the others are not resumed and the error propagates from here.
+function waitForAll(...)
+    local barrier_ctx = { co = coroutine.running() }
 
-function waitForAll( ... )
-    local routines = { create( ... ) }
-	runUntilLimit( routines, 0 )
+    local can_spawn, threads, count = false, {}, 0
+
+    local function spawn(fn, ...)
+        expect(1, fn, "function")
+        if not can_spawn then error("Cannot spawn new functions outside of waitForAll", 2) end
+
+        threads[count + 1] = {
+            co = coroutine.create(function(...) return exception.try_barrier(barrier_ctx, fn, ...) end),
+            filter = nil,
+            resume_with = table.pack(...),
+        }
+        count = count + 1
+    end
+
+    local functions = table.pack(...)
+    can_spawn = true
+    for i = 1, functions.n, 1 do
+        local fn = functions[i]
+        expect(i, fn, "function")
+        -- Each function is started with `spawn` so it can add more work.
+        spawn(fn, spawn)
+    end
+    can_spawn = false
+
+    local event = { n = 0 }
+    while true do
+        local i = 1
+        while i <= count do
+            local thread = threads[i]
+
+            -- A freshly spawned thread starts with its arguments; a running one resumes with the
+            -- event, when the filter allows.
+            local resume_with
+            if thread.resume_with then
+                resume_with = thread.resume_with
+                thread.resume_with = nil
+            elseif thread.filter == nil or thread.filter == event[1] or event[1] == "terminate" then
+                resume_with = event
+            end
+
+            if resume_with then
+                can_spawn = true
+                local ok, param = coroutine.resume(thread.co, table.unpack(resume_with, 1, resume_with.n))
+                can_spawn = false
+
+                if not ok then error(exception.wrap_error(param, thread.co), 0) end
+
+                if coroutine.status(thread.co) == "dead" then
+                    -- Dead threads are removed while iterating, so this one's slot must be
+                    -- revisited (the list shifts down).
+                    table.remove(threads, i)
+                    i, count = i - 1, count - 1
+                end
+
+                thread.filter = param
+            end
+
+            i = i + 1
+        end
+
+        -- Zero functions, or every one finished: return rather than waiting for an event.
+        if count == 0 then return end
+
+        event = table.pack(os.pullEventRaw())
+    end
 end
