@@ -1588,3 +1588,49 @@ already knew how to return several types for a directly attached peripheral.
   round-trip (equip → leave → re-enter → still the right peripheral) staged as the key manual check.
 
 Full suite: **1714 tests, 0 failures**.
+
+---
+
+## Parity audit — terminal, networking, registry, Lua contracts
+
+A second, wider audit of four areas against `migrate/CC-Tweaked-1.20.1-1.120.2`, after
+Batches A–M. Method sets were compared mechanically (`tools/apidiff.js`) and every reported
+difference was then read by hand. Full write-up: `docs/CC_TWEAKED_1.120_PARITY_FEASIBILITY.md`
+section 12.
+
+### Headline: three areas are at parity, one is not
+
+- **Terminal** — at parity, including the palette, `window` (all 24 methods), monitors
+  (25 term methods) and the greyscale rendering of the 16 colours on normal computers.
+  Two small deltas: our `blit` throws on non-hex colour characters where upstream renders
+  them with the default colour; and our `nativePaletteColour` is redirected where upstream
+  pins it to the native terminal.
+- **Networking / `peripheral_hub` / multi-type** — at parity after Batch M, with three
+  `rednet` deltas: `MAX_ID_CHANNELS` is 65535 here against 65500 upstream (which makes ID
+  65535 alias the broadcast channel), `rednet.lookup` takes no timeout, and
+  `peripheral.hasType` answers `false` for an unknown side where upstream answers `nil`.
+- **Blocks/items** — complete. Every 1.120 registry entry has a counterpart; 1.7.10 folds
+  several of them into metadata. Ours adds the chat box, an expanded disk and the CustomNPCs
+  peripherals.
+- **Lua contracts** — method sets identical everywhere. The exception is `http.request`:
+  upstream takes `(url, body, headers, binary)` plus an options table, ours takes
+  `(url, data, headers, verb, timeout, binary, …)`, so a modern caller's binary flag lands in
+  the verb slot and is silently dropped. `HttpContractProbeTest` pins the current shape so
+  the note cannot go stale.
+
+### The mechanical diff lied five times
+
+`tools/apidiff.js` reported `fs.complete`, `fs.find`, `fs.isDriveRoot`, `keys.cimcumflex`
+and `keys.scollLock` as missing. All five exist — `fs.complete` lives in `bios.lua`,
+`find`/`isDriveRoot` are Java methods, and the misspelled key constants are table *values*
+rather than assignments. That is the Batch L lesson applied to tooling: a skip and a passing
+group read the same, and so do "absent" and "defined somewhere the regex does not look".
+
+### Why this is a document and not a patch
+
+The audit asked for a check, and the check produced five items of very different value.
+`http.request` is the only one where a modern program misbehaves *silently*; the `rednet`
+arithmetic is a genuine (if rare) correctness bug; the `lookup` timeout and `blit` tolerance
+are one-liners; the other two are cosmetic. They are recorded as a proposed "Batch N —
+contract alignment" rather than bundled into this commit, so the findings can be reviewed
+before code moves.

@@ -661,3 +661,219 @@ matter on 1.7.10 and under-weighted a few that are feasible:
   via lwjgl3ify; GPS accuracy.
 - **Do not promise:** named block states without GTNHLib, full `@e` selectors, native file
   drag-and-drop on vanilla LWJGL2, non-empty `itemGroups`.
+
+---
+
+## 12. Parity audit — terminal, networking, registry, Lua contracts
+
+Re-audit of four areas against `migrate/CC-Tweaked-1.20.1-1.120.2`, done after Batches
+A–L and M. Method sets were compared mechanically (`tools/apidiff.js`, which extracts every
+`function api.name` / `api.name =` definition from both ROM trees), then every difference was
+read by hand — the script alone produces false positives, and two of them are recorded below
+precisely because trusting it would have produced wrong claims.
+
+**Method:** `node tools/apidiff.js` for the Lua surface; `@LuaFunction`/`getMethodNames`
+extraction for the Java surface; `ModRegistry` for the registry; targeted reading of every
+remaining delta.
+
+### 12.1 Terminal
+
+The terminal API is at parity, including the parts that were ported deliberately in earlier
+batches. Ours is a superset in one place (legacy palette names) and a subset in two small ones.
+
+| Feature | CC:T 1.120 | Ours | Verdict |
+|---|---|---|---|
+| `write, scroll, setCursorPos, getCursorPos, setCursorBlink, getCursorBlink, getSize, clear, clearLine` | ✔ | ✔ | parity |
+| `setTextColour/Color, getTextColour/Color, setBackgroundColour/Color, getBackgroundColour/Color, isColour/Color` | ✔ | ✔ | parity — both accept a combined bitmask and resolve it to the highest bit |
+| `blit(text, textColour, backgroundColour)` | ✔ | ✔ | parity — same-length check, hex digits accepted in either case, cursor advanced |
+| `setPaletteColour(colour, rgb24)` and `(colour, r, g, b)` | ✔ | ✔ | parity — ours implements both forms |
+| `getPaletteColour(colour)` → floats 0–1 | ✔ | ✔ | parity |
+| `nativePaletteColour/nativePaletteColor` | kept on `term`, **not** redirected | kept and **routed through the redirect** | see T1 |
+| Invalid colour characters in `blit` | rendered with the default colour | `LuaException("Invalid colour")` | see T2 |
+| `window.create(parent, x, y, w, h, visible)` | visible defaults true | same | parity |
+| `window`: `write, blit, clear, clearLine, get/setCursorPos, get/setCursorBlink, getSize, getPosition, scroll, set/getTextColour, set/getBackgroundColour, isColour, set/getPaletteColour, getLine, setVisible, isVisible, redraw, restoreCursor, reposition` | ✔ | ✔ | parity |
+| `monitor` term surface (25 methods incl. `setTextScale`, `getTextScale`, palette) | inherited from `TermMethods` | explicit list, same 25 | parity |
+| `Terminal.write/scroll/clear/clearLine/blit/resize` semantics | — | line-for-line port | parity |
+| `term_resize`, cursor blink, 16-colour-on-greyscale, palette persistence | ✔ | ✔ | parity |
+
+**T1 — `term.nativePaletteColour` is redirected in ours.** Upstream pins the two
+`nativePalette*` functions onto `term` and deletes them from the native table, so
+`term.nativePaletteColour(colour)` always reads the *computer's* palette even while output is
+redirected to a monitor. Ours wraps them like any other term function, so after
+`term.redirect(monitor)` they act on the monitor. This is arguably more useful, but it is a
+behavioural difference: a program that redirects and then restores the computer's palette
+shade will get the monitor's.
+
+**T2 — `blit` is stricter than upstream.** `TermAPI.checkColour` rejects anything outside
+`0–9a–fA–F`; 1.120 stores the byte and `Terminal.getColour(c, def)` maps unknown characters
+to the default (white). A program that blits colour strings containing e.g. `\0`, a space, or
+`g` renders in upstream and throws here. Low impact — but it is a throw where upstream has
+none, which is the kind of difference that turns into a bug report.
+
+Also noted, not a defect: colour capability comes from `ITerminal.isColour()` for monitors
+(correct, colour monitors report true regardless of the computer family) and from
+`IAPIEnvironment.isColour()` for the computer's own terminal (also correct).
+
+### 12.2 Networking, peripheral hub, multi-type
+
+This area is at parity after Batch M, with three real divergences in `rednet` and one
+cosmetic one in `peripheral`.
+
+| Feature | CC:T 1.120 | Ours | Verdict |
+|---|---|---|---|
+| `modem.open/isOpen/close/closeAll/transmit/isWireless` | ✔ | ✔ | parity |
+| `transmit(channel, replyChannel, payload)` accepting tables | ✔ | ✔ (payload carried as `Object` through `INetwork`) | parity in-process |
+| Wired modem: `getNamesRemote, isPresentRemote, getTypeRemote, getMethodsRemote, callRemote, hasTypeRemote, getNameLocal` | ✔ | ✔ | parity |
+| Wired modem types | `"modem"` + `"peripheral_hub"` | same (Batch M) | parity |
+| `peripheral.getType` returns every type as separate values | ✔ | ✔ | parity |
+| `peripheral.hasType` / `peripheral.find` multi-type aware | ✔ | ✔ | parity |
+| Remote multi-type (`getTypeRemote` one value per type, `hasTypeRemote` any type) | ✔ | ✔ (Batch M) | parity |
+| Peripheral names `type_<id>`, persisted across world loads | ✔ | ✔ (`computer/lastid_<type>.txt`) | parity |
+| Wireless range: weather-dependent, altitude-scaled, ender modem interdimensional | ✔ | ✔ | parity |
+| `rednet.send/broadcast/receive/host/unhost/open/close/isOpen` | ✔ | ✔ | parity |
+| `rednet.MAX_ID_CHANNELS` | **65500**, id → `id % 65500` | **65535**, id → `(id-1) % 65535 + 1` | see N1 |
+| `rednet.lookup(protocol, hostname, timeout)` | timeout optional (default 2 s) | hardcoded 2 s timer, no argument | see N2 |
+| `peripheral.hasType(side, type)` for an unknown side | `nil` | `false` | see N3 |
+
+**N1 — `MAX_ID_CHANNELS` differs, and ours can collide with the broadcast channel.**
+Upstream reserves 65500 channels for computer IDs, so ID 65535 (or 0) never shares a channel
+with `CHANNEL_BROADCAST` (65535). Ours reserves 65535 and maps `id → (id-1) % 65535 + 1`, so a
+computer whose ID is 65535 computes channel 65535 — the broadcast channel — and would receive
+(and could be confused by) every rednet broadcast as if it were addressed to it. IDs that high
+are rare (they need 65535 computer creations), but the arithmetic is wrong, not just different:
+two different IDs cannot share a channel, and no ID may alias a reserved channel.
+
+**N2 — `rednet.lookup` cannot be given a timeout.** Upstream's third argument overrides the
+2 s default; ours starts `os.startTimer(2)` unconditionally. A program that wants a longer
+scan for a repeater-hosted service cannot ask for one.
+
+**N3 — `peripheral.hasType` returns `false` where upstream returns `nil`.** Upstream's
+`PeripheralAPI.hasType` returns nil when the side name resolves to no peripheral;
+ours returns false. Only visible to code that tests the result for nil.
+
+**Deliberate superset:** ours resolves *wired remote names* transparently in
+`peripheral.getNames`, `isPresent`, `getType`, `getMethods`, `call`, `wrap` and `hasType` —
+1.75 behaviour that 1.120 dropped (upstream only accepts local sides there, and remote access
+goes through the modem's `*Remote` methods). Consequences: `peripheral.getNames()` also lists
+remotes, and `peripheral.find("monitor")` returns wired monitors. Modern programs still work;
+programs written against ours may rely on something modern does not offer. Worth keeping, but
+it is a documented difference rather than parity.
+
+`getNamesRemote` ordering is unspecified in both (ours `HashMap`, upstream
+`ConcurrentHashMap`); no parity claim is possible or needed.
+
+### 12.3 Blocks and items
+
+The registries match one-for-one. 1.7.10 collapses what 1.20 splits into separate registry
+entries into metadata on a handful of blocks, so the comparison is by *concept*, not by
+registry name.
+
+| CC:T 1.120 registry entry | Ours | Notes |
+|---|---|---|
+| `computer_normal`, `computer_advanced` | `computer` block (metadata) | `ItemComputer.getFamily`: bit 16384 = advanced |
+| `computer_command` | `command_computer` | separate block |
+| `turtle_normal`, `turtle_advanced` | `CC-TurtleExpanded`, `CC-TurtleAdvanced` (+ legacy `CC-Turtle`) | |
+| `monitor_normal`, `monitor_advanced` | `peripheral` metadata 10 / 12 | |
+| `disk_drive` | `peripheral` metadata 2–5 | facing in metadata |
+| `printer` | `peripheral` metadata 11 | |
+| `wireless_modem_normal`, `wireless_modem_advanced` | `peripheral` metadata 0/1, `CC-AdvancedWirelessModem` | |
+| `wired_modem`, `wired_modem_full`, `cable` | `CC-Cable` (WiredModem / WiredModemWithCable / Cable) | |
+| `speaker`, `redstone_relay` | `speaker`, `CC-RedstoneRelay` | |
+| `pocket_computer_normal`, `pocket_computer_advanced` | `pocketComputer` (damage 0/1) | upgrades are NBT, as upstream |
+| `disk`, `treasure_disk` | `disk`, `treasureDisk` | |
+| `printed_page`, `printed_pages`, `printed_book` | `printout` (damage 0/1/2) | |
+| — | `diskExpanded`, `chat_box`, `npc_detector`, `npc_interface`, `npc_trader` | ours-only: custom disk size, the chat box (removed upstream in 1.99), CustomNPCs compat |
+
+No upstream block or item is missing. `pocket_computer_no_term`, `pocket_computer_lectern`,
+`computer_upgrade` and `pocket_computer_upgrade` are menu types and recipe serialisers in
+1.120, not items, so they have no counterpart to check.
+
+### 12.4 Lua API contracts
+
+Method sets are identical across `colors/colours`, `fs`, `io`, `keys`, `parallel`,
+`peripheral`, `paintutils`, `rednet`, `settings`, `term`, `textutils`, `turtle`, `vector`,
+`window`, `command/commands` and `help`. Verified in detail:
+
+- **`fs`** — `list, combine, getName, getSize, exists, isDir, isReadOnly, makeDir, move, copy,
+  delete, open, getDrive, getFreeSpace, find, getDir, getCapacity, attributes, isDriveRoot`
+  plus `fs.complete` (ours lives in `bios.lua`, upstream in `fs.lua`; ours already accepts the
+  1.101 `{ include_files, include_dirs, include_hidden }` options table). `fs.attributes`
+  returns `size, isDir, isReadOnly, created, modified` and keeps the deprecated
+  `modification` alias, exactly as upstream.
+- **`textutils`** — all twelve functions, including `serialize`/`serializeJSON` options
+  (`compact`, `allow_repetitions`, `nbt_style`, `unicode_strings`) and
+  `unserializeJSON` options (`parse_null`, `parse_empty_array`). `slowWrite`'s `rate` is in
+  characters per second with a default of 20 in both.
+- **`settings`** — `define/set/get(name, default)/unset/clear/load/save/getDetails/changed`,
+  with the same `{ default, description, type, changed }` option fields.
+- **`io`** — handle metatable, `open` modes, `output/input`, `lines`, `read` format list;
+  ours is a port of the same Lua implementation.
+- **`parallel`, `vector`, `gps`, `turtle`, `disk`, `paintutils`, `colors`** — identical
+  method sets (`colors.rgb8`, `packRGB`, `unpackRGB`, `toBlit`, `fromBlit` all present).
+- **`commands`** — same eight methods (`exec`, `execAsync`, `list`, `getBlockPosition`,
+  `getBlockInfo`, `getBlockInfos`, `getDimension`, `getEntities`). Upstream's block methods
+  take an optional trailing `dimension` argument; 1.7.10 has a single world, so ours omits it.
+
+Two contract differences stand out, both in `http`:
+
+**L1 — `http.request` positional arguments disagree, and there is no options table.**
+Upstream's positional form is `request(url, body, headers, binary)` and it also accepts a
+single options table `{ url, body, headers, binary, method, redirect, timeout }`. Ours kept the
+legacy-extended positional form `request(url, data, headers, verb, timeout, binary, ...)`, so:
+
+- a modern program calling `http.request(url, body, headers, true)` intending **binary**
+  instead sets our **verb** (a boolean is not a String, so it is ignored and the argument is
+  silently lost) and receives a text handle instead of a binary one;
+- the options-table form is not supported at all — `http.request{ url = ... }` fails with
+  "Expected string".
+
+This is the one place found where a modern program is likely to break silently rather than
+with an error, which makes it the highest-value fix in this audit.
+
+**L2 — `http.fetch` is ours-only.** Harmless extra (an alias for `request`); no upstream
+program can depend on it, and nothing in the ROM uses it.
+
+### 12.5 What the audit did *not* find
+
+For the record, since a parity audit that only lists gaps is misleading:
+
+- No missing terminal API method, window method, monitor method or palette feature.
+- No missing `modem`, wired-modem or `rednet` function.
+- No missing block or item.
+- No missing Lua API function in any ROM API.
+- Keyboard key *names* differ only because of the platform (`F17`–`F25`, `leftSuper`,
+  `rightSuper`, `menu`, `printScreen`, `world1`, `world2` are GLFW/LWJGL3 codes that 1.7.10
+  never produces; ours instead carries the LWJGL2 punctuation names `at`, `colon`,
+  `semiColon`, `multiply`, `kana`, …). This is a platform limit, not a code gap.
+
+### 12.6 False positives worth recording
+
+The mechanical diff initially reported `fs.complete`, `fs.find`, `fs.isDriveRoot`,
+`keys.cimcumflex` and `keys.scollLock` as missing. All five exist:
+
+- `fs.complete` is defined in `bios.lua`, not in an `apis/` file;
+- `fs.find` and `fs.isDriveRoot` are Java methods (`FSAPI`), not Lua;
+- the misspelled key constants are table *values* (`scollLock = "scrollLock"`) in our
+  constructor rather than `keys.scollLock = keys.scrollLock` assignments.
+
+Upstream keeps the misspellings deliberately, and so do we. Two audits in a row have now been
+saved by checking a "missing" claim before writing it down; the lesson from Batch L applies to
+tooling as much as to test skips.
+
+### 12.7 Suggested follow-up
+
+Ranked by user impact per unit of risk:
+
+1. **`http.request` options table + binary in the 4th positional slot** (L1). The only
+   silent-misbehaviour finding. Keep the legacy arguments working by detecting the argument
+   shape (boolean in slot 4 = binary) and accepting a table first argument.
+2. **`rednet` channel arithmetic** (N1). Three lines: `MAX_ID_CHANNELS = 65500` and
+   `id % MAX_ID_CHANNELS`. Fixes a real, if rare, collision with the broadcast channel.
+3. **`rednet.lookup(protocol, hostname, timeout)`** (N2). One optional argument.
+4. **`blit` colour tolerance** (T2). Match upstream by mapping unknown characters to the
+   default colour instead of throwing.
+5. **`term.nativePaletteColour` pinning** (T1) and **`hasType` nil-vs-false** (N3).
+   Cosmetic; do them only alongside something else.
+
+Items 1–4 are small enough to form a single "Batch N — contract alignment" with unit tests and
+an in-game script; none of them touches the Lua runtime, persistence or rendering.
