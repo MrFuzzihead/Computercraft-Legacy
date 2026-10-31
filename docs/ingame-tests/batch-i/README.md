@@ -45,9 +45,18 @@ The script writes files into `/batch-i-visual` and prints a numbered list. In or
    the continuation state working.
 3. **Breaking the comment** — delete a character from `--[[` on the first line and every following
    line must change colour **immediately**. That is the state-propagation loop.
-4. **`scrolling.lua`** — a 40-line comment. PageDown until `]]` is visible: the lines must still be
-   green, and the screen must not look corrupted. (The corruption was real: seeding the state for
-   scrolled-off lines used to draw them at the cursor.)
+4. **`scrolling.lua`** — a 40-line comment. Scroll to the closing `]]` with the **mouse wheel**:
+   the lines must still be green and the screen must not look corrupted. (The corruption was real:
+   seeding the state for scrolled-off lines used to draw them at the cursor.) The wheel matters
+   here — it scrolls the view without moving the cursor, which is the path that triggers seeding.
+
+   On keys, since it is easy to assume otherwise:
+
+   | Input | Behaviour in `edit` |
+   |---|---|
+   | Mouse wheel | Scrolls the **view** ±1 line; the cursor stays put. |
+   | PageUp / PageDown | Moves the **cursor** a screenful; scrolling is a side effect. Doing nothing visible means the cursor is already at an end. |
+   | Up / Down | Moves the cursor one line, scrolling only at the edges. |
 5. **`edit.default_extension`** — `edit /batch-i-visual/typed` opens `typed.lua`.
 6. **`edit.autocomplete = false`** — TAB does nothing; set it back and TAB completes.
 7. **REPL** — multi-line pretty output, the `   > ` continuation prompt for `function g()`, and

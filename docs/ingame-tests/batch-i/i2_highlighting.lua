@@ -275,9 +275,13 @@ writeFile(
     "\n"
   ) .. "\n"
 )
-stage("edit " .. dir .. "/scrolling.lua  -- PageDown until the closing ']]' is on screen: the lines "
-  .. "must still be GREEN (this is the state seeding that used to draw over the screen; if the "
-  .. "screen looks corrupted, that bug is back)")
+stage("edit " .. dir .. "/scrolling.lua  -- use the MOUSE WHEEL to scroll down to the closing ']]'. "
+  .. "The wheel is the important one: it scrolls the view without moving the cursor, so it goes "
+  .. "through the state-seeding path that used to draw scrolled-off lines over the screen. EXPECT "
+  .. "every comment line still GREEN and the screen intact. If it looks corrupted, that bug is back.")
+stage("In the same file, PageUp and PageDown also work: they move the CURSOR a screenful at a time "
+  .. "(so scrolling is a side effect), which is why nothing seems to happen if the cursor is already "
+  .. "at the end. Up/Down move one line and scroll only at the edges.")
 
 writeFile(dir .. "/newfile_content", "return 1\n")
 stage("settings.set('edit.default_extension','lua') then 'edit " .. dir .. "/typed' -- EXPECT the "
