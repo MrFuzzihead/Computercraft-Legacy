@@ -97,7 +97,13 @@ end)
 print("== no modem ==")
 group("no modem", function()
   if modemSide then
-    -- Calling locate here would wait for a timer, which a headless run cannot provide.
+    -- Calling locate here would wait for a timer, which a headless run cannot provide. What can be
+    -- checked without waiting is that locate's channel is not left open from an earlier run.
+    ok(
+      "the GPS channel is not already open",
+      peripheral.call(modemSide, "isOpen", gps.CHANNEL_GPS) ~= true,
+      "run gps locate once and re-run this to be sure it closes the channel"
+    )
     skip("a wireless modem is attached, so the no-modem path cannot be exercised")
     return
   end
@@ -109,9 +115,11 @@ end)
 -- ---------------------------------------------------------------------------
 print("== the geometry the maths relies on ==")
 group("geometry", function()
-  local okLoad, vectorApi = pcall(require, "vector")
-  if not okLoad or type(vectorApi) ~= "table" then
-    skip("the vector API is not loadable here")
+  -- `vector` is a ROM *API*, so it is a global installed by the shell -- not a module, and
+  -- require("vector") finds nothing. (That mistake made this whole group skip on a live computer.)
+  local vectorApi = vector
+  if type(vectorApi) ~= "table" then
+    skip("the vector API is not available here")
     return
   end
 
@@ -130,7 +138,7 @@ group("geometry", function()
   end
 
   eq("range to 0,0,0", 22.36, round2(ranges[1]))
-  eq("range to 100,0,0", 92.19, round2(ranges[2]))
+  eq("range to 100,0,0", 92.2, round2(ranges[2]))
   eq("range to 0,0,100", 80.62, round2(ranges[3]))
 
   -- A host at the listener's own position reports zero, which is the case locate() answers immediately.

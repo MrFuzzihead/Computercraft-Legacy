@@ -1508,3 +1508,22 @@ Three mistakes were mine, not the code's, and each is worth recording:
 headless run has no timers, so `gps.locate(timeout)` would hang it.
 
 Full suite: **1697 tests, 0 failures**.
+
+### Batch L follow-up — two mistakes in the in-game script
+
+Reported from a live run: `l1_gps` gave "2 skips, 2 passes" on a computer with a modem attached.
+Both skips were the script's fault, not the API's.
+
+1. **`require("vector")` found nothing.** `vector` is a ROM *API* — a global installed by the shell
+   like `gps` and `colors` — not a module, so it is not on `package.path`. The whole geometry group
+   skipped silently. It now uses the global, and the group's three range checks run.
+2. **A wrong expectation**: `√(90² + 20²)` is 92.1954, so the two-decimal range is **92.2**, not
+   the 92.19 I had written. The Suite caught it only once the group stopped skipping.
+
+The modem-present branch also stopped being a bare skip: it now checks that `CHANNEL_GPS` is not
+left open, which is the one thing about channel bookkeeping that can be observed without waiting for
+a real reply.
+
+Worth noting the shape of this failure: a *skip* hid a broken check. A skipped group and a passing
+group look the same in a summary line, which is why the live report ("2 skips") was the only signal
+that the geometry group never ran.

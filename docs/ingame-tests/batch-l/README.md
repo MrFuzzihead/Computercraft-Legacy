@@ -28,7 +28,7 @@ Then run `l1_gps` on any computer. It performs **no blocking calls**, so it is s
 |---|---|
 | constants | `gps.CHANNEL_GPS == 65534`, and it is not the computer id |
 | no modem | `gps.locate` returns nothing immediately when no wireless modem is attached |
-| geometry | the ranges the ROM's maths will see for a known setup (22.36 / 92.19 / 80.62), and that a host at our own position reports 0 |
+| geometry | the ranges the ROM's maths will see for a known setup (22.36 / 92.2 / 80.62), and that a host at our own position reports 0 |
 
 Everything that waits for a real modem reply is in the script's manual list: a headless run has no
 timers, so `gps.locate(timeout)` would hang there.
