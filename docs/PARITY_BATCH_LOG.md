@@ -1211,3 +1211,71 @@ fixed and pinned by `HTTPFailureReasonTest`.
 4. **An all-digit host was treated as a name.** `isLiteralShape` required a dot, so `http://1234/`
    (which `InetAddress` reads as `0.0.4.210`) went to DNS. It now treats any digits-and-dots host as
    a literal.
+
+---
+
+## Batch I — Editor / REPL / Help (part 1)
+
+Batch I is the largest in the audit (1–2 weeks of pure Lua). Three of its four items are in; the
+fourth, lexer-based syntax highlighting in `edit`, is still outstanding and is described at the end.
+
+### I1 — `help` markdown rendering, sections and menu
+
+Ported from upstream with one substantive change.
+
+The renderer styles headings, bullet lists and inline code by building matching
+foreground/background colour strings and drawing with `term.blit`, so the paragraph wrapping and the
+colour strings stay aligned. A one-line menu bar shows `Help: <topic> (current section)` and the
+keyboard moves through the document: up/down, page up/down, home/end, and **left/right to jump
+between sections**. `term_resize` re-wraps at the new width and re-clamps the offset, and
+`mouse_scroll` works.
+
+The change: **upstream decides between the markdown and plain renderers by file extension**
+(`.md`). Its build turns the documentation into `.md` topics; the topics that ship *here* are
+extensionless plain text, and only some use headings at all (`speaker` does, `intro` does not). Ported
+verbatim, the markdown renderer would have been unreachable — dead code that looks finished. The
+choice now also inspects the content: a `.md` name *or* any heading line selects the rich renderer.
+
+`cc.internal.event.discard_char()` was added as a dependency (MPL-2.0, recorded in `NOTICE`), so
+"press Q to exit" does not leave its `char` event to land on the shell prompt as a stray command.
+
+### I2 — `lua` REPL
+
+* Results are pretty-printed through `cc.pretty`, honouring `lua.function_args` and
+  `lua.function_source`, instead of one-line `textutils.serialise`.
+* `require` is rooted at the working directory (`cc.require.make`), so `require "mylib"` finds the
+  file being looked at rather than `/rom/programs`.
+* `lua.autocomplete` gates completion, and `:` was added to the completion pattern so a dot-chain
+  completes as a whole.
+* **Multi-line input**: while a chunk cannot compile and the error mentions `<eof>`, the REPL shows a
+  `   > ` continuation prompt, so `function f()` … `end` spans lines instead of failing.
+* Runtime errors go through `cc.internal.exception`, so they carry their source line.
+
+`cc.internal.syntax.parse_repl` is deliberately **not** used for the continuation test: it returns
+"parsed successfully" and prints errors as a side effect, so it cannot answer "is this unfinished".
+Checking for `<eof>` in the compiler error is the honest signal.
+
+### I3 — `edit.default_extension` / `edit.autocomplete`
+
+* A new path with no extension gets `edit.default_extension` (e.g. `lua`); an existing file is never
+  renamed.
+* `edit.autocomplete` (default on) gates completion, and `:` joins the completion pattern.
+
+### Still outstanding — `edit` syntax highlighting
+
+Not done. `edit` still colours by simple per-line heuristics, and has no notion of lexical state
+across lines, so a multi-line string or `--[[ ]]` comment is mis-coloured on every line after the
+first. Doing this properly means wiring `cc.internal.syntax` (lexer + parser, both already present)
+into the editor: tokenising each line with the state left by the previous one, keeping the theme's
+colour table, and re-tokenising only from the edited line. That is a substantial change to a 780-line
+program and deserves its own pass rather than being rushed at the end of this one.
+
+### Verification
+
+`docs/ingame-tests/batch-i/i1_editor_repl_help.lua` — 24 checks over the parts that need a real
+shell: help topics and lookup, a markdown topic actually containing headings, the `lua` settings and
+`cc.pretty`, relative `require` through a directory-rooted package, and both `edit` settings. It
+deliberately does **not** drive `multishell`, because that needs event pumping the headless harness
+cannot do; the interactive rendering is in the script's manual drill.
+
+Full suite: **1646 tests, 0 failures**.
