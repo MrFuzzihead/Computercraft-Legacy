@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -223,6 +224,10 @@ public class HTTPRequest {
                     }
 
                     int redirects = 0;
+                    // Whether the body still applies: a 303 switches to GET, which must not
+                    // carry the original body. Any other method keeps it, including a verb
+                    // the caller chose explicitly (PUT, PATCH, ...).
+                    boolean sendBody = postText != null;
                     while (true) {
                         HttpURLConnection connection = (HttpURLConnection) current.openConnection();
                         connection.setInstanceFollowRedirects(false);
@@ -237,10 +242,18 @@ public class HTTPRequest {
                         }
 
                         { // Setup connection
-                            connection.setRequestMethod(method);
+                            try {
+                                connection.setRequestMethod(method);
+                            } catch (ProtocolException e) {
+                                // HttpURLConnection only accepts GET, POST, HEAD, OPTIONS, PUT,
+                                // DELETE and TRACE; notably PATCH is refused. Report that as a
+                                // policy-ish failure with a clear reason instead of letting it look
+                                // like a dead server.
+                                throw new LuaException("Unsupported HTTP method: " + method);
+                            }
 
                             connection.setRequestProperty("accept-charset", "UTF-8");
-                            if (postText != null && "POST".equals(method)) {
+                            if (sendBody) {
                                 connection.setRequestProperty(
                                     "content-type",
                                     "application/x-www-form-urlencoded; charset=utf-8");
@@ -253,7 +266,7 @@ public class HTTPRequest {
                                 }
                             }
 
-                            if (postText != null && "POST".equals(method)) {
+                            if (sendBody) {
                                 connection.setDoOutput(true);
                                 OutputStream os = connection.getOutputStream();
                                 OutputStreamWriter osr = new OutputStreamWriter(os);
@@ -271,7 +284,10 @@ public class HTTPRequest {
                         if (target != null && redirects < MAX_REDIRECTS) {
                             redirects++;
                             // 303 explicitly means "GET the result"; other codes keep the method.
-                            if (code == 303) method = "GET";
+                            if (code == 303) {
+                                method = "GET";
+                                sendBody = false;
+                            }
                             connection.disconnect();
                             synchronized (lock) {
                                 if (cancelled) {
@@ -373,6 +389,18 @@ public class HTTPRequest {
 
                         connection.disconnect();
                         break;
+                    }
+                } catch (LuaException e) {
+                    // A policy refusal, not a fault: PrivateAddresses.check and the re-check of
+                    // each redirect hop raise here. The message must reach Lua as the failure
+                    // reason (otherwise every blocked request looks like "Could not connect"),
+                    // and it must not be logged as an error -- being refused is the feature
+                    // working, and a program can trigger it as often as it likes.
+                    synchronized (lock) {
+                        complete = true;
+                        success = false;
+                        result = null;
+                        failureReason = e.getMessage();
                     }
                 } catch (IOException e) {
                     synchronized (lock) {

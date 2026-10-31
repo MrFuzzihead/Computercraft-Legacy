@@ -1183,3 +1183,31 @@ as a constant. `broadcast` still uses 65535, which the mapping reproduces exactl
   in its manual drill.
 
 Full suite: **1636 tests, 0 failures**.
+
+### Batch H follow-up — four bugs found by re-reading the batch, not by a test
+
+Reviewing H after it merged turned up four things the green suite had not caught. All four are now
+fixed and pinned by `HTTPFailureReasonTest`.
+
+1. **A refused request said `"Could not connect"`.** `PrivateAddresses.check` and the per-hop
+   `checkURL` raise `LuaException`, which fell into the generic `catch (Exception)` in the worker:
+   the reason was dropped, `HTTPAPI` substituted its fallback text, and every blocked request wrote
+   a stack trace at ERROR level. A program could not tell "the server refused this address" from
+   "the server is down", and a script could spam the log by asking twice. There is now a
+   `catch (LuaException e)` that stores the message as the failure reason and logs nothing.
+
+2. **The body was dropped for every verb except POST.** Writing the body only when
+   `"POST".equals(method)` was my own regression from adding the redirect loop — the original code
+   sent the body whenever one was supplied. `PUT` and `PATCH` with a body silently became
+   bodiless requests. A `sendBody` flag now tracks it explicitly, and only a 303 (which switches
+   to GET) clears it.
+
+3. **`PATCH` was advertised but never worked.** `HTTPURLConnection`'s method whitelist predates
+   PATCH and throws `ProtocolException`; the call surfaced as an IO failure. It now reports
+   `Unsupported HTTP method: PATCH`. This is a real parity gap with CC:Tweaked, which uses an
+   async HTTP client, and the honest options are a clear error or replacing the client — the clear
+   error is what shipped, and the in-game drill now says so.
+
+4. **An all-digit host was treated as a name.** `isLiteralShape` required a dot, so `http://1234/`
+   (which `InetAddress` reads as `0.0.4.210`) went to DNS. It now treats any digits-and-dots host as
+   a literal.

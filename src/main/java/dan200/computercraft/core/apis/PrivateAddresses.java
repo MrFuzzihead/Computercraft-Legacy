@@ -185,12 +185,16 @@ public final class PrivateAddresses {
             if (c >= '0' && c <= '9') {
                 digitSeen = true;
             } else if (c != '.') {
-                // A short, all-numeric-and-dots form such as "127.1" is also an IPv4 literal for
-                // InetAddress, but a name never contains anything but letters, digits, '-' and '.'.
+                // A name may contain letters, digits, '-' and '.'; anything else means this is
+                // not an address at all.
                 return false;
             }
         }
-        return digitSeen && host.indexOf('.') >= 0;
+
+        // "127.1", "10" and even bare "1234" are all IPv4 literals as far as InetAddress is
+        // concerned (the last one is 0.0.4.210), so no dotted quad is required. A host name made
+        // only of digits and dots does not exist, so treating it as a literal is safe.
+        return digitSeen;
     }
 
     private static List<Range> parseRanges() {
