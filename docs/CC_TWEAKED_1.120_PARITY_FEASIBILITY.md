@@ -1026,3 +1026,59 @@ That is the third time in this project a "difference" has survived a check it sh
 (Batch H's swallowed `LuaException`, Batch L's skip hiding a broken assertion, and now a test
 construct masquerading as a code defect). The rule that keeps catching them: reproduce from the
 screenshots, then read the code that produces the output before believing the output.
+
+### 13.6 Follow-up: the annotation glyphs printed as `?`
+
+With the annotation wired up, the block appeared but the rule and the indicator rendered as
+`?`:
+
+```
+lua[2]:1: attempt to call field 'getType' (a nil value)
+?Line 1
+?t.getType()
+?
+```
+
+`cc.internal.error_printer` draws with two characters from **CC:Tweaked's own font**:
+
+| Code | What CC:T's font has there | Used for |
+|---|---|---|
+| `0x95` | a solid bar three pixels wide, full cell height, at the **left** edge | the cyan rule beside each annotated line |
+| `0x83` | a solid bar filling the cell width and the **top** third of its height | the mark under the token that failed — being at the top of its cell, it touches the source line above and reads as a thick underline |
+
+Our renderer does not use a code-indexed font: it maps characters through a CP437 table into
+**Minecraft's `ascii.png`**, so a character with no slot there resolves to `?`. `0x95` and `0x83`
+have no slot, which is the whole bug. (The two other high characters the printer uses, `\xab`
+and `\xbb`, are `«`/`»` and do render.)
+
+Checked against the actual atlases — CC:T's `term_font.png` decoded glyph by glyph, and
+Minecraft's `ascii.png` for the substitutes (`tools/fontglyph.js` reads both) — the closest
+drawable glyphs are:
+
+* `0x95` → **`|`** — a vertical bar, left-aligned in its cell, exactly where CC:T's bar sits
+  (thinner, and broken at the baseline, but a rule);
+* `0x83` → **`^`** — anchored at the **top** of its cell like CC:T's bar, so it still sits against
+  the source line above. `_` was the alternative and is worse: it is drawn at the *bottom* of the
+  cell, one full line below the token, which reads as an underline for the next line.
+
+Both live in one place, `FixedWidthFontRenderer.buildCharIndex`, so the ROM stays byte-identical
+to upstream — the substitution is a font-coverage decision, not a change to what the ROM emits.
+
+The result:
+
+```
+lua[2]:1: attempt to call field 'getType' (a nil value)
+|Line 1
+|t.getType()
+|        ^
+```
+
+Structurally identical to upstream; the rule is thinner and the indicator is a caret rather than
+a solid bar. That is the honest limit of a vanilla-font build: matching the thickness would mean
+shipping CC:T's 256-glyph font and re-indexing every character, which would turn the accented
+Latin text the legacy ROM uses (and the CP437 set) into box-drawing glyphs.
+
+**Guard:** `FixedWidthFontRendererGlyphTest` pins the two mappings *and* scans
+`cc.internal.error_printer` for the high characters it emits, asserting each one has a glyph. If
+upstream ever starts using a third font-only character, that test fails instead of the terminal
+quietly printing `?`.

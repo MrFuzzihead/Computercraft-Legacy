@@ -21,14 +21,44 @@ class FixedWidthFontRendererCharIndexTest {
         return index;
     }
 
+    /**
+     * The two code points where the index table deliberately deviates from the legacy scan.
+     *
+     * <p>
+     * They are glyphs from CC:Tweaked's own terminal font that the vanilla sheet has no slot for,
+     * and the ROM's error printer draws with them. They used to fall back to {@code ?}, which made
+     * an annotated error print as {@code ?Line 1}. {@link FixedWidthFontRendererGlyphTest} covers
+     * what they map to and why.
+     * </p>
+     */
+    private static final char[] FONT_GLYPH_SUBSTITUTES = { 0x83, 0x95 };
+
+    private static boolean isSubstituted(char ch) {
+        for (char c : FONT_GLYPH_SUBSTITUTES) {
+            if (c == ch) return true;
+        }
+        return false;
+    }
+
     @Test
     void charIndexMatchesLegacyLinearScanForEveryCharacter() {
         for (int c = 0; c < 65536; c++) {
             char ch = (char) c;
+            if (isSubstituted(ch)) continue;
             assertEquals(
                 legacyGetIndex(ch),
                 FixedWidthFontRenderer.getIndex(ch),
                 "Mismatch for code point " + c + " ('" + ch + "')");
+        }
+    }
+
+    @Test
+    void theSubstitutedFontGlyphsNoLongerFallBackToQuestionMarks() {
+        for (char ch : FONT_GLYPH_SUBSTITUTES) {
+            assertEquals(
+                false,
+                FixedWidthFontRenderer.getIndex(ch) == legacyGetIndex(ch),
+                "0x" + Integer.toHexString(ch) + " should map to a real glyph now, not the '?' fallback");
         }
     }
 

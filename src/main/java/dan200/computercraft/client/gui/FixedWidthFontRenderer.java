@@ -326,6 +326,21 @@ public class FixedWidthFontRenderer implements IResourceManagerReloadListener {
         }
         int space = defaultChars.indexOf(' ');
         table['\t'] = table['\r'] = table['\n'] = space;
+
+        // CC:Tweaked ships its own terminal font, which has glyphs at U+0080-U+009F that the vanilla
+        // font sheet has no counterpart for. The ROM's error printer uses two of them:
+        //
+        // 0x95 a bar three pixels wide, filling the cell height, at the left edge -- the rule
+        // drawn beside an annotated line, in cyan;
+        // 0x83 a solid bar filling the cell width and the top third of its height -- the mark
+        // under the token that failed, in red. Being at the top of its cell, it touches the
+        // source line above it and reads as a thick underline.
+        //
+        // Without these entries both resolved to '?' and an annotated error printed as "?Line 1".
+        // The substitutes are the closest glyphs the vanilla sheet actually draws: a vertical rule,
+        // and a caret anchored at the top of its cell, so it still points at the line above.
+        table['\u0095'] = table['|'];
+        table['\u0083'] = table['^'];
         return table;
     }
 

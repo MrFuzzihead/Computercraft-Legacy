@@ -1687,3 +1687,27 @@ the buffer survives quotes, tabs, newlines and `%`.
 
 The first version of that second test failed on `nesting of [[...]] is deprecated` — the test's
 own construct, not the code's. Recorded in the feasibility doc with the other false alarms.
+
+### The annotation glyphs, and why they showed `?`
+
+Once the annotation was drawn, only the rule and the indicator were wrong: they printed as `?`.
+
+`cc.internal.error_printer` uses two characters from CC:Tweaked's own font, which this build does
+not have. Decoding both atlases glyph by glyph (`tools/fontglyph.js`) gave the exact shapes:
+`0x95` is a solid bar three pixels wide, full cell height, at the left edge; `0x83` is a solid bar
+across the cell width and the top third of its height — which is why it reads as a thick underline
+under the token, hugging the source line above.
+
+Our renderer indexes glyphs through a CP437 table into Minecraft's `ascii.png`, so anything with no
+slot there becomes `?`. Mapping the two codes in `FixedWidthFontRenderer.buildCharIndex` — `|` for
+the rule, `^` for the indicator — fixes it without touching the ROM, which stays byte-identical to
+upstream. `|` is left-aligned exactly where CC:T's bar sits; `^` is anchored at the top of its
+cell like CC:T's bar, where `_` would sit a whole line lower and look detached.
+
+The remaining difference is thickness, not structure: matching CC:T's solid blocks would mean
+shipping its 256-glyph font and re-indexing every character, which would render the accented Latin
+text the legacy ROM uses as box-drawing glyphs. Recorded rather than papered over.
+
+`FixedWidthFontRendererGlyphTest` pins both mappings and scans the error printer for every high
+character it emits, so a future third glyph fails the build instead of printing a `?` on a user's
+screen.
