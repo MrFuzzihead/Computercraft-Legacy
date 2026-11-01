@@ -82,6 +82,8 @@ local function readChunk()
     end
 end
 
+local chunk_idx, chunk_map = 1, {}
+
 while bRunning do
     write("lua> ")
 
@@ -92,24 +94,26 @@ while bRunning do
     end
     table.insert(tCommandHistory, input)
 
-    local nForcePrint = 0
-    local func, e = load(input, "lua", "t", tEnv)
-    local func2, e2 = load("return _echo(" .. input .. ");", "lua", "t", tEnv)
-    if not func then
-        if func2 then
-            func = func2
-            e = nil
-            nForcePrint = 1
-        end
-    else
-        if func2 then
-            func = func2
-        end
+    -- Each input gets its own chunk name, so an error reads `lua[3]:1:` rather than a bare
+    -- `lua:1:` and the REPL can tell one input from another.
+    local name, offset = "=lua[" .. chunk_idx .. "]", 0
+
+    local func, e = load(input, name, "t", tEnv)
+    if load("return " .. input) then
+        -- Wrap the expression in a call to _echo(...), which prevents tail calls (and thus
+        -- confusing errors). The expression is checked separately so inputs like `)--`, which
+        -- would be parsed as `_echo()--)`, are not accepted.
+        func = load("return _echo(" .. input .. "\n)", name, "t", tEnv)
+        offset = 13
     end
 
     if func then
-        -- Run through the exception helper so a runtime error is reported with its source line
-        -- rather than as a bare message.
+        -- Remember the user's own text for this chunk so a runtime error can be reported with
+        -- its line and a caret under the failing token, rather than as a bare message. The
+        -- offset undoes the `return _echo(` wrapper added above.
+        chunk_map[name] = { contents = input, offset = offset }
+        chunk_idx = chunk_idx + 1
+
         local results = table.pack(exception.try(func))
         if results[1] then
             for i = 2, results.n do
@@ -127,12 +131,14 @@ while bRunning do
             end
         else
             printError(results[2])
-            exception.report(results[2], results[3], {})
+            exception.report(results[2], results[3], chunk_map)
         end
     else
         -- The multi-line reader above has already given incomplete input every chance, so
-        -- whatever is left is a genuine syntax error.
-        printError(e)
+        -- whatever is left is a genuine syntax error. Let the ROM's parser report it, which
+        -- points a caret at the offending token instead of echoing the loader's message.
+        local parser = require "cc.internal.syntax"
+        if parser.parse_repl(input) then printError(e) end
     end
 end
 

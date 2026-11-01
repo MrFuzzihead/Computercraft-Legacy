@@ -484,21 +484,40 @@ local tMenuFuncs = {
 		bRunning = false
 	end,
 	Run = function()
-	    local sTempPath = "/.temp"
-        local ok, err = save( sTempPath )
-        if ok then
-            local nTask = shell.openTab( sTempPath )
-            if nTask then
-                shell.switchTab( nTask )
-            else
-                sStatus="Error starting Task"
-            end
-            fs.delete( sTempPath )
-        else
-            sStatus="Error saving to "..sTempPath
-        end
+		-- Launch through cc.internal.edit_runner rather than running a copy of the file: the
+		-- runner loads the buffer itself, so a runtime error names this file and points at the
+		-- right line even when the buffer was never saved, and it holds the tab open so the
+		-- error can be read instead of vanishing with the tab.
+		local sTitle = fs.getName( sPath )
+		if sTitle:sub( -4 ) == ".lua" then
+			sTitle = sTitle:sub( 1, -5 )
+		end
+		local sTempPath = (bReadOnly and ".temp." or fs.combine( fs.getDir( sPath ), ".temp." )) .. sTitle
+		if fs.exists( sTempPath ) then
+			sStatus = "Error saving to "..sTempPath
+			redrawMenu()
+			return
+		end
+
+		local file = fs.open( sTempPath, "w" )
+		if not file then
+			sStatus = "Error saving to "..sTempPath
+			redrawMenu()
+			return
+		end
+		local runHandler = [[return require("cc.internal.edit_runner")(%q, %q, %q)]]
+		file.write( runHandler:format( sTitle, "@/" .. sPath, table.concat( tLines, "\n" ) ) )
+		file.close()
+
+		local nTask = shell.openTab( "/" .. sTempPath )
+		if nTask then
+			shell.switchTab( nTask )
+		else
+			sStatus = "Error starting Task"
+		end
+		fs.delete( sTempPath )
 		redrawMenu()
-    end
+	end
 }
 
 local function doMenuItem( _n )

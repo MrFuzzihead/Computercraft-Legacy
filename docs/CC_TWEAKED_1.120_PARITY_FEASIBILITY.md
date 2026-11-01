@@ -877,3 +877,152 @@ Ranked by user impact per unit of risk:
 
 Items 1–4 are small enough to form a single "Batch N — contract alignment" with unit tests and
 an in-game script; none of them touches the Lua runtime, persistence or rendering.
+
+---
+
+## 13. Error reporting on the terminal
+
+Reported from a side-by-side run (`migrate/screenshots/ModernCCTError.png` against
+`migrate/screenshots/CC1710Error.png`): the same REPL mistake produced two different screens.
+
+Upstream:
+
+```
+lua> x = peripheral.wrap("right")
+lua> x.getType()
+lua[3]:1: attempt to call field 'getType' (a nil value)
+Line 1
+x.getType()
+    ‾‾‾‾
+lua> _
+```
+
+Here, before the fix:
+
+```
+lua> x = peripheral.wrap("right")
+lua> x.getType()
+lua:1: attempt to call field 'getType' (a nil value)
+lua>
+```
+
+Two differences, one cause each — and both turned out to be wiring, not missing code.
+
+### 13.1 Cause: the REPL threw away its own source text
+
+`cc.internal.exception.report` is what draws the `Line N` block, the echoed source and the
+caret. It needs to recover the user's text for the line that failed, and it has exactly two
+ways to do that:
+
+1. a **source map** entry for the failing chunk (`{ contents = ..., offset = ... }`), used by
+   the REPL, where the code never existed as a file;
+2. otherwise, a chunk whose name starts with `@/`, in which case it **re-reads the file from
+   disk** — the path a crashing program takes.
+
+`rom/programs/lua` was doing neither: every input was compiled as the chunk name `"lua"`, and
+`report` was called with an empty table. So `report` looked for `source_map["=lua"]`, did not
+find it, then checked for a `@/` source (no — a `load()`ed REPL chunk is `=lua`), and returned
+early without printing anything. Only the plain `printError` line survived.
+
+The chunk name also explains the lost `[3]`: upstream compiles each input as `=lua[N]`, so the
+error is prefixed `lua[3]:1:` and a short program's output can be traced back to its input.
+
+Fixed by adopting upstream's shape exactly:
+
+```lua
+local name, offset = "=lua[" .. chunk_idx .. "]", 0
+local func, e = load(input, name, "t", tEnv)
+if load("return " .. input) then
+    func = load("return _echo(" .. input .. "\n)", name, "t", tEnv)
+    offset = 13                      -- length of "return _echo("
+end
+if func then
+    chunk_map[name] = { contents = input, offset = offset }
+    chunk_idx = chunk_idx + 1
+    ...
+        printError(results[2])
+        exception.report(results[2], results[3], chunk_map)
+```
+
+The `offset` is the reason the caret lands under the user's token rather than 13 columns to the
+right: `report` subtracts it from the column Cobalt reports, because the failing expression was
+really compiled inside `return _echo(`.
+
+The same change fixes the **syntax error** branch for free. Upstream routes it through
+`cc.internal.syntax.parse_repl`, which prints the parser's own annotation; ours echoed the
+loader's message. Our `cc/internal/syntax/init.lua` is byte-identical to upstream, so this was a
+one-line call-site change, not a port.
+
+### 13.2 `edit` Run was reporting against the wrong file
+
+`edit`'s Run saved the buffer to `/.temp` and opened a tab on it. A runtime error was therefore
+reported by `shell` as `/.temp:3: ...`, the tab closed immediately, and the user had no chance
+to read it. Upstream writes a one-line bootstrap instead and lets `cc.internal.edit_runner` load
+the **buffer** under the **real path**, report against it, and then wait for a key:
+
+```lua
+local runHandler = [[return require("cc.internal.edit_runner")(%q, %q, %q)]]
+file.write(runHandler:format(sTitle, "@/" .. sPath, table.concat(tLines, "\n")))
+```
+
+`cc/internal/edit_runner.lua` was the one module in `cc/internal/` we had never ported (upstream
+added it in 2025). It is now ported, and `edit`'s Run writes the bootstrap to
+`.temp.<title>` next to the file (or `.temp.<title>` in the current directory for a read-only
+file), deletes it, and switches to the tab.
+
+Result: a failing script now reports against its own name and line, with the caret, and the tab
+stays open until a key is pressed.
+
+### 13.3 Re-check of every other error surface
+
+The question "is this the only place?" was answered by reading every path that prints an error,
+not by assuming:
+
+| Surface | Path | Verdict |
+|---|---|---|
+| program crash | `shell.run` → `printError` + `exception.report(err, co)` | **parity** — identical to upstream, reads the source from disk |
+| program syntax error | `shell.run` → `cc.internal.syntax.parse_program` | **parity** |
+| `lua` runtime error | `rom/programs/lua` | **fixed** (§13.1) |
+| `lua` syntax error | `rom/programs/lua` | **fixed** (§13.1) |
+| `edit` Run | `cc.internal.edit_runner` | **fixed** (§13.2) |
+| `os.run`, `dofile`, `loadfile` | `bios.lua` | **parity** — same structure and messages |
+| API load failure (`os.loadAPI`) | `bios.lua` | **parity** |
+| BIOS/startup failure | `bios.lua` | **parity** (`printError`) |
+| `cc.internal.error_printer` | module | **byte-identical** to upstream |
+| `cc.internal.error_hints` | module | **byte-identical** |
+| `cc.internal.syntax` | module | **byte-identical** |
+| `cc.internal.exception` | module | **identical except one local fix**: upstream never closes the file handle it opens to read the failing line, leaking a handle (and blocking deletion) on every reported error. Ours closes it. |
+| `cc.internal.event` | module | ported; comments differ only |
+| `multishell` | — | no error handling by design; the shell inside the tab reports |
+
+### 13.4 Verification
+
+* `ReplErrorDisplayTest` drives the **real BIOS, real ROM and real terminal** with simulated
+  keystrokes, and pins the four shapes that the screenshots compare:
+  - the chunk is named `lua[2]` (not `lua`), and the annotated block is drawn;
+  - the block echoes the input that failed (`t.getType()`);
+  - the caret lands **inside** the echoed line, which is the offset arithmetic an empty source
+    map used to skip entirely;
+  - a statement (offset 0 path) is annotated too, and a **program crash** is annotated from the
+    file on disk (`boom:3:` / `Line 3` / the line's text);
+  - a syntax error goes through the ROM parser.
+* `EditRunnerBootstrapTest` reads the `runHandler` literal **out of `rom/programs/edit`** (so it
+  cannot drift from production), formats it the way Run does, and checks the bootstrap loads and
+  carries the buffer through unchanged — including quotes, tabs, newlines and a `%`.
+* The existing ROM compile test already loads every ROM file with `loadstring`, so `edit`,
+  `lua` and the new `edit_runner.lua` are all syntax-checked on every build.
+
+### 13.5 One more false alarm, recorded
+
+The first version of the bootstrap test failed with
+`nesting of [[...]] is deprecated near '['`. That was **the test's fault**, not the code's: it
+built the bootstrap as `([[...]]):format(...)`, and it put a buffer containing `[[long string]]`
+inside a `[[...]]` literal. Cobalt's lexer rejects nested long brackets. Production assigns the
+handler to a local first (exactly as upstream does) and never nests, so there was nothing to fix —
+but the test now reads the production literal directly, which removes the possibility of testing
+a different construct than the one that ships.
+
+That is the third time in this project a "difference" has survived a check it should not have
+(Batch H's swallowed `LuaException`, Batch L's skip hiding a broken assertion, and now a test
+construct masquerading as a code defect). The rule that keeps catching them: reproduce from the
+screenshots, then read the code that produces the output before believing the output.

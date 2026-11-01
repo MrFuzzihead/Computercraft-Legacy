@@ -1634,3 +1634,56 @@ arithmetic is a genuine (if rare) correctness bug; the `lookup` timeout and `bli
 are one-liners; the other two are cosmetic. They are recorded as a proposed "Batch N —
 contract alignment" rather than bundled into this commit, so the findings can be reviewed
 before code moves.
+
+---
+
+## Error reporting: REPL annotations and edit's Run
+
+Reported from two screenshots of the same REPL mistake: modern CC:T showed
+`lua[3]:1: ...` followed by a `Line 1` block, the source line and a caret; this build showed
+only a bare `lua:1: ...` line.
+
+### The REPL discarded its own source
+
+`cc.internal.exception.report` draws the annotation, and it can only do so if it can recover the
+text of the failing line — from a source map (REPL input, which never existed as a file) or by
+re-reading a `@/path` chunk from disk (a program).
+
+`rom/programs/lua` did neither: every input was compiled under the constant chunk name `"lua"`
+and `report` was handed an empty table. `report` then looked for `source_map["=lua"]`, found
+nothing, saw a source that was not a `@/` file, and returned before printing. The chunk name also
+explains the missing `[3]`.
+
+Adopted upstream's shape: `=lua[N]` chunk names, a `chunk_map[name] = { contents, offset }` entry
+per successful input, offset 13 for the `return _echo(` wrapper (which is what makes the caret
+land under the user's token instead of 13 columns to the right), and the map passed to `report`.
+The syntax-error branch now goes through `cc.internal.syntax.parse_repl`, so it gets the parser's
+annotation too — a call-site change, because our copy of that module is byte-identical to
+upstream.
+
+### edit's Run reported against the wrong file
+
+Run saved to `/.temp` and opened a tab on it, so an error was reported as `/.temp:3:` and the tab
+closed before it could be read. Upstream writes a one-line bootstrap and lets
+`cc.internal.edit_runner` load the buffer under the real path. That module was the one file in
+`cc/internal/` we had never ported; it is ported now, and Run writes
+`return require("cc.internal.edit_runner")(title, "@" .. path, contents)` to `.temp.<title>`,
+launches it, deletes it, and switches tabs.
+
+### Everything else checked, not assumed
+
+`shell` crash and syntax paths, `os.run`, `dofile`, `loadfile`, `os.loadAPI`, the BIOS startup
+path: all already match upstream. `cc.internal.error_printer`, `error_hints` and `syntax` are
+byte-identical; `exception` differs only by our file-handle close.
+
+### Tests
+
+`ReplErrorDisplayTest` boots the real BIOS and ROM and types into the real terminal: it pins the
+`lua[2]` chunk name, the `Line 1` block, the echoed input, a caret that falls **inside** that
+input, the statement path (offset 0), a program crash annotated from disk, and the parser's
+syntax-error annotation. `EditRunnerBootstrapTest` reads the bootstrap literal straight out of
+`rom/programs/edit` so it cannot drift from production, formats it the way Run does, and checks
+the buffer survives quotes, tabs, newlines and `%`.
+
+The first version of that second test failed on `nesting of [[...]] is deprecated` — the test's
+own construct, not the code's. Recorded in the feasibility doc with the other false alarms.
