@@ -6,22 +6,27 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests that the SDL drop hook is genuinely optional.
+ * Tests that the SDL drop hook fails safely.
  *
  * <p>
- * The watcher reaches into {@code org.lwjgl.sdl} by reflection precisely so that the mod still loads
- * and runs on a client without lwjgl3ify, and so that a future lwjgl3ify change cannot break startup.
- * This test runs on a plain JVM with no LWJGL3 on the classpath at all, which is exactly the
- * "vanilla LWJGL2" case: installing must be a quiet no-op rather than a crash or an exception.
+ * lwjgl3ify is a hard dependency, so a real client always has the SDL3 bindings and their native
+ * libraries. A test JVM has the bindings (they are on the test runtime classpath) but no natives, so
+ * what this pins is the guard: installing must report itself unavailable and log once, rather than
+ * throwing into the client tick or leaving the game unable to start. That guard is also what protects
+ * a real client whose SDL install is broken.
+ * </p>
+ *
+ * <p>
+ * The queue itself is plain Java and needs no SDL at all.
  * </p>
  */
 class SdlFileDropWatcherTest {
 
     @Test
-    void installingWithoutLwjgl3ifyIsANoOp() {
+    void installingWithoutNativeSdlFailsSafely() {
         SdlFileDropWatcher.install();
 
-        assertFalse(SdlFileDropWatcher.isAvailable(), "SDL3 is not on the test classpath, so drops are unavailable");
+        assertFalse(SdlFileDropWatcher.isAvailable(), "there are no SDL natives in a test JVM");
         assertEquals(0, SdlFileDropWatcher.pollDrops().length);
     }
 

@@ -20,6 +20,10 @@ decompiled file matches a modern CC: Tweaked file, or vice versa. See
 - The CCPL is **non-commercial** and restricts reuse to other Minecraft mods.
   Do not describe the project as MIT/permissive, in the README, `mcmod.info`, or
   anywhere else.
+- **Compile against LWJGL3 only where lwjgl3ify guarantees it.** The one such place is
+  `org.lwjgl:lwjgl-sdl` (`compileOnly`), used by `client/upload/SdlFileDropWatcher` for SDL3
+  drag-and-drop. Nothing from LWJGL may be shaded or shipped: lwjgl3ify provides it at runtime,
+  and the `required-after:lwjgl3ify` dependency guarantees it is loaded first.
 - **There are deliberately no per-file licence headers.** Provenance is recorded
   centrally in `NOTICE`. Do not add SPDX headers to source files; the project
   owner has considered and declined that, and scattered headers invite
@@ -134,6 +138,7 @@ See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for L
 | com.github.GTNewHorizons:ForgeMultipart | Multipart peripheral support |
 | com.github.GTNewHorizons:CodeChickenCore | Required by ForgeMultipart |
 | com.github.GTNewHorizons:NotEnoughItems | Dev-only runtime for testing |
+| org.lwjgl:lwjgl-sdl:3.4.2 | SDL3 event API for file drag-and-drop (**compileOnly**: provided at runtime by lwjgl3ify, never shipped; BSD-3-Clause) |
 | org.junit.jupiter:junit-jupiter:5.8.2 | Unit testing |
 | org.mockito:mockito-core:4.8.0 | Unit testing |
 

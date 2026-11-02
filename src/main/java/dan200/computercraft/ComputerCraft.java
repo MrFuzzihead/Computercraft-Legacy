@@ -91,7 +91,14 @@ import dan200.computercraft.shared.util.IEntityDropConsumer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-@Mod(modid = ComputerCraft.MODID, name = ComputerCraft.MODID, version = Tags.VERSION)
+// The mod ships Java 17+ bytecode, so every client and server that runs it is already on lwjgl3ify
+// (which is what makes LWJGL2/Forge 1.7.10 work on a modern JVM). Declaring it here makes that
+// explicit, and guarantees LWJGL3 - and so the SDL3 classes behind file drag-and-drop - is present.
+@Mod(
+    modid = ComputerCraft.MODID,
+    name = ComputerCraft.MODID,
+    version = Tags.VERSION,
+    dependencies = "required-after:lwjgl3ify")
 public class ComputerCraft {
 
     public static final String MODID = "ComputerCraft";

@@ -16,6 +16,9 @@
         "logoFile" : "pack.png",
         "updateUrl" : "https://github.com/MrFuzzihead/Computercraft-Legacy/releases/latest",
         "parent" : "",
+        "dependencies" : [
+            "lwjgl3ify"
+        ],
         "screenshots": [
         ]
     }

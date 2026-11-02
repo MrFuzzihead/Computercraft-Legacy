@@ -46,13 +46,14 @@ The most important corrections to the first pass:
    `net.minecraft.command.PlayerSelector` (players only), not 1.8+ `@e` entity selectors,
    and it has no 1.11+ entity tags/NBT selectors. A player-only subset is possible; full
    modern selector parity is not.
-5. **`file_transfer` works with lwjgl3ify and is absent without it.**
+5. **`file_transfer` works through lwjgl3ify, which is now a declared dependency.**
    Forge 1.7.10’s `GuiScreen` has no `handleFileDrop`, and LWJGL2 has no OS drop callback.
    lwjgl3ify runs the client on SDL3, which exposes `SDL_AddEventWatch` and
-   `SDL_EVENT_DROP_FILE`, so a client bridge can turn those into the modern
-   `file_transfer` upload — **done in Batch J**, reflectively, so the mod has no LWJGL3 build
-   dependency and degrades to "no drops" instead of crashing. The AWT `FileDialog` alternative was
-   considered and rejected as a different feature.
+   `SDL_EVENT_DROP_FILE`, so a client bridge turns those into the modern `file_transfer` upload —
+   **done in Batch J**, against the `org.lwjgl.sdl` API directly. Since the mod ships Java 17+
+   bytecode, lwjgl3ify was already an implicit requirement; it is now explicit
+   (`required-after:lwjgl3ify`). The AWT `FileDialog` alternative was considered and rejected as a
+   different feature.
 6. **Some previously “missing” fields are feasible natively:** `nbt` hash, `maxCount`,
    `damage`/`maxDamage`, `displayName`, `durability`, `lore`, `unbreakable`,
    `potionEffects`, and `mapColor` all have 1.7.10 APIs.
@@ -249,7 +250,7 @@ project remains CCPL.
 | `copy`/`move`/`delete`/`mkdir` safety/multi-path | Native Lua | — | ✅ Native | D | S/M |
 | Missing help docs / `motd.txt` / `modules/turtle` | Native resources | — | ✅ Native | D | S |
 | `/computercraft` admin command | Native Forge command | — | ✅ Native | K | M |
-| `file_transfer` / native drag-drop import | No Forge/LWJGL2 API | SDL3 drop events via lwjgl3ify, read reflectively | ✅ with lwjgl3ify / absent without | J | — |
+| `file_transfer` / native drag-drop import | No Forge/LWJGL2 API | SDL3 drop events via lwjgl3ify (now a declared dependency) | ✅ with lwjgl3ify | J | — |
 | Full `commands.getEntities` selector parity | No `@e`, entity tags, NBT selectors | No ETFR `@e`; GTNHLib Brigadier has no entity selector args | ❌/🟡 Partial | G | L |
 
 ### 4.2 Terminal, text, and formatting
@@ -326,7 +327,7 @@ project remains CCPL.
 | `copy`/`move`/`delete`/`mkdir` | ✅ Native | Multi-path, read-only/mount-root guards. |
 | Help docs / `motd.txt` / `modules/turtle` | ✅ Native | Resource files. |
 | `/computercraft` admin command | ✅ Native | Forge `ICommand`; skip 1.20-only subcommands. |
-| `file_transfer`/drag-drop | ✅ lwjgl3ify / ❌ LWJGL2 | SDL3 `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE` through a reflective bridge (**done**); no AWT fallback, by choice. |
+| `file_transfer`/drag-drop | ✅ lwjgl3ify | SDL3 `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE`, direct API (**done**); lwjgl3ify declared as a required dependency; no AWT fallback, by choice. |
 | Full `commands.getEntities` | ❌/🟡 | See §4.3. |
 
 ---
@@ -473,10 +474,10 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 
 Implemented with SDL3, which is also what modern ComputerCraft effectively uses:
 
-- `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE`, read through a Java proxy over
-  `SDL_EventFilterI` and `SDL_Event.ndrop(...).dataString()`. Reached reflectively, so there is no
-  LWJGL3 build dependency and no `NoClassDefFoundError` on a client without lwjgl3ify; the feature
-  simply reports itself unavailable.
+- `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE`, called directly through `org.lwjgl:lwjgl-sdl`
+  (`compileOnly`) and `SDL_Event.ndrop(...).dataString()`. lwjgl3ify is a **hard** dependency,
+  declared in `@Mod` (`required-after:lwjgl3ify`) and `mcmod.info`, which is sound because the mod
+  already ships Java 17+ bytecode and so is never run without it.
 - Rejected: AWT `FileDialog`. It works everywhere but is a different feature ("choose a file", not
   "drag onto the computer"), and parity is the point.
 - Per-screen drop target (`GuiComputer`/`GuiTurtle`/`GuiPocketComputer` via a one-method
@@ -571,16 +572,14 @@ Implemented with SDL3, which is also what modern ComputerCraft effectively uses:
 
 ### lwjgl3ify file drop — ✅ implemented (Batch J)
 
-- Pure reflection on `org.lwjgl.sdl.*`, no `compileOnly` and no build dependency: the build has no
-  LWJGL3 on its classpath and adding a 3.4.x `lwjgl-sdl` would make it depend on a repository only
-  lwjgl3ify populates. `client/upload/SdlFileDropWatcher` is reached only after
-  `Class.forName("org.lwjgl.sdl.SDLEvents")` succeeds.
-- The callback is a `java.lang.reflect.Proxy` over `SDL_EventFilterI`: the interface's `address()`
-  and `callback()` are *default* methods, and forwarding those to the defaults (via
-  `MethodHandles.privateLookupIn` + `findSpecial`) is what creates the native upcall and decodes the
-  argument block, so only `invoke` has to be implemented.
-- `SDL_AddEventWatch` filters `SDL_EVENT_DROP_FILE`; the path comes from
-  `SDL_Event.ndrop(event).dataString()`.
+- Direct use of `org.lwjgl.sdl.*` through a `compileOnly` dependency on
+  `org.lwjgl:lwjgl-sdl` (nothing shipped; lwjgl3ify provides it at runtime), plus a hard mod
+  dependency on lwjgl3ify in `@Mod` and `mcmod.info`. The mod ships Java 17+ bytecode, so lwjgl3ify
+  was already required in practice; this only makes it explicit.
+- The callback is an anonymous `SDL_EventFilter` overriding `invoke`. `SDL_AddEventWatch` filters
+  `SDL_EVENT_DROP_FILE`; the path comes from `SDL_Event.ndrop(event).dataString()`.
+- A failure to install (broken SDL, uninitialised display) is caught and logged, so a broken native
+  cannot take the client tick down.
 - Paths are queued from the SDL thread and drained on the client tick, then routed to the open
   `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` screen (`IComputerGui`).
 - Sizes are limited by `upload_size_limit` (512 KiB default) on both sides, files are checksummed

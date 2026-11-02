@@ -1733,25 +1733,31 @@ platform with no drops.
 ### The hook
 
 `client/upload/SdlFileDropWatcher` registers `SDL_AddEventWatch` and filters
-`SDL_EVENT_DROP_FILE`, queueing the dropped path. Everything about it is reflective, deliberately:
+`SDL_EVENT_DROP_FILE`, queueing the dropped path:
 
-* compiling against `org.lwjgl:lwjgl-sdl` would make the build depend on a repository that serves a
-  3.4.x LWJGL only lwjgl3ify ships, and would add a dependency to a build that deliberately has no
-  LWJGL3 dependency at all;
-* a hard reference would turn "lwjgl3ify is not installed" into a `NoClassDefFoundError` at class
-  load, i.e. a crash, instead of a missing feature.
+```java
+filter = new SDL_EventFilter() {
+    @Override public boolean invoke(long userdata, long event) {
+        SDL_DropEvent drop = SDL_Event.ndrop(event);
+        if (drop.type() == SDLEvents.SDL_EVENT_DROP_FILE) drops.add(drop.dataString());
+        return false;  // returning true would remove the watch
+    }
+};
+SDLEvents.SDL_AddEventWatch(filter, 0L);
+```
 
-The watcher is therefore only touched after `Class.forName("org.lwjgl.sdl.SDLEvents")` succeeds, and
-every failure inside `install()` disables drops with one log line. `SdlFileDropWatcherTest` runs on
-a JVM with no LWJGL3 at all — the vanilla case — and asserts exactly that.
+This compiles directly against `org.lwjgl:lwjgl-sdl` (`compileOnly`, so nothing is shipped) and
+**lwjgl3ify is declared as a required mod dependency** (`required-after:lwjgl3ify` in `@Mod`, and
+`dependencies: ["lwjgl3ify"]` in `mcmod.info`). That is sound because the mod already ships Java 17+
+bytecode: every client and server that can load it is on lwjgl3ify already, since lwjgl3ify is what
+makes LWJGL2 and Forge 1.7.10 work on a modern JVM. Making it explicit costs nothing and turns a
+would-be `NoClassDefFoundError` into a clear load-order guarantee.
 
-One implementation detail worth recording, because it is the reason this works without a build
-dependency: a Java `Proxy` cannot be registered as an SDL callback directly, but
-`SDL_EventFilterI` is an interface whose `address()` and `callback()` are *default* methods, and those
-defaults are exactly the machinery that creates the native upcall and decodes the argument block. So
-the proxy forwards those two methods to the interface's own defaults via `MethodHandles` and only
-implements `invoke`, which receives the `SDL_Event*` and reads the path through
-`SDL_Event.ndrop(event).dataString()`.
+The first version of this was reflective (a `Proxy` over `SDL_EventFilterI`, with `address()` and
+`callback()` forwarded to the interface defaults to create the native upcall). It worked, but it was
+machinery in service of a dependency the mod already had implicitly. The hard dependency replaced
+about eighty lines of reflection with the eight above; `SdlFileDropWatcherTest` still pins that a
+broken SDL install reports itself unavailable rather than throwing into the client tick.
 
 ### The rest of the pipeline
 
@@ -1762,6 +1768,7 @@ implements `invoke`, which receives the `SDL_Event*` and reads the path through
 | `FileUploadPacket` | Its own codec, dispatched by packet type: the generic `ComputerCraftPacket` payload cannot express a file list plus slices without going through NBT |
 | `ServerFileUploadHandler` | Holds the first message until the last arrives, verifies checksums, then queues `file_transfer` on the target `ServerComputer` |
 | `FileUploadSender` | Reads the dropped files, enforces the limit, sends the messages |
+| `SdlFileDropWatcher` | The SDL3 event watch (direct `org.lwjgl.sdl` API) |
 | `rom/programs/import`, `cc/internal/import.lua` | The ported ROM half, unchanged apart from headers |
 | `rom/programs/shell` | Handles a transfer **while the prompt is open**, as upstream does |
 
@@ -1806,7 +1813,7 @@ Three things that reading would not have:
   that cannot name its computer.
 * `FileUploadSenderTest` (9) — folders skipped, missing paths ignored, per-file and total limits,
   too many files, and that only the base name reaches the computer.
-* `SdlFileDropWatcherTest` (3) — the no-lwjgl3ify case.
+* `SdlFileDropWatcherTest` (3) — a missing/broken SDL install fails safely instead of throwing.
 * `TransferEventBridgeTest` (2) — **harness**: a real `TransferredFiles` queued through
   `CobaltMachine.handleEvent` and read back from Lua, so the `ILuaObject` → table conversion and the
   byte[] → binary string hop are actually exercised. This is what found (1).

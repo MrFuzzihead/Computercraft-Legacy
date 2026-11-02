@@ -2,4 +2,7 @@
 
 repositories {
     maven { url = uri("https://maven.squiddev.cc") }
+    // LWJGL3 (org.lwjgl:lwjgl-sdl, compileOnly) is published here for the 3.4.x line. lwjgl3ify
+    // brings the runtime copy; this is for the build.
+    maven { url = uri("https://maven.lwjgl.org") }
 }

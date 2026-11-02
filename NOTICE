@@ -98,6 +98,10 @@ That backport is substantial, and predates the Minecraft
     The rest of that feature - the SDL3 drop watcher, the size/authorisation
     checks, IContainerComputer and IComputerGui - is this project's own code.
 
+LWJGL 3 (including lwjgl-sdl) is a compile-time dependency only. It is not
+bundled or shaded: lwjgl3ify provides it at runtime, and the mod declares
+lwjgl3ify as a required dependency. LWJGL is BSD-3-Clause.
+
 Files sourced from CC: Tweaked are licensed under the Mozilla Public
 License 2.0. The full text is in LICENSE-MPL-2.0. MPL-2.0 is a
 file-level copyleft: those files remain MPL-2.0, and only those files.

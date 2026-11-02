@@ -1,13 +1,15 @@
 package dan200.computercraft.client.upload;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.lwjgl.sdl.SDLEvents;
+import org.lwjgl.sdl.SDL_DropEvent;
+import org.lwjgl.sdl.SDL_Event;
+import org.lwjgl.sdl.SDL_EventFilter;
+import org.lwjgl.system.MemoryUtil;
 
 import dan200.computercraft.ComputerCraft;
 
@@ -17,111 +19,68 @@ import dan200.computercraft.ComputerCraft;
  * <p>
  * CC: Tweaked receives drops from Minecraft's own drag-and-drop hook
  * ({@code Screen#onFilesDropped}). Forge 1.7.10 has no such hook and LWJGL2 has no drop callback at
- * all, but lwjgl3ify 3.x runs the client on SDL3, which does: {@code SDL_AddEventWatch} reports
+ * all, but the client runs on SDL3 through lwjgl3ify, which does: {@code SDL_AddEventWatch} reports
  * {@code SDL_EVENT_DROP_FILE} with the dropped path. So this is the legacy equivalent of the modern
- * hook - not an approximation of it - and it degrades to nothing when lwjgl3ify is absent.
+ * hook - not an approximation of it.
  * </p>
  *
  * <p>
- * Everything here is reflective, deliberately. Compiling against {@code org.lwjgl:lwjgl-sdl} would
- * make the mod's build depend on a repository serving a 3.4.x LWJGL that only lwjgl3ify ships, and a
- * missing class at runtime would be a hard failure rather than a missing feature. Instead the whole
- * watcher is only reached after {@code Class.forName("org.lwjgl.sdl.SDLEvents")} succeeds, and any
- * failure inside {@link #install()} disables drops with one log line.
+ * This compiles against {@code org.lwjgl:lwjgl-sdl} directly, which is a <em>hard</em> dependency:
+ * the mod requires lwjgl3ify (see the {@code @Mod} annotation), and lwjgl3ify is what puts LWJGL3 and
+ * its native libraries on the classpath. Nothing from LWJGL is shipped in this jar; it is
+ * {@code compileOnly} and provided at runtime.
  * </p>
  */
 public final class SdlFileDropWatcher {
 
     private static final Queue<String> drops = new ConcurrentLinkedQueue<>();
 
-    /** Kept alive for the lifetime of the process: the native closure holds a global ref to it. */
-    private static Object filter;
+    /**
+     * Kept for the lifetime of the process: the native closure holds a reference to it, and the
+     * filter's memory is freed with it.
+     */
+    private static SDL_EventFilter filter;
 
-    private static boolean attempted;
+    private static boolean installed;
     private static boolean available;
 
     private SdlFileDropWatcher() {}
 
     /**
-     * Registers the SDL event watch, once. Safe to call repeatedly and safe to call when lwjgl3ify is
-     * not installed.
+     * Registers the SDL event watch, once. Safe to call repeatedly, and safe to call before SDL has
+     * been initialised - a failure is reported once and disables drops rather than propagating into
+     * the client tick.
      */
     public static synchronized void install() {
-        if (attempted) {
+        if (installed) {
             return;
         }
 
-        attempted = true;
+        installed = true;
 
         try {
-            ClassLoader loader = SdlFileDropWatcher.class.getClassLoader();
+            filter = new SDL_EventFilter() {
 
-            Class<?> filterInterface = Class.forName("org.lwjgl.sdl.SDL_EventFilterI", true, loader);
-            Class<?> sdlEvents = Class.forName("org.lwjgl.sdl.SDLEvents", true, loader);
-            Class<?> sdlEvent = Class.forName("org.lwjgl.sdl.SDL_Event", true, loader);
-            Class<?> dropEvent = Class.forName("org.lwjgl.sdl.SDL_DropEvent", true, loader);
-
-            Method ndrop = sdlEvent.getMethod("ndrop", long.class);
-            Method dropType = dropEvent.getMethod("type");
-            Method dropData = dropEvent.getMethod("dataString");
-            int dropFileType = sdlEvents.getField("SDL_EVENT_DROP_FILE")
-                .getInt(null);
-            Method addEventWatch = sdlEvents.getMethod("SDL_AddEventWatch", filterInterface, long.class);
-            Object descriptor = filterInterface.getField("DESCRIPTOR")
-                .get(null);
-
-            // Proxy cannot inherit a default method, and the interface defaults are exactly what we
-            // want: address() creates the native upcall through the descriptor, and callback() decodes
-            // the native argument block before calling invoke(). So find them rather than
-            // reimplementing either.
-            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(filterInterface, MethodHandles.lookup());
-            MethodHandle addressDefault = lookup
-                .findSpecial(filterInterface, "address", MethodType.methodType(long.class), filterInterface);
-            MethodHandle callbackDefault = lookup.findSpecial(
-                filterInterface,
-                "callback",
-                MethodType.methodType(void.class, long.class, long.class),
-                filterInterface);
-
-            InvocationHandler handler = (proxy, method, args) -> {
-                switch (method.getName()) {
-                    case "address":
-                        return addressDefault.invoke(proxy);
-                    case "callback":
-                        callbackDefault.invoke(proxy, args[0], args[1]);
-                        return null;
-                    case "invoke":
-                        // invoke(userdata, event) -> never remove the watch.
-                        read(ndrop, dropType, dropData, dropFileType, (Long) args[1]);
-                        return Boolean.FALSE;
-                    case "getDescriptor":
-                        return descriptor;
-                    case "hashCode":
-                        return System.identityHashCode(proxy);
-                    case "equals":
-                        return proxy == args[0];
-                    case "toString":
-                        return "ComputerCraft SDL file drop filter";
-                    default:
-                        return null;
+                @Override
+                public boolean invoke(long userdata, long event) {
+                    onEvent(event);
+                    // Returning true would remove the watch, so this is always false.
+                    return false;
                 }
             };
 
-            Object proxy = Proxy
-                .newProxyInstance(filterInterface.getClassLoader(), new Class<?>[] { filterInterface }, handler);
-            Object registered = addEventWatch.invoke(null, proxy, 0L);
-            if (!Boolean.TRUE.equals(registered)) {
+            if (!SDLEvents.SDL_AddEventWatch(filter, 0L)) {
                 throw new IllegalStateException("SDL_AddEventWatch returned false");
             }
 
-            filter = proxy;
             available = true;
             ComputerCraft.logger.info("File drag-and-drop is available (SDL3 via lwjgl3ify)");
         } catch (Throwable t) {
-            // No lwjgl3ify, an unsupported lwjgl3ify/lwjgl combination, or a changed internal API. The
-            // feature is optional, so this is information, not an error.
+            // A broken SDL installation or an SDL that has not been initialised yet. lwjgl3ify is a
+            // hard dependency, so this should not happen in a real client - but losing drops must not
+            // take the game down with it.
             available = false;
-            ComputerCraft.logger.info("File drag-and-drop is unavailable: {}", t.toString());
+            ComputerCraft.logger.error("Could not install the file drop handler", t);
         }
     }
 
@@ -140,7 +99,7 @@ public final class SdlFileDropWatcher {
             return new String[0];
         }
 
-        java.util.List<String> paths = new java.util.ArrayList<>();
+        List<String> paths = new ArrayList<>();
         String path;
         while ((path = drops.poll()) != null) {
             paths.add(path);
@@ -154,15 +113,20 @@ public final class SdlFileDropWatcher {
         drops.clear();
     }
 
-    private static void read(Method ndrop, Method type, Method dataString, int dropFileType, long event) {
+    /** Reads one SDL event, queueing the path if it is a file drop. Runs on the SDL thread. */
+    private static void onEvent(long event) {
         try {
-            Object drop = ndrop.invoke(null, event);
-            if (!Integer.valueOf(dropFileType)
-                .equals(type.invoke(drop))) {
+            // This watch sees *every* event, so the type is read straight out of the union rather
+            // than allocating a struct view for each mouse move and key press. SDL_Event.type is the
+            // first 32-bit field, which is also SDL_DropEvent's.
+            if (MemoryUtil.memGetInt(event + SDL_DropEvent.TYPE) != SDLEvents.SDL_EVENT_DROP_FILE) {
+                // DROP_BEGIN/COMPLETE/POSITION carry no path; DROP_TEXT is text dragged from another
+                // application, which is not a file.
                 return;
             }
 
-            String path = (String) dataString.invoke(drop);
+            String path = SDL_Event.ndrop(event)
+                .dataString();
             if (path != null && !path.isEmpty()) {
                 drops.add(path);
             }
