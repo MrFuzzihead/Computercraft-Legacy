@@ -30,9 +30,10 @@ Everything else about this batch happens in the client: the drop itself cannot b
    upload was refused, and no partial file may appear.
 8. Close the terminal, then drop a file over the desktop: nothing should happen at all (no computer
    is open, so it is not a drop target).
-9. On a client **without** lwjgl3ify the log must contain one line, `File drag-and-drop is
-   unavailable: …`, and nothing else — no crash, no repeated logging, and the rest of the mod must
-   work normally.
+9. lwjgl3ify is now a **required** dependency (`required-after:lwjgl3ify`), so removing it should
+   make Forge refuse to load the mod with a dependency error, not crash halfway through startup. If
+   SDL itself is broken on an otherwise valid install, the log should contain exactly one
+   `Could not install the file drop handler` error and the rest of the mod must work normally.
 
 ## Notes
 
