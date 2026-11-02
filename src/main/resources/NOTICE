@@ -79,6 +79,24 @@ That backport is substantial, and predates the Minecraft
     event.lua, ported from CC: Tweaked's cc/internal/event.lua (MPL-2.0;
     the file states this in its own header). It is loaded by rom/programs/help
     to discard the char event left behind by a keypress.
+  - file transfer (Batch J), ported from CC: Tweaked 1.120.2:
+      * dan200.computercraft.core.apis.transfer.TransferredFiles and
+        TransferredFile, from cc/core/src/main/java/.../apis/transfer
+      * dan200.computercraft.shared.computer.upload.FileUpload, FileSlice,
+        UploadResult and UploadState, from cc/common/src/main/java/...
+        /computer/upload (UploadState factors out the accumulation logic that
+        upstream keeps in ServerInputState)
+      * dan200.computercraft.shared.network.FileUploadPacket, from
+        cc/common/src/main/java/.../network/server/UploadFileMessage, with its
+        own codec because the legacy packet format cannot express it
+      * dan200.computercraft.shared.computer.upload.ServerFileUploadHandler,
+        from the upload half of ServerInputState
+      * the ROM programs assets/computercraft/lua/rom/programs/import and
+        assets/computercraft/lua/rom/modules/main/cc/internal/import.lua,
+        which carry SPDX-License-Identifier: MPL-2.0 headers
+      * the file_transfer branch of assets/computercraft/lua/rom/programs/shell
+    The rest of that feature - the SDL3 drop watcher, the size/authorisation
+    checks, IContainerComputer and IComputerGui - is this project's own code.
 
 Files sourced from CC: Tweaked are licensed under the Mozilla Public
 License 2.0. The full text is in LICENSE-MPL-2.0. MPL-2.0 is a

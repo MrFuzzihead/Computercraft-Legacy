@@ -58,6 +58,7 @@ import dan200.computercraft.shared.computer.inventory.ContainerComputer;
 import dan200.computercraft.shared.computer.items.ComputerItemFactory;
 import dan200.computercraft.shared.computer.items.ItemCommandComputer;
 import dan200.computercraft.shared.computer.items.ItemComputer;
+import dan200.computercraft.shared.computer.upload.UploadResult;
 import dan200.computercraft.shared.media.common.DefaultMediaProvider;
 import dan200.computercraft.shared.media.inventory.ContainerHeldItem;
 import dan200.computercraft.shared.media.items.ItemDiskExpanded;
@@ -254,6 +255,24 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
                 }
 
                 ComputerCraft.proxy.stopSpeaker(packet.m_dataInt[0], packet.m_dataInt[1], packet.m_dataInt[2]);
+                break;
+            }
+            case ComputerCraftPacket.FileUploadResult: {
+                // Only reached on the client: the server-side result is what tells the player whether
+                // their dropped files were accepted, queued or refused, and why.
+                if (!packet.hasInts(2)) {
+                    break;
+                }
+
+                UploadResult result = UploadResult.byId(packet.m_dataInt[1]);
+                String message = packet.hasStrings(1) ? packet.m_dataString[0] : null;
+                if (result == UploadResult.ERROR) {
+                    ComputerCraft.logger.warn("File upload refused: {}", message);
+                } else {
+                    ComputerCraft.logger
+                        .debug("File upload to computer {}: {} {}", packet.m_dataInt[0], result, message);
+                }
+
                 break;
             }
         }

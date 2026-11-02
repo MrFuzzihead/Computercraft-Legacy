@@ -15,7 +15,7 @@ import dan200.computercraft.shared.computer.core.IComputer;
 import dan200.computercraft.shared.computer.core.IComputerContainer;
 import dan200.computercraft.shared.computer.inventory.ContainerComputer;
 
-public class GuiComputer extends GuiContainer {
+public class GuiComputer extends GuiContainer implements IComputerGui {
 
     private static final ResourceLocation background = new ResourceLocation(
         "computercraft",
@@ -64,6 +64,11 @@ public class GuiComputer extends GuiContainer {
     public void onGuiClosed() {
         super.onGuiClosed();
         Keyboard.enableRepeatEvents(false);
+    }
+
+    @Override
+    public int getComputerInstanceID() {
+        return this.m_computer != null ? this.m_computer.getInstanceID() : -1;
     }
 
     public boolean doesGuiPauseGame() {

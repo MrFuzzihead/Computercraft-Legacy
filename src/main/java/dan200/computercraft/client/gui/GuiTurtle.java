@@ -18,7 +18,7 @@ import dan200.computercraft.shared.computer.core.IComputerContainer;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 import dan200.computercraft.shared.turtle.inventory.ContainerTurtle;
 
-public class GuiTurtle extends GuiContainer {
+public class GuiTurtle extends GuiContainer implements IComputerGui {
 
     private static final ResourceLocation background = new ResourceLocation("computercraft", "textures/gui/turtle.png");
     private static final ResourceLocation backgroundAdvanced = new ResourceLocation(
@@ -67,6 +67,11 @@ public class GuiTurtle extends GuiContainer {
     public void onGuiClosed() {
         super.onGuiClosed();
         Keyboard.enableRepeatEvents(false);
+    }
+
+    @Override
+    public int getComputerInstanceID() {
+        return this.m_computer != null ? this.m_computer.getInstanceID() : -1;
     }
 
     public void updateScreen() {

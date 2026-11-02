@@ -46,12 +46,13 @@ The most important corrections to the first pass:
    `net.minecraft.command.PlayerSelector` (players only), not 1.8+ `@e` entity selectors,
    and it has no 1.11+ entity tags/NBT selectors. A player-only subset is possible; full
    modern selector parity is not.
-5. **`file_transfer` is blocked on vanilla LWJGL2, but possible with lwjgl3ify.**
-   Forge 1.7.10’s `GuiScreen` has no `handleFileDrop`, and LWJGL2 has no OS drop
-   callback. lwjgl3ify uses SDL3, which exposes `SDL_AddEventWatch` and
-   `SDL_EVENT_DROP_FILE`; a small optional client bridge can turn those into a
-   `file_transfer`-style upload. Without lwjgl3ify, the AWT `FileDialog` alternative is
-   still not the modern UX.
+5. **`file_transfer` works with lwjgl3ify and is absent without it.**
+   Forge 1.7.10’s `GuiScreen` has no `handleFileDrop`, and LWJGL2 has no OS drop callback.
+   lwjgl3ify runs the client on SDL3, which exposes `SDL_AddEventWatch` and
+   `SDL_EVENT_DROP_FILE`, so a client bridge can turn those into the modern
+   `file_transfer` upload — **done in Batch J**, reflectively, so the mod has no LWJGL3 build
+   dependency and degrades to "no drops" instead of crashing. The AWT `FileDialog` alternative was
+   considered and rejected as a different feature.
 6. **Some previously “missing” fields are feasible natively:** `nbt` hash, `maxCount`,
    `damage`/`maxDamage`, `displayName`, `durability`, `lore`, `unbreakable`,
    `potionEffects`, and `mapColor` all have 1.7.10 APIs.
@@ -248,7 +249,7 @@ project remains CCPL.
 | `copy`/`move`/`delete`/`mkdir` safety/multi-path | Native Lua | — | ✅ Native | D | S/M |
 | Missing help docs / `motd.txt` / `modules/turtle` | Native resources | — | ✅ Native | D | S |
 | `/computercraft` admin command | Native Forge command | — | ✅ Native | K | M |
-| `file_transfer` / native drag-drop import | No Forge/LWJGL2 API | lwjgl3ify SDL3 drop events; no ETFR equivalent | ❌ on LWJGL2 / ✅ with lwjgl3ify | J | L |
+| `file_transfer` / native drag-drop import | No Forge/LWJGL2 API | SDL3 drop events via lwjgl3ify, read reflectively | ✅ with lwjgl3ify / absent without | J | — |
 | Full `commands.getEntities` selector parity | No `@e`, entity tags, NBT selectors | No ETFR `@e`; GTNHLib Brigadier has no entity selector args | ❌/🟡 Partial | G | L |
 
 ### 4.2 Terminal, text, and formatting
@@ -325,7 +326,7 @@ project remains CCPL.
 | `copy`/`move`/`delete`/`mkdir` | ✅ Native | Multi-path, read-only/mount-root guards. |
 | Help docs / `motd.txt` / `modules/turtle` | ✅ Native | Resource files. |
 | `/computercraft` admin command | ✅ Native | Forge `ICommand`; skip 1.20-only subcommands. |
-| `file_transfer`/drag-drop | ❌ LWJGL2 / ✅ lwjgl3ify | SDL3 `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE`; add an optional client bridge and GUI drop target. AWT `FileDialog` fallback without lwjgl3ify. |
+| `file_transfer`/drag-drop | ✅ lwjgl3ify / ❌ LWJGL2 | SDL3 `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE` through a reflective bridge (**done**); no AWT fallback, by choice. |
 | Full `commands.getEntities` | ❌/🟡 | See §4.3. |
 
 ---
@@ -468,16 +469,24 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 
 **Why here:** large pure-Lua work; depends on Batch C.
 
-### Batch J — File transfer/import (P3; conditional on lwjgl3ify)
+### Batch J — File transfer/import (P3; conditional on lwjgl3ify) — ✅ **DONE**
 
-- On vanilla LWJGL2: no Forge/LWJGL2 drag-drop API; ETFR does not add one.
-- With lwjgl3ify: SDL3 exposes `SDL_AddEventWatch` and `SDL_EVENT_DROP_FILE`;
-  `SDL_DropEvent.dataString()` gives the path. Add an optional client bridge, a
-  `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` drop target, upload size limits, and the
-  `file_transfer` event.
-- Option A: defer.
-- Option B: AWT `FileDialog`-based import (different UX) when lwjgl3ify is absent.
-- Do not promise modern `file_transfer` parity on vanilla LWJGL2.
+Implemented with SDL3, which is also what modern ComputerCraft effectively uses:
+
+- `SDL_AddEventWatch` + `SDL_EVENT_DROP_FILE`, read through a Java proxy over
+  `SDL_EventFilterI` and `SDL_Event.ndrop(...).dataString()`. Reached reflectively, so there is no
+  LWJGL3 build dependency and no `NoClassDefFoundError` on a client without lwjgl3ify; the feature
+  simply reports itself unavailable.
+- Rejected: AWT `FileDialog`. It works everywhere but is a different feature ("choose a file", not
+  "drag onto the computer"), and parity is the point.
+- Per-screen drop target (`GuiComputer`/`GuiTurtle`/`GuiPocketComputer` via a one-method
+  `IComputerGui`), upload limits (`upload_size_limit`, 512 KiB default), checksummed chunked
+  upload, `file_transfer` event, ported `rom/programs/import` + `cc/internal/import.lua`, and the
+  shell's mid-prompt handler.
+- Authorisation: an upload may only target a computer the sender has open, via
+  `IContainerComputer` on the legacy containers.
+- Recorded limits: no upload toast, drop coordinates ignored, and nothing at all on vanilla
+  LWJGL2.
 
 ### Batch K — Admin command (P2, ~1 day)
 
@@ -526,7 +535,7 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 
 ### P3 — deferred/conditional
 
-14. Batch J (file transfer/import).
+14. ~~Batch J (file transfer/import).~~ **DONE** — SDL3 via lwjgl3ify, see §5.
 
 ---
 
@@ -537,7 +546,7 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
 | Named block-state properties without GTNHLib | Vanilla 1.7.10 has only metadata. With GTNHLib, use `BlockPropertyRegistry`; otherwise expose `state.metadata`. |
 | `itemGroups` contents | CC:T 1.120 always writes an empty list; add `{}` only. |
 | Full `@e` selector parity | 1.7.10 lacks `@e`, entity tags, and NBT selectors; a subset is acceptable, full parity is not. |
-| Native OS file drag-and-drop on vanilla LWJGL2 | Forge 1.7.10 `GuiScreen` has no `handleFileDrop`; LWJGL2 has no drop callback. With lwjgl3ify, SDL3 provides the event; without it, use AWT or skip. |
+| Native OS file drag-and-drop on vanilla LWJGL2 | Forge 1.7.10 `GuiScreen` has no `handleFileDrop`; LWJGL2 has no drop callback. **Implemented with SDL3 via lwjgl3ify (Batch J)**; without lwjgl3ify the feature is absent by design rather than replaced with a file chooser. |
 | Cross-version GPS channel compatibility | Irrelevant for 1.7.10↔1.20; only multi-host accuracy matters. |
 | `rednet` ID wrapping as urgent work | 1.7.10 IDs are normally small; parity-only. |
 | 1.20 lecterns/Create/EMI/JEI integrations | Out of scope/platform-specific. |
@@ -560,16 +569,24 @@ Files: `rom/programs/edit`, `rom/programs/lua`, `rom/programs/help`,
   generic inventory peripheral. This is an enhancement, not modern capability parity.
 - Licensing: GTNHLib is LGPL-3.0; reflection preferred, or optional `compileOnly`.
 
-### lwjgl3ify file drop
+### lwjgl3ify file drop — ✅ implemented (Batch J)
 
-- Optional compileOnly/reflection on `org.lwjgl.sdl.*` and
-  `org.lwjglx.opengl.Display`.
-- Register an `SDL_AddEventWatch` filter for `SDL_EVENT_DROP_FILE`; read
-  `SDL_DropEvent.dataString()`.
-- Queue paths on the client thread and route them to the open
-  `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` screen.
-- Add upload size limits and a `file_transfer`-shaped event.
-- Licensing: lwjgl3ify is LGPL-3.0; do not copy its code.
+- Pure reflection on `org.lwjgl.sdl.*`, no `compileOnly` and no build dependency: the build has no
+  LWJGL3 on its classpath and adding a 3.4.x `lwjgl-sdl` would make it depend on a repository only
+  lwjgl3ify populates. `client/upload/SdlFileDropWatcher` is reached only after
+  `Class.forName("org.lwjgl.sdl.SDLEvents")` succeeds.
+- The callback is a `java.lang.reflect.Proxy` over `SDL_EventFilterI`: the interface's `address()`
+  and `callback()` are *default* methods, and forwarding those to the defaults (via
+  `MethodHandles.privateLookupIn` + `findSpecial`) is what creates the native upcall and decodes the
+  argument block, so only `invoke` has to be implemented.
+- `SDL_AddEventWatch` filters `SDL_EVENT_DROP_FILE`; the path comes from
+  `SDL_Event.ndrop(event).dataString()`.
+- Paths are queued from the SDL thread and drained on the client tick, then routed to the open
+  `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` screen (`IComputerGui`).
+- Sizes are limited by `upload_size_limit` (512 KiB default) on both sides, files are checksummed
+  with SHA-256 and uploaded in slices, and the target must be a computer the sender has open.
+- Licensing: lwjgl3ify is LGPL-3.0; none of its code was copied, only the public SDL binding is
+  called.
 
 ### ETFR/HogUtils tags
 
@@ -617,11 +634,13 @@ This makes `turtle.getItemDetail`/`inventory.getItemDetail`/`turtle.inspect`/`co
 - Optional integration:
   - ETFR + HogUtils installed: verify `tags` fields; without ETFR/HogUtils, verify empty
     tables and no class-loading errors.
-- Manual:
-  - lwjgl3ify installed: drag a file onto an open computer GUI; verify upload path and
-    size limits.
-  - Without lwjgl3ify: `file_transfer` has no automated test; if an AWT alternative is
-    added, test on Windows/Linux/macOS clients.
+- File transfer (Batch J): the ROM half and the whole server half run headlessly
+  (`TransferEventBridgeTest`, `ImportProgramTest`, `docs/ingame-tests/batch-j/j1_transfer.lua`).
+  - Manual, lwjgl3ify installed: drag a file onto an open computer GUI, and onto it *while the shell
+    prompt is open*; verify the overwrite prompt, the size limit and that a drop with no computer
+    open does nothing. Full drill in `docs/ingame-tests/batch-j/README.md`.
+  - Without lwjgl3ify: `SdlFileDropWatcherTest` pins that installing is a no-op; confirm in game that
+    the log has exactly one "unavailable" line and the mod otherwise behaves normally.
 
 ---
 

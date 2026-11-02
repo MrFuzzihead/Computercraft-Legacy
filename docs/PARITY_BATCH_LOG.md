@@ -700,9 +700,10 @@ No `dan200.computercraft.api` changes. Lua-visible:
 ### Deviations
 
 1. **`rom/motd.txt` is not upstream's.** The CC:Tweaked file advertises `tweaked.cc` and
-   `forums.computercraft.cc`, and tells the user to drag files onto the computer — Batch J, and
-   impossible on vanilla LWJGL2. Replaced with tips that hold for this mod (settings, `edit`,
+   `forums.computercraft.cc`. Replaced with tips that hold for this mod (settings, `edit`,
    `programs`, `peripherals`, monitor/speaker, Ctrl+T/R/S, floppies, multi-path file programs).
+   Upstream's drag-and-drop tip was left out at the time because the feature did not exist; **Batch J
+   added it back**, marked "lwjgl3ify clients only" because that is where it works.
 2. **No 2-argument `term.setPaletteColour(colour, rgb24)`.** `clear palette` works the same way
    upstream's does — `nativePaletteColour` returns `r, g, b` and is passed straight through as the
    remaining arguments — so the packed form is not needed. The feasibility audit's Batch E item
@@ -765,10 +766,10 @@ No `dan200.computercraft.api` changes.
 1. **`wget`'s "http disabled" message points at this mod's config.** Upstream says to set
    `http.enabled` in CC:T's server config; this mod's flag is `http_enable` in
    `ComputerCraft.cfg`.
-2. **`rom/programs/import` is deliberately not ported.** It exists upstream but waits for a
-   `file_transfer` event, which needs Batch J — and vanilla LWJGL2 has no file-drop callback, so
-   the program would be dead on every 1.7.10 client. Revisit with Batch J if lwjgl3ify support is
-   added.
+2. ~~**`rom/programs/import` is deliberately not ported.**~~ **Ported in Batch J**, together with
+   `cc/internal/import.lua`, once the `file_transfer` event had a producer (SDL3 drop events via
+   lwjgl3ify). It was left out here only because a program waiting for an event nothing emits is
+   dead code.
 3. `speaker` uses `string.unpack`, which Cobalt provides, and `cc.audio.dfpwm`, which this ROM
    already ships.
 
@@ -1711,3 +1712,121 @@ text the legacy ROM uses as box-drawing glyphs. Recorded rather than papered ove
 `FixedWidthFontRendererGlyphTest` pins both mappings and scans the error printer for every high
 character it emits, so a future third glyph fails the build instead of printing a `?` on a user's
 screen.
+
+---
+
+## Batch J — file transfer and import
+
+The last outstanding batch, and the only one that was ever blocked on something other than effort:
+"File transfer/import (P3; conditional on lwjgl3ify)". Vanilla LWJGL2 has no drop callback and
+Forge 1.7.10's `GuiScreen` has no `handleFileDrop`, so at the time of the audit the feature looked
+unimplementable on this base. It is implementable now, because the mod requires Java 17+ and
+therefore, in practice, runs on lwjgl3ify — which since 3.0 runs the client on SDL3, and SDL3 has
+drop events. So Batch J is done with SDL3, which is what modern ComputerCraft actually uses.
+
+**AWT was the other option and was rejected.** The feasibility doc listed it as a fallback: an AWT
+`FileDialog` picker would work on every client with no conditional code at all. It is not the same
+feature — it is "open a file chooser", not "drag a file onto the computer" — and the point of this
+batch is parity with upstream, so the fallback is to do nothing, exactly as upstream does on a
+platform with no drops.
+
+### The hook
+
+`client/upload/SdlFileDropWatcher` registers `SDL_AddEventWatch` and filters
+`SDL_EVENT_DROP_FILE`, queueing the dropped path. Everything about it is reflective, deliberately:
+
+* compiling against `org.lwjgl:lwjgl-sdl` would make the build depend on a repository that serves a
+  3.4.x LWJGL only lwjgl3ify ships, and would add a dependency to a build that deliberately has no
+  LWJGL3 dependency at all;
+* a hard reference would turn "lwjgl3ify is not installed" into a `NoClassDefFoundError` at class
+  load, i.e. a crash, instead of a missing feature.
+
+The watcher is therefore only touched after `Class.forName("org.lwjgl.sdl.SDLEvents")` succeeds, and
+every failure inside `install()` disables drops with one log line. `SdlFileDropWatcherTest` runs on
+a JVM with no LWJGL3 at all — the vanilla case — and asserts exactly that.
+
+One implementation detail worth recording, because it is the reason this works without a build
+dependency: a Java `Proxy` cannot be registered as an SDL callback directly, but
+`SDL_EventFilterI` is an interface whose `address()` and `callback()` are *default* methods, and those
+defaults are exactly the machinery that creates the native upcall and decodes the argument block. So
+the proxy forwards those two methods to the interface's own defaults via `MethodHandles` and only
+implements `invoke`, which receives the `SDL_Event*` and reads the path through
+`SDL_Event.ndrop(event).dataString()`.
+
+### The rest of the pipeline
+
+| Layer | What it does |
+|---|---|
+| `TransferredFiles` / `TransferredFile` (`core/apis/transfer`) | The Lua-visible event payload: `getFiles()`, then `getName`/`read`/`readLine`/`readAll`/`seek`/`close` per file, with the binary-handle contract (`read()` with no count returns a byte number) |
+| `FileUpload` / `FileSlice` / `UploadState` | The announced bytes, the slices that fill them, and the checksum check |
+| `FileUploadPacket` | Its own codec, dispatched by packet type: the generic `ComputerCraftPacket` payload cannot express a file list plus slices without going through NBT |
+| `ServerFileUploadHandler` | Holds the first message until the last arrives, verifies checksums, then queues `file_transfer` on the target `ServerComputer` |
+| `FileUploadSender` | Reads the dropped files, enforces the limit, sends the messages |
+| `rom/programs/import`, `cc/internal/import.lua` | The ported ROM half, unchanged apart from headers |
+| `rom/programs/shell` | Handles a transfer **while the prompt is open**, as upstream does |
+
+`FileSlice.apply` is the only thing between a hostile packet and an out-of-bounds write, so it
+bounds-checks rather than trusting the declared file length; `UploadState` discards the whole upload
+if any slice does not fit.
+
+An upload may only target a computer the sender has **open** — the same rule upstream's
+container-based routing enforces. The legacy containers share no base class, so they implement a
+one-method `IContainerComputer`. Without it a modified client could push files into any computer
+whose instance id it could guess, and the shell prompt would then write them to disk.
+
+### What testing caught
+
+Three things that reading would not have:
+
+1. **`CobaltMachine.toValue` has no case for a `List`.** `getFiles()` returning the list gave Lua
+   `nil`, so `#files` and `files[1]` both failed. The legacy bridge converts `Map`s to tables, so the
+   Java API stays a `List` and the Lua-facing call converts to 1-based keys.
+2. **`pcall(handle.write, chunk)`** in the ported module passes the contents as argument one, because
+   a CC file handle binds itself. The first test stub assumed `(self, data)` and produced "non-string
+   chunk: nil" — a test bug, but it is the kind of thing that would otherwise have surfaced as a
+   user's file silently failing to write.
+3. **A `do`-loop packet builder that measures only slice *headers*** produced 45 KB messages for a
+   30 KB budget. The budget now counts every byte the message will contain, and a test asserts it for
+   five files at once.
+
+### Verification
+
+**1796 tests, 0 failures** (+68).
+
+* `FileUploadPacketTest` (13) — round trip, multi-message reassembly with per-file offsets, empty
+  files, and every malformed shape: truncated header, wrong type, too many files, a declared size over
+  the limit, files that individually fit but together do not, a slice longer than its data, a negative
+  length.
+* `TransferredFileTest` (15) — the handle contract: bare `read()` returns a byte, `read(0)` probes for
+  EOF, `readLine` collapses `\r\n` but keeps a lone `\r`, `seek` in all three whences, and every
+  method refusing a closed file.
+* `UploadStateTest` (7) — checksums pass when intact and fail on one altered byte, out-of-order
+  slices, and slices outside their file.
+* `ServerFileUploadHandlerTest` (5) — the authorisation rule, including "no computer" and a container
+  that cannot name its computer.
+* `FileUploadSenderTest` (9) — folders skipped, missing paths ignored, per-file and total limits,
+  too many files, and that only the base name reaches the computer.
+* `SdlFileDropWatcherTest` (3) — the no-lwjgl3ify case.
+* `TransferEventBridgeTest` (2) — **harness**: a real `TransferredFiles` queued through
+  `CobaltMachine.handleEvent` and read back from Lua, so the `ILuaObject` → table conversion and the
+  byte[] → binary string hop are actually exercised. This is what found (1).
+* `ImportProgramTest` (10) — **harness**: the real `cc/internal/import.lua` and the real
+  `rom/programs/import` loaded from the jar and run against an in-memory filesystem, including the
+  overwrite prompt, `q`, unrelated events, a 20 KB chunked copy and a failing write.
+* `RomProgramCompileTest` (4) — the restructured shell compiles, and still runs its prompt in a
+  coroutine with the transfer branch present.
+* `docs/ingame-tests/batch-j/j1_transfer.lua` — runs in CI, and its README lists the manual drill:
+  the drop itself, which needs a real client and a real file manager.
+
+### Deviations
+
+1. **No "upload queued/consumed" toast.** Upstream shows GUI alerts for the four `UploadResult`s; the
+   client here logs them and the mod's chat stays silent. The information is in the log.
+2. **The drop's coordinates are ignored.** Any drop over an open computer screen counts. Upstream has
+   no per-widget targeting either, so this is the same rule with less bookkeeping.
+3. **`TransferredFile` exposes `readLine`/`readAll`/`seek`, which this ROM's `fs.open(..., "rb")`
+   handles do not.** That is intentional — the object follows modern CC:T, and the 1.75 binary handle
+   is unchanged (Batch J only adds, it does not alter `fs.open`).
+4. **`rom/motd.txt` says "lwjgl3ify clients only".** The Batch D rewrite had removed upstream's
+   drag-and-drop line because it was not true; it is now true on the clients that can do it, and the
+   tip names the requirement rather than promising it universally.

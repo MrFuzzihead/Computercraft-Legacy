@@ -25,6 +25,10 @@ public class ComputerCraftPacket implements IMessage {
     public static final byte ComputerDeleted = 8;
     public static final byte SpeakerAudio = 10;
     public static final byte SpeakerStop = 11;
+    /** Client to server: one message of a file upload, with its own codec in {@link FileUploadPacket}. */
+    public static final byte FileUpload = 12;
+    /** Server to client: the outcome of an upload, carried in the generic int/string payload. */
+    public static final byte FileUploadResult = 13;
     public byte m_packetType = 0;
     public String[] m_dataString = null;
     public int[] m_dataInt = null;

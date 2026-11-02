@@ -19,3 +19,4 @@ Hold Ctrl and press S to shut the computer down.
 Use a floppy disk to carry programs between computers.
 "copy", "move" and "delete" accept several paths at once.
 Use "pastebin put" to upload a program, and "pastebin get" to fetch one.
+Drag a file onto this computer to transfer it (lwjgl3ify clients only).

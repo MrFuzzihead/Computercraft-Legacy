@@ -546,8 +546,8 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         return computer != null ? computer.getRootMount() : null;
     }
 
-    private int getInstanceID(ItemStack stack) {
-        NBTTagCompound compound = stack.getTagCompound();
+    public int getInstanceID(ItemStack stack) {
+        NBTTagCompound compound = stack != null ? stack.getTagCompound() : null;
         return compound != null && compound.hasKey("instanceID") ? compound.getInteger("instanceID") : -1;
     }
 

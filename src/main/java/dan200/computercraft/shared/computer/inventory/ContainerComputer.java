@@ -5,7 +5,7 @@ import net.minecraft.inventory.Container;
 
 import dan200.computercraft.shared.computer.blocks.TileComputer;
 
-public class ContainerComputer extends Container {
+public class ContainerComputer extends Container implements IContainerComputer {
 
     private TileComputer m_computer;
 
@@ -15,5 +15,10 @@ public class ContainerComputer extends Container {
 
     public boolean canInteractWith(EntityPlayer player) {
         return this.m_computer.isUseableByPlayer(player);
+    }
+
+    @Override
+    public int getInstanceID() {
+        return this.m_computer.getInstanceID();
     }
 }

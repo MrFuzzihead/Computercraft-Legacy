@@ -470,17 +470,64 @@ else
         shell.run( "/rom/startup" )
     end
 
-    -- Read commands and execute them
-    local tCommandHistory = {}
-    while not bExit do
-        term.redirect( parentTerm )
+    -- Packs an event with its true argument count, for re-dispatching into read().
+    -- (bios.lua's table.pack keeps no `n`, and read() cares about argument counts.)
+    local function pack( ... )
+        return { n = select( "#", ... ), ... }
+    end
+
+    local function show_prompt()
         term.setBackgroundColor( bgColour )
         term.setTextColour( promptColour )
         write( shell.dir() .. "> " )
         term.setTextColour( textColour )
+    end
 
-        local sLine = read( nil, tCommandHistory, shell.complete )
-        table.insert( tCommandHistory, sLine )
-        shell.run( sLine )
+    -- Read commands and execute them
+    local tCommandHistory = {}
+    while not bExit do
+        term.redirect( parentTerm )
+        show_prompt()
+
+        local complete
+        if settings.get( "shell.autocomplete" ) ~= false then complete = shell.complete end
+
+        -- read() is run in a coroutine so that a file transfer can be handled *while* the prompt
+        -- is open, the way modern ComputerCraft does: abandon the prompt, run the import, redraw.
+        local co = coroutine.create( read )
+        local ok, result = coroutine.resume( co, nil, tCommandHistory, complete )
+        if not ok then error( result, 0 ) end
+
+        while coroutine.status( co ) ~= "dead" do
+            local event = pack( os.pullEvent() )
+            if event[1] == "file_transfer" then
+                -- Move off the current prompt line so the import output does not overwrite it.
+                local _, h = term.getSize()
+                local _, y = term.getCursorPos()
+                if y == h then
+                    term.scroll( 1 )
+                    term.setCursorPos( 1, y )
+                else
+                    term.setCursorPos( 1, y + 1 )
+                end
+                term.setCursorBlink( false )
+
+                local success, err = require( "cc.internal.import" )( event[2].getFiles() )
+                if not success and err then printError( err ) end
+
+                show_prompt()
+                term.setCursorBlink( true )
+                -- Force read() to redraw over what we just printed.
+                event = { "term_resize", n = 1 }
+            end
+
+            if result == nil or event[1] == result or event[1] == "terminate" then
+                ok, result = coroutine.resume( co, table.unpack( event, 1, event.n ) )
+                if not ok then error( result, 0 ) end
+            end
+        end
+
+        table.insert( tCommandHistory, result )
+        shell.run( result )
     end
 end

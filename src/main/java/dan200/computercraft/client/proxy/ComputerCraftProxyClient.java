@@ -43,6 +43,7 @@ import dan200.computercraft.client.gui.GuiPrintout;
 import dan200.computercraft.client.gui.GuiTurtle;
 import dan200.computercraft.client.render.FixedRenderBlocks;
 import dan200.computercraft.client.render.TileEntityMonitorRenderer;
+import dan200.computercraft.client.upload.FileUploadSender;
 import dan200.computercraft.shared.computer.blocks.TileComputer;
 import dan200.computercraft.shared.media.inventory.ContainerHeldItem;
 import dan200.computercraft.shared.media.items.ItemPrintout;
@@ -439,6 +440,10 @@ public class ComputerCraftProxyClient extends ComputerCraftProxyCommon {
         public void onTick(ClientTickEvent event) {
             if (event.phase == Phase.START) {
                 ComputerCraftProxyClient.this.m_tickCount++;
+            } else {
+                // END, so the screen and the world have already been updated this tick: a drop that
+                // arrived while the computer GUI was opening is still routed to it.
+                FileUploadSender.tick(Minecraft.getMinecraft());
             }
         }
     }
