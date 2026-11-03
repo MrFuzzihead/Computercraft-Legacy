@@ -1079,6 +1079,42 @@ living entities. `name` is `EntityList.getEntityString` lowercased and deliberat
 namespaced — 1.7.10 has no entity registry id, so prefixing `minecraft:` would mislabel every mod
 entity.
 
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
+
 ### Verification
 
 `CommandDimensionTest` — 13 tests over `dimensionName` and `resolveDimension`: vanilla ids,
@@ -1171,6 +1207,42 @@ as a constant. `broadcast` still uses 65535, which the mapping reproduces exactl
   instead of pulling events for ever. `waitForAny()` returns 0;
 * **error source info**: errors are re-raised through `cc.internal.exception.wrap_error` with the
   failing coroutine, so the shell can point at the line that broke rather than at `parallel`.
+
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
 
 ### Verification
 
@@ -1271,6 +1343,42 @@ into the editor: tokenising each line with the state left by the previous one, k
 colour table, and re-tokenising only from the edited line. That is a substantial change to a 780-line
 program and deserves its own pass rather than being rushed at the end of this one.
 
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
+
 ### Verification
 
 `docs/ingame-tests/batch-i/i1_editor_repl_help.lua` — 24 checks over the parts that need a real
@@ -1322,6 +1430,42 @@ existing test, because nothing compiled the ROM. That test stays.
 The suite failed on 31 October: `motd` prints a fixed message on 1 January, 24 December,
 **31 October** and 28 April, ignoring `motd.path`, so `d1_programs`' two motd assertions failed.
 The script now checks the calendar message on those days and runs the file-based checks otherwise.
+
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
 
 ### Verification
 
@@ -1446,6 +1590,42 @@ final field, the formatting was split out as a pure
 is better code and it is now covered directly (`"10, 64, -3 in The Nether"`, and `?` when the name is
 unknown).
 
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
+
 ### Verification
 
 * `CommandComputerCraftTest` — 28 tests.
@@ -1481,6 +1661,42 @@ filled, so trilateration never runs and a lone host cannot fake an answer.
 
 The **host** program also gained the `nDistance` check: a ping with no distance cannot be measured
 from, so answering it is pointless.
+
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
 
 ### Verification
 
@@ -1575,6 +1791,42 @@ already knew how to return several types for a directly attached peripheral.
   remote wired modem;
 * `getTypeRemote`'s string form (used elsewhere) is now `;`-joined, which is the convention the
   existing multi-value split already expected.
+
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
 
 ### Verification
 
@@ -1828,6 +2080,42 @@ Three things that reading would not have:
 3. **A `do`-loop packet builder that measures only slice *headers*** produced 45 KB messages for a
    30 KB budget. The budget now counts every byte the message will contain, and a test asserts it for
    five files at once.
+
+### The first real drop, and the bug it found
+
+The transport worked on the first in-game attempt — the log shows the upload queued *and* consumed:
+
+```
+File drag-and-drop is available (SDL3 via lwjgl3ify)
+File upload to computer 0: QUEUED null
+File upload to computer 0: CONSUMED Developer transferred files
+```
+
+`CONSUMED` means the computer's Lua called `getFiles()`, so the drop, the packet codec, the
+checksum, the authorisation check and the event all worked. What failed was the ROM: the terminal
+printed
+
+```
+...cc/internal/import.lua:25: attempt to index global 'shell' (a nil value)
+```
+
+because the shell's prompt handler called the **BIOS-level** `require`, which loads a module in the
+global environment. `shell` is not a global - it is local to `rom/programs/shell` - so
+`shell.resolve`, the first thing the ported module does, indexed nil. Programs never had this
+problem: `shell.execute` builds a program env with `shell` in it and a `require` (`cc.require`) that
+loads modules into *that* env.
+
+The prompt now loads the module the same way a program does -
+`setmetatable(createShellEnv(shell.dir()), { __index = tEnv }).require("cc.internal.import")` - so the
+module sees exactly what it would see when run as the `import` program, and `rom/programs/import`
+stays byte-identical to upstream.
+
+`docs/ingame-tests/batch-j/j1_transfer.lua` had two bugs of its own, both from using absolute paths
+while the module resolves relative to the shell directory: check "/batch-j-dropped.txt" while the
+module wrote "<cwd>/batch-j-dropped.txt", and create "/batch-j-existing.txt" where the module looked
+elsewhere (so no overwrite prompt appeared and the "decline" assertion failed). It now resolves every
+path with `shell.resolve`, so it passes from any directory, and it asserts the prompt loads the
+module through a shell env.
 
 ### Verification
 

@@ -80,18 +80,18 @@ print("Batch J: file transfer")
 
 local importModule = require("cc.internal.import")
 
+-- cc.internal.import resolves names with shell.resolve, i.e. relative to the shell's directory, so
+-- every path here has to be resolved the same way. Using absolute paths made this script pass only
+-- when it happened to be run from "/" - run it from any other directory and the module wrote
+-- somewhere the test was not looking.
+local function at(name)
+  return shell.resolve(name)
+end
+
 -- The program cannot fabricate a TransferredFiles object from Lua (it is a Java object), so this
 -- checks the parts a Lua program touches: the module writes files, and the shell prompt handles the
 -- event. The real object only exists when something actually drops a file.
 group("import module", function()
-  local handle, err = fs.open("/batch-j-source.txt", "wb")
-  if not handle then
-    ok("write a source file", false, err)
-    return
-  end
-  handle.write("dropped by batch J")
-  handle.close()
-
   -- A stand-in for a TransferredFile: the module only calls getName and read.
   local reading = true
   local fake = {
@@ -108,17 +108,16 @@ group("import module", function()
 
   -- Text mode on purpose: this ROM's binary handles only expose read/close (as 1.75 did),
   -- while a text handle can readAll.
-  local copied = fs.open("/batch-j-dropped.txt", "r")
+  local copied = fs.open(at("batch-j-dropped.txt"), "r")
   if not copied then
-    ok("the transferred file exists", false, "not written")
+    ok("the transferred file exists", false, "not written at " .. at("batch-j-dropped.txt"))
     return
   end
   local contents = copied.readAll()
   copied.close()
   eq("the transferred file matches", "dropped by batch J", contents)
 
-  fs.delete("/batch-j-source.txt")
-  fs.delete("/batch-j-dropped.txt")
+  fs.delete(at("batch-j-dropped.txt"))
 end)
 
 group("shell prompt", function()
@@ -134,6 +133,12 @@ group("shell prompt", function()
 
   ok("the shell waits for events at its prompt", shell:find("coroutine.create", 1, true) ~= nil)
   ok("the shell handles file_transfer", shell:find('"file_transfer"', 1, true) ~= nil)
+  -- The module needs the shell's own `require`: the BIOS-level one runs modules in the global env,
+  -- where `shell` is nil, and shell.resolve is the first thing the module calls.
+  ok(
+    "the shell loads the import module in a shell env",
+    shell:find("tImportEnv.require", 1, true) ~= nil
+  )
 end)
 
 group("import program", function()
@@ -144,7 +149,7 @@ end)
 group("overwrite behaviour", function()
   -- An existing target must not be clobbered silently: the module asks first, and answering "no"
   -- has to leave the file alone. Nothing here needs a real drop.
-  local h = fs.open("/batch-j-existing.txt", "wb")
+  local h = fs.open(at("batch-j-existing.txt"), "wb")
   h.write("original")
   h.close()
 
@@ -166,12 +171,12 @@ group("overwrite behaviour", function()
 
   ok("declining the overwrite is not an error", wrote == nil and err == nil, tostring(err))
 
-  local check = fs.open("/batch-j-existing.txt", "r")
+  local check = fs.open(at("batch-j-existing.txt"), "r")
   local contents = check.readAll()
   check.close()
   eq("the existing file is untouched", "original", contents)
 
-  fs.delete("/batch-j-existing.txt")
+  fs.delete(at("batch-j-existing.txt"))
 end)
 
 finish("batch-j")

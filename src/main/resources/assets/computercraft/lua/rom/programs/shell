@@ -476,6 +476,19 @@ else
         return { n = select( "#", ... ), ... }
     end
 
+    -- The import module has to be loaded the way a *program* is loaded, not with the BIOS-level
+    -- require. That require runs modules in the global environment, where `shell` does not exist
+    -- (it is local to this program), and cc.internal.import resolves paths with shell.resolve - so
+    -- a drop used to die with "attempt to index global 'shell' (a nil value)".
+    local importModule
+    local function runImport( files )
+        if not importModule then
+            local tImportEnv = setmetatable( createShellEnv( shell.dir() ), { __index = tEnv } )
+            importModule = tImportEnv.require( "cc.internal.import" )
+        end
+        return importModule( files )
+    end
+
     local function show_prompt()
         term.setBackgroundColor( bgColour )
         term.setTextColour( promptColour )
@@ -512,7 +525,7 @@ else
                 end
                 term.setCursorBlink( false )
 
-                local success, err = require( "cc.internal.import" )( event[2].getFiles() )
+                local success, err = runImport( event[2].getFiles() )
                 if not success and err then printError( err ) end
 
                 show_prompt()

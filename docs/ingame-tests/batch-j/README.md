@@ -8,6 +8,7 @@ module writes what it is handed, and the shell still runs its prompt in a corout
 |---|---|
 | the shell waits for events at its prompt | `rom/programs/shell` still runs `read` in a coroutine, so a transfer can be handled mid-prompt |
 | the shell handles `file_transfer` | the prompt's transfer branch was not lost in a later edit |
+| the shell loads the import module in a shell env | the prompt uses the shell's own `require`; the BIOS-level one leaves `shell` nil inside the module |
 | the import module accepts a transfer | `cc.internal.import` writes a stand-in file and the contents match |
 | the import program / module are installed | both ROM files shipped |
 
@@ -17,7 +18,9 @@ Everything else about this batch happens in the client: the drop itself cannot b
 
 1. Put a computer down, right-click it, and stay in its terminal.
 2. Drag a text file from your file manager onto the game window, still over the terminal.
-3. Expected, with the shell prompt open:
+3. Expected, with the shell prompt open (this is the case that failed first: the prompt used to
+   load the import module with the BIOS-level `require`, so it died with
+   `attempt to index global 'shell' (a nil value)`):
    - the prompt is abandoned, `Transferring <name>` prints, and the prompt is redrawn below it;
    - the file is in `ls`, and `type <name>` or `edit <name>` shows the original contents;
    - `drop.txt` from a nested folder arrives as just `drop.txt`.

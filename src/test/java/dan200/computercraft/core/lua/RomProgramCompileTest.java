@@ -67,8 +67,10 @@ class RomProgramCompileTest {
             "the prompt must be run in a coroutine, or read() cannot be resumed with a transfer");
         assertTrue(shell.contains("event[1] == \"file_transfer\""), "the prompt must handle file_transfer");
         assertTrue(
-            shell.contains("require( \"cc.internal.import\" )"),
-            "the prompt must hand the files to the import module");
+            shell.contains("tImportEnv.require( \"cc.internal.import\" )"),
+            "the prompt must load the import module through a shell environment (with `shell` in "
+                + "scope); the BIOS-level require runs modules against the global env, where "
+                + "shell.resolve is a nil index");
         assertTrue(
             shell.contains("term.setCursorBlink( true )"),
             "the prompt's cursor has to be restored after an import");
