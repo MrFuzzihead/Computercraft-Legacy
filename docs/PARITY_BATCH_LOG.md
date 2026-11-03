@@ -1754,10 +1754,43 @@ makes LWJGL2 and Forge 1.7.10 work on a modern JVM. Making it explicit costs not
 would-be `NoClassDefFoundError` into a clear load-order guarantee.
 
 The first version of this was reflective (a `Proxy` over `SDL_EventFilterI`, with `address()` and
-`callback()` forwarded to the interface defaults to create the native upcall). It worked, but it was
-machinery in service of a dependency the mod already had implicitly. The hard dependency replaced
-about eighty lines of reflection with the eight above; `SdlFileDropWatcherTest` still pins that a
-broken SDL install reports itself unavailable rather than throwing into the client tick.
+`callback()` forwarded to the interface defaults to create the native upcall). It was replaced by the
+hard dependency: about eighty lines of reflection became the eight above.
+
+### The crash that proved the namespace problem
+
+Compiling against LWJGL3 directly crashed the client on the **first tick**:
+
+```
+java.lang.NoClassDefFoundError: org/lwjglx/sdl/SDL_EventFilter
+    at FileUploadSender.tick(FileUploadSender.java:35)
+Caused by: Class bytes are null for org.lwjglx.sdl.SDL_EventFilter
+```
+
+Nothing in this project mentions `org.lwjglx`. lwjgl3ify's `LwjglRedirectTransformer` rewrites every
+`org/lwjgl/` reference in mod bytecode to `org/lwjglx/` — that is how legacy LWJGL2 calls
+(`org.lwjgl.input.Keyboard`, `org.lwjgl.opengl.GL11`, which this mod's GUI classes still use) reach
+its compatibility shims. LWJGL3 lives under the same package prefix, so `SDL_EventFilter` was
+rewritten into a namespace that only contains LWJGL2's API, and there is no `org.lwjglx.sdl`.
+
+Two lessons, both now guarded:
+
+1. **`@Lwjgl3Aware` is mandatory on any class that uses real LWJGL3.** The annotation opts that class
+   out of the rewrite. The jar-wide manifest attribute (`Lwjgl3ify-Aware: true`) does the same thing
+   for the *whole* jar, which would be actively wrong here: our GUI and renderer classes need the
+   rewrite to reach the shims.
+2. **It is per class file, and anonymous classes cannot be annotated.** The callback was an anonymous
+   `SDL_EventFilter`, which would have been rewritten even with the outer class exempt — a failure
+   that would only appear when `install()` ran. It is now a named `@Lwjgl3Aware` nested class,
+   `DropFilter`.
+
+`Lwjgl3AwareCoverageTest` scans the compiled classes and fails the build if any class mentioning
+`org.lwjgl.sdl` or `org.lwjgl.system` lacks the annotation. Mutation-checked: deleting the annotation
+from `DropFilter` fails it by name.
+
+The call site is also guarded now. A linkage error is raised when the class is *verified*, before the
+class's own `try`/`catch` can run, so `FileUploadSender.tick` catches `Throwable` around the install
+and disables drops permanently if it fails — the first version crashed the game instead.
 
 ### The rest of the pipeline
 

@@ -12,6 +12,7 @@ import org.lwjgl.sdl.SDL_EventFilter;
 import org.lwjgl.system.MemoryUtil;
 
 import dan200.computercraft.ComputerCraft;
+import me.eigenraven.lwjgl3ify.api.Lwjgl3Aware;
 
 /**
  * Picks up files dropped onto the game window, using SDL3 while lwjgl3ify is installed.
@@ -30,7 +31,19 @@ import dan200.computercraft.ComputerCraft;
  * its native libraries on the classpath. Nothing from LWJGL is shipped in this jar; it is
  * {@code compileOnly} and provided at runtime.
  * </p>
+ *
+ * <p>
+ * <strong>{@code @Lwjgl3Aware} is load-bearing.</strong> lwjgl3ify rewrites every {@code org/lwjgl/}
+ * reference in mod bytecode to {@code org/lwjglx/}, which is how legacy LWJGL2 calls
+ * ({@code org.lwjgl.input.Keyboard}, {@code org.lwjgl.opengl.GL11}) reach its compatibility shims.
+ * LWJGL3 lives in the same package prefix, so without this annotation {@code SDL_EventFilter} became
+ * {@code org.lwjglx.sdl.SDL_EventFilter} — a class that does not exist, because the shim namespace
+ * only covers LWJGL2's API — and the client died with a {@code NoClassDefFoundError} on the first
+ * tick. The annotation opts this class (and only this class) out of the rewrite; every other class in
+ * the mod still needs it, so do not put the equivalent manifest attribute on the whole jar.
+ * </p>
  */
+@Lwjgl3Aware
 public final class SdlFileDropWatcher {
 
     private static final Queue<String> drops = new ConcurrentLinkedQueue<>();
@@ -59,15 +72,7 @@ public final class SdlFileDropWatcher {
         installed = true;
 
         try {
-            filter = new SDL_EventFilter() {
-
-                @Override
-                public boolean invoke(long userdata, long event) {
-                    onEvent(event);
-                    // Returning true would remove the watch, so this is always false.
-                    return false;
-                }
-            };
+            filter = new DropFilter();
 
             if (!SDLEvents.SDL_AddEventWatch(filter, 0L)) {
                 throw new IllegalStateException("SDL_AddEventWatch returned false");
@@ -111,6 +116,29 @@ public final class SdlFileDropWatcher {
     /** Discards queued drops. Used by tests. */
     public static void clear() {
         drops.clear();
+    }
+
+    /**
+     * The SDL callback itself - a <em>named</em> class, not an anonymous one, so it can carry
+     * {@code @Lwjgl3Aware}.
+     *
+     * <p>
+     * This matters more than it looks. lwjgl3ify transforms each class file independently, so an
+     * anonymous class implementing {@code SDL_EventFilter} would be rewritten to the nonexistent
+     * {@code org.lwjglx.sdl.SDL_EventFilter} even though its outer class is exempt, and the failure
+     * would surface at {@code install()} rather than at load time. A nested class can be annotated;
+     * an anonymous one cannot.
+     * </p>
+     */
+    @Lwjgl3Aware
+    private static final class DropFilter extends SDL_EventFilter {
+
+        @Override
+        public boolean invoke(long userdata, long event) {
+            onEvent(event);
+            // Returning true would remove the watch, so this is always false.
+            return false;
+        }
     }
 
     /** Reads one SDL event, queueing the path if it is a file drop. Runs on the SDL thread. */

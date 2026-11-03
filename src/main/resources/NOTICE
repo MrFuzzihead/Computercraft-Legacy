@@ -102,6 +102,10 @@ LWJGL 3 (including lwjgl-sdl) is a compile-time dependency only. It is not
 bundled or shaded: lwjgl3ify provides it at runtime, and the mod declares
 lwjgl3ify as a required dependency. LWJGL is BSD-3-Clause.
 
+lwjgl3ify itself (LGPL-3.0) is likewise compile-time only, and only for its
+@Lwjgl3Aware marker annotation, which tells that mod not to rewrite this
+project's LWJGL3 references. No lwjgl3ify code is copied, linked or shipped.
+
 Files sourced from CC: Tweaked are licensed under the Mozilla Public
 License 2.0. The full text is in LICENSE-MPL-2.0. MPL-2.0 is a
 file-level copyleft: those files remain MPL-2.0, and only those files.

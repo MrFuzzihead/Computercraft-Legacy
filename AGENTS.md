@@ -20,10 +20,16 @@ decompiled file matches a modern CC: Tweaked file, or vice versa. See
 - The CCPL is **non-commercial** and restricts reuse to other Minecraft mods.
   Do not describe the project as MIT/permissive, in the README, `mcmod.info`, or
   anywhere else.
-- **Compile against LWJGL3 only where lwjgl3ify guarantees it.** The one such place is
-  `org.lwjgl:lwjgl-sdl` (`compileOnly`), used by `client/upload/SdlFileDropWatcher` for SDL3
-  drag-and-drop. Nothing from LWJGL may be shaded or shipped: lwjgl3ify provides it at runtime,
-  and the `required-after:lwjgl3ify` dependency guarantees it is loaded first.
+- **Compile against LWJGL3 only where lwjgl3ify guarantees it, and mark the class
+  `@Lwjgl3Aware`.** The one such place is `org.lwjgl:lwjgl-sdl` (`compileOnly`), used by
+  `client/upload/SdlFileDropWatcher` for SDL3 drag-and-drop. lwjgl3ify rewrites every
+  `org/lwjgl/` reference in mod bytecode to `org/lwjglx/` (that is how legacy LWJGL2 calls reach
+  its shims); LWJGL3 shares the prefix, so an un-annotated class is redirected somewhere that has
+  no SDL and the client crashes with `NoClassDefFoundError: org/lwjglx/sdl/SDL_EventFilter`.
+  The opt-out is **per class file** and anonymous classes cannot be annotated — use a named nested
+  class. Never put `Lwjgl3ify-Aware: true` on the jar manifest: the rest of the mod *needs* the
+  rewrite. `Lwjgl3AwareCoverageTest` enforces all of this. Nothing from LWJGL may be shaded or
+  shipped: lwjgl3ify provides it at runtime.
 - **There are deliberately no per-file licence headers.** Provenance is recorded
   centrally in `NOTICE`. Do not add SPDX headers to source files; the project
   owner has considered and declined that, and scattered headers invite

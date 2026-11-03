@@ -26,15 +26,33 @@ import dan200.computercraft.shared.network.FileUploadPacket;
  */
 public final class FileUploadSender {
 
+    /** Whether the drop hook has been attempted, and whether it worked. */
+    private static boolean dropHookTried;
+    private static boolean dropsAvailable;
+
     private FileUploadSender() {}
 
     /** Called once per client tick, after the screen and world have settled. */
     public static void tick(Minecraft mc) {
-        // Not at init: SDL only has a window to watch once the game is running, and installing
-        // earlier would either fail or attach to nothing. install() is idempotent.
-        SdlFileDropWatcher.install();
+        if (!dropHookTried) {
+            dropHookTried = true;
+            dropsAvailable = installDropHook();
+        }
 
-        String[] paths = SdlFileDropWatcher.pollDrops();
+        if (!dropsAvailable) {
+            return;
+        }
+
+        String[] paths;
+        try {
+            paths = SdlFileDropWatcher.pollDrops();
+        } catch (Throwable t) {
+            // If the watcher's class could not be linked, every call into it throws - so stop asking.
+            dropsAvailable = false;
+            ComputerCraft.logger.error("File drag-and-drop has been disabled", t);
+            return;
+        }
+
         if (paths.length == 0) {
             return;
         }
@@ -71,6 +89,28 @@ public final class FileUploadSender {
 
         for (FileUploadPacket packet : FileUploadPacket.build(instanceID, uploads)) {
             ComputerCraft.sendRawToServer(packet);
+        }
+    }
+
+    /**
+     * Sets up the SDL drop hook, reporting failure instead of propagating it.
+     *
+     * <p>
+     * The guard has to live here as well as inside the watcher: a linkage error is raised when the
+     * watcher class is <em>verified</em>, before any of its own code - including its try/catch - can
+     * run. That is exactly how this crashed once, on the first tick, when lwjgl3ify's namespace
+     * rewrite sent {@code SDL_EventFilter} to a package that does not exist.
+     * </p>
+     */
+    private static boolean installDropHook() {
+        // Not at init: SDL only has a window to watch once the game is running, and installing
+        // earlier would either fail or attach to nothing.
+        try {
+            SdlFileDropWatcher.install();
+            return SdlFileDropWatcher.isAvailable();
+        } catch (Throwable t) {
+            ComputerCraft.logger.error("File drag-and-drop is unavailable", t);
+            return false;
         }
     }
 

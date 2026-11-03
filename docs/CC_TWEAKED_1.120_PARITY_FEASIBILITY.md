@@ -578,8 +578,14 @@ Implemented with SDL3, which is also what modern ComputerCraft effectively uses:
   was already required in practice; this only makes it explicit.
 - The callback is an anonymous `SDL_EventFilter` overriding `invoke`. `SDL_AddEventWatch` filters
   `SDL_EVENT_DROP_FILE`; the path comes from `SDL_Event.ndrop(event).dataString()`.
-- A failure to install (broken SDL, uninitialised display) is caught and logged, so a broken native
-  cannot take the client tick down.
+- **`@Lwjgl3Aware` is required on every class that touches real LWJGL3.** lwjgl3ify rewrites
+  `org/lwjgl/` to `org/lwjglx/` in mod bytecode so legacy LWJGL2 calls reach its shims; LWJGL3 shares
+  that prefix, so an un-annotated class is redirected into a namespace with no SDL and the client
+  dies with `NoClassDefFoundError: org/lwjglx/sdl/SDL_EventFilter`. The annotation is per class file,
+  so the SDL callback is a named nested class (`DropFilter`) rather than an anonymous one.
+  `Lwjgl3AwareCoverageTest` enforces this over the compiled classes.
+- A failure to install (broken SDL, uninitialised display) is caught and logged at both the watcher
+  and the call site, so a broken native — or a linkage error — cannot take the client tick down.
 - Paths are queued from the SDL thread and drained on the client tick, then routed to the open
   `GuiComputer`/`GuiTurtle`/`GuiPocketComputer` screen (`IComputerGui`).
 - Sizes are limited by `upload_size_limit` (512 KiB default) on both sides, files are checksummed
