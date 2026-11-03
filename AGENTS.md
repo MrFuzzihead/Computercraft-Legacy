@@ -142,9 +142,13 @@ Register in `Computer.java` alongside existing APIs.
 
 - Build: `./gradlew build`
 - Test: `./gradlew test`
-- Run server: `./gradlew runServer25` (Java 25 + lwjgl3ify + HodgePodge — the only run task that
-  can start this mod). `runServer` runs on Java 8 without lwjgl3ify and stops at
-  `MissingModsException`.
+- Run server: `./gradlew runServer` or `runServer25` — they are the same thing. `runServer` is a
+  no-op alias that depends on `runServer25` (Java 25 + lwjgl3ify + HodgePodge), wired up in
+  `addon.gradle.kts`, because the GTNH CI workflow hardcodes `runServer` and RFG's Java 8 task
+  cannot start a mod that requires lwjgl3ify. Before that alias existed, `runServer` loaded the
+  `-dev-preshadow` jar, FML discarded it as unreadable, and the server booted *without*
+  ComputerCraft — so the CI smoke test was passing vacuously. `runClient` is **not** aliased; use
+  `runClient25`.
 - Format: `./gradlew spotlessApply`
 - Checkstyle: `./gradlew checkstyleMain`
 

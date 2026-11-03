@@ -165,3 +165,39 @@ if (usingJvmDowngrader.get()) {
 
     tasks.matching { it.name == "check" }.configureEach { dependsOn(verifyTestSuiteExecuted) }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Make the plain `runServer` dev task able to start this mod at all.
+//
+// `runServer` is RFG's Java 8 task: its classpath is the ordinary runtimeClasspath, which does not
+// contain lwjgl3ify (the convention only puts that in `java17Dependencies`, which is what
+// runServer17/21/25 use). This mod declares `required-after:lwjgl3ify`, and lwjgl3ify needs
+// Java 17+, so `runServer` can never start it.
+//
+// It did not fail loudly either. Observed on `main` (enableModernJavaSyntax = modern):
+//
+//   [FML]: There was a problem reading the entry dan200/computercraft/ComputerCraft$Blocks.class
+//          in the jar ComputerCraft-3.1.0-dev-preshadow.jar - probably a corrupt zip
+//   [FML]: Zip file ComputerCraft-3.1.0-dev-preshadow.jar failed to read properly, it will be ignored
+//   [fml.ModTracker]: This world was saved with mod ComputerCraft which appears to be missing
+//
+// The only ComputerCraft jar that task could see was the `-dev-preshadow` intermediate, whose class
+// files are newer than Java 8, so JarDiscoverer discarded it and the server started *without* the
+// mod. The GTNH CI workflow hardcodes `runServer`, so its "Test no errors reported during server
+// run" step was green because it tested a server with no ComputerCraft on it.
+//
+// Forward the task to runServer25 rather than ship a dev task that silently drops the mod. This is
+// safe to do: RunHotswappableMinecraftTask's `superTask` field is only a label and is never read
+// anywhere in GTNHGradle, so runServer25 does not depend on runServer and there is no cycle.
+// `runClient` is left alone; use runClient25.
+// ---------------------------------------------------------------------------------------------
+afterEvaluate {
+    if (tasks.findByName("runServer25") != null) {
+        tasks.named("runServer") {
+            description = "Runs the modded dedicated server on Java 25 with lwjgl3ify (forwards to runServer25)"
+            dependsOn("runServer25")
+            // The Java 8 body must not run: it would boot a second server with no ComputerCraft on it.
+            onlyIf("runServer is a no-op alias for runServer25 in this project") { false }
+        }
+    }
+}
