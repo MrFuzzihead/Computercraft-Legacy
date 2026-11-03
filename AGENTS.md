@@ -77,20 +77,38 @@ dan200.computercraft
 
 ## Key Conventions (for Agents)
 
-- **The mod requires Java 17+.** It builds with `enableModernJavaSyntax = modern` and ships
-  native modern bytecode. The game itself runs on a modern JVM via **lwjgl3ify**, which the
-  GTNH convention injects automatically for `runClient17/21/25` and `runServer17/21/25` — do
-  *not* add lwjgl3ify or HodgePodge to `dependencies.gradle`. Java 8 players are cut off by
-  design; that is the accepted trade for using Cobalt 0.9.9 (records, sealed types) directly
-  instead of downgrading it.
+- **Bytecode targets Java 8, via JVM Downgrader.** `enableModernJavaSyntax = jvmDowngrader`,
+  `downgradeTargetVersion = 8`. Source may use modern syntax *and* modern stdlib APIs; the
+  toolchain compiles at Java 25 and the downgrader rewrites both down to class file version 52.
+  The reason is downstream, not player-facing: a Java-8-target consumer (CCTweaks, Jabel-era
+  addons, anything compiled with `--release 8`) cannot read a class file above its own version,
+  and Gradle refuses to match a Java 25 variant for a Java 8 consumer at all.
+- **The mod still requires Java 17+ at runtime**, because `@Mod(dependencies =
+  "required-after:lwjgl3ify")` is load-bearing: `SdlFileDropWatcher` compiles against
+  `org.lwjgl:lwjgl-sdl`, and lwjgl3ify is what puts LWJGL3 and its natives on the classpath.
+  Downgrading buys class-file compatibility, *not* Java 8 runnability. lwjgl3ify and HodgePodge
+  are injected by the convention for `runClient17/21/25` and `runServer17/21/25` — do *not* add
+  them to `dependencies.gradle`. Plain `runServer`/`runClient` run without them and will stop at
+  `MissingModsException: lwjgl3ify`; that is expected.
 - **Do not reintroduce a JVM Downgrader multi-release overlay.** FML 1.7.10's `JarDiscoverer`
   feeds *every* `.class` entry to ASM 5.0.3, which cannot read class files above Java 8. It
   walks the whole jar, so a `META-INF/versions/N` overlay makes it throw and FML discards the
   entire mod — silently, with one `failed to read properly` line in the log, and computers that
-  never turn on. The unit tests do **not** catch this, because they run on
-  `testRuntimeClasspath` and never touch the packaged jar. Modern bytecode at the jar *root* is
-  fine; only the overlay trips this. `addon.gradle.kts` documents the full list of what must
-  return together if the build mode is ever switched back to `jvmDowngrader`.
+  never turn on. The build cannot be asked to omit the overlay: an empty
+  `jvmDowngraderMultiReleaseVersions` falls back to `21,25`, and the convention rejects anything
+  below 9. `multiReleaseVersions = 9` therefore stays in `gradle.properties` and
+  `addon.gradle.kts` strips `META-INF/versions/**` from every shipped archive and asserts the
+  result. The unit tests do **not** catch a regression here, because they run on
+  `testRuntimeClasspath` and never touch the packaged jar; if you change the jar pipeline, verify
+  with `unzip -l` and a real `runServer25`.
+- **Stubs are shaded, not taken from GTNHLib** (`jvmDowngraderStubsProvider = shade`).
+  GTNHLib does not ship `jvmdowngrader-java-api`; it downloads it at runtime from
+  `maven.wagyourtail.xyz` via its dependency loader, and its system-classloader mirroring is
+  skipped whenever the system class loader is not a `URLClassLoader` — always true on Java 9+.
+  That would put a network fetch in `LuaString.compareTo`. Shading costs about 5 KB (currently
+  `J_L_Record` and `J_U_Arrays`) and is documented in `NOTICE` section 3 with the text in
+  `LICENSE-jvmdowngrader`. Every root licence file needs a byte-identical copy in
+  `src/main/resources`; `LicenseDistributionTest` enforces it.
 - Legacy instance fields use `m_` prefix; follow in existing classes.
 - Do not refactor `ComputerCraftAPI` reflection logic.
 - Do not create/edit `dan200.computercraft.Tags` (auto-generated).
@@ -124,7 +142,9 @@ Register in `Computer.java` alongside existing APIs.
 
 - Build: `./gradlew build`
 - Test: `./gradlew test`
-- Run server: `./gradlew runServer` (runs on the configured toolchain, Java 25)
+- Run server: `./gradlew runServer25` (Java 25 + lwjgl3ify + HodgePodge — the only run task that
+  can start this mod). `runServer` runs on Java 8 without lwjgl3ify and stops at
+  `MissingModsException`.
 - Format: `./gradlew spotlessApply`
 - Checkstyle: `./gradlew checkstyleMain`
 
@@ -145,12 +165,21 @@ See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for L
 | com.github.GTNewHorizons:CodeChickenCore | Required by ForgeMultipart |
 | com.github.GTNewHorizons:NotEnoughItems | Dev-only runtime for testing |
 | org.lwjgl:lwjgl-sdl:3.4.2 | SDL3 event API for file drag-and-drop (**compileOnly**: provided at runtime by lwjgl3ify, never shipped; BSD-3-Clause) |
+| xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api | JDK API stubs, added by the convention as `compileOnly` + `testRuntimeOnly`; the ~3 reachable stubs are shaded under `dan200.computercraft.shadow` (**LGPL-2.1**, `LICENSE-jvmdowngrader`) |
 | org.junit.jupiter:junit-jupiter:5.8.2 | Unit testing |
 | org.mockito:mockito-core:4.8.0 | Unit testing |
 
 Cobalt Maven repository: `https://maven.squiddev.cc` (see `repositories.gradle`).
 Shadowed dependencies must stay listed in `NOTICE` section 3, with their licence
 texts present in the repository root.
+
+The JVM Downgrader stubs are the one **LGPL-2.1** component in the jar. They are not
+declared in `dependencies.gradle` — the convention pulls
+`jvmdowngrader-java-api:downgraded-8` in, and `jvmDowngraderStubsProvider = shade` copies the
+minimised set into the jar. Keep `LICENSE-jvmdowngrader` byte-identical at the root and in
+`src/main/resources`, and keep the `NOTICE` section 3 entry in step with whatever the downgrader
+actually ends up shading: the set changes when the source starts or stops using a Java 9+ API.
+`unzip -l` the shipped jar and look for `shadow/xyz/wagyourtail/jvmdg/` to see it.
 
 ---
 

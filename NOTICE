@@ -126,9 +126,11 @@ reference. It is not part of any distribution.
 3. Bundled third-party libraries
 --------------------------------
 
-The following libraries are shaded into the released jar. All are MIT
-licensed, and are redistributed with their license texts in LICENSE-Cobalt,
-LICENSE-Java-WebSocket and LICENSE-slf4j-api.
+The following libraries are shaded into the released jar. Cobalt,
+Java-WebSocket and slf4j-api are MIT licensed; the JVM Downgrader API stubs
+are under the LGPL 2.1. Each is redistributed with its license text in
+LICENSE-Cobalt, LICENSE-Java-WebSocket, LICENSE-slf4j-api and
+LICENSE-jvmdowngrader respectively.
 
   Cobalt 0.9.9               MIT    LICENSE-Cobalt
       https://github.com/cc-tweaked/Cobalt
@@ -146,6 +148,53 @@ LICENSE-Java-WebSocket and LICENSE-slf4j-api.
       Copyright QOS.ch Sarl, Switzerland (2004-2022).
       A transitive dependency of Java-WebSocket. It is not declared in
       dependencies.gradle, but it is present in the released jar.
+
+  JVM Downgrader API stubs   LGPL-2.1   LICENSE-jvmdowngrader
+      https://github.com/unimined/JvmDowngrader
+      Copyright (C) 2024 William Gray ("Wagyourtail").
+      Shaded by jvmDowngrader when jvmDowngraderStubsProvider = shade, as a
+      minimised set: only the stubs the downgraded bytecode actually calls
+      are copied, relocated under dan200.computercraft.shadow, so they
+      cannot collide with an unrelocated copy supplied by another mod.
+
+      The stubs re-implement Java 9+ API entry points that have no Java 8
+      equivalent. Only two classes are actually packed in for this code base:
+      J_L_Record, which becomes the supertype of Cobalt's eight record classes
+      (java.lang.Record does not exist on Java 8), and J_U_Arrays plus its
+      ArraySupport helper, which back Arrays.mismatch and
+      Arrays.equals(byte[],int,int,byte[],int,int) in Cobalt's LuaString
+      comparison. Everything else the downgrader needed was inlined into the
+      calling class instead -- for example Objects.requireNonNullElse becomes a
+      private jvmdg$inlined$requireNonNullElse helper.
+
+      A J_L_Deprecated marker annotation is also written into
+      RuntimeVisibleAnnotations on seven classes, as a stand-in for
+      java.lang.Deprecated. The minimiser does not copy it into the jar. That is
+      harmless: the JVM ignores an annotation whose type cannot be resolved, and
+      getAnnotations() and isAnnotationPresent(Deprecated.class) are unaffected
+      (verified against the packaged jar on Java 25).
+
+      JvmDowngrader licenses its API stubs under LGPL-2.1 with a commercial
+      alternative, and its own LICENSE.md takes the position that shading
+      these classes into an application is a "combined work" that does not
+      force the application onto the GPL, provided the unshaded or
+      undowngraded artifact (or its source) is made available. This project
+      is not commercial and publishes its complete source, so that condition
+      is met. Note that the LGPL-2.1 text shipped here is JvmDowngrader's own
+      license file; the stub class contents are derived from OpenJDK, whose
+      provenance JvmDowngrader does not restate per file. That question is
+      recorded here as open, in the same way as the ComputerCraft API notice
+      discussed in section 2.
+
+      Choosing 'shade' over 'gtnhlib' is deliberate. GTNHLib does not ship
+      these stubs: it downloads jvmdowngrader-java-api at runtime from
+      maven.wagyourtail.xyz through its dependency loader, and its
+      system-classloader mirroring is skipped whenever the system class
+      loader is not a URLClassLoader, which is always the case on Java 9+.
+      This mod requires Java 17+ via lwjgl3ify, so that route would put a
+      network fetch and a class loader accident in the middle of
+      LuaString.compareTo. Shading costs roughly 5 KB and makes the jar
+      self-contained.
 
 ComputerCraft 1.7.10 embedded LuaJ 2.0.3. This project does not. The
 previous LICENSE-luaj has therefore been removed, and replaced by

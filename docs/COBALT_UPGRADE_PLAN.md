@@ -7,10 +7,13 @@
 > - The dependency is now `shadowImplementation("cc.tweaked:cobalt:0.9.9")`.
 >   The `org.squiddev:Cobalt` coordinate was renamed; 0.6.0 and 0.7.3 are not
 >   the target.
-> - The build no longer targets Java 8. It uses
->   `enableModernJavaSyntax = modern` and ships native modern bytecode, so the
->   JVM Downgrader constraint discussed below no longer applies and Cobalt 0.9.x
->   is usable directly.
+> - The build targets Java 8 bytecode again, via
+>   `enableModernJavaSyntax = jvmDowngrader` with `downgradeTargetVersion = 8`. The JVM
+>   Downgrader constraint discussed below *does* now apply, and Cobalt 0.9.x is still usable
+>   directly because the downgrader rewrites its records and sealed types. The old concern in
+>   this document — that the downgrader could not cope with a modern Cobalt — turned out to be
+>   wrong; what it actually cannot do is add *methods* to JDK classes that exist on Java 8 but
+>   lack them, which is handled by shaded API stubs (see `NOTICE` section 3).
 > - `ILuaContext.pullEvent`/`pullEventRaw`/`yield` have been removed in favour of
 >   `MethodResult` and `ILuaCallback`, which suspend the Lua call rather than
 >   blocking. See `docs/METHODRESULT_MIGRATION.md`.
