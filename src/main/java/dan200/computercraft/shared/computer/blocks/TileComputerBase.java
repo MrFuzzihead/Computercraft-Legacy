@@ -362,6 +362,14 @@ public abstract class TileComputerBase extends TileGeneric implements IComputerT
                 .getInstanceID());
     }
 
+    /**
+     * The registry instance id of this tile's computer, or {@code -1} if it has not been created yet.
+     * Used to authorise file uploads: the sender must have this computer open.
+     */
+    public int getInstanceID() {
+        return this.m_instanceID;
+    }
+
     @Override
     public void readDescription(NBTTagCompound nbttagcompound) {
         super.readDescription(nbttagcompound);

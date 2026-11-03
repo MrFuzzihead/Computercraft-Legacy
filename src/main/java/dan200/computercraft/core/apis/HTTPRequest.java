@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -152,6 +153,12 @@ public class HTTPRequest {
      */
     private final boolean m_binary;
     /** Optional internal correlation ID; null preserves legacy completion event shapes. */
+    /** Upstream's cap on followed redirects. */
+    private static final int MAX_REDIRECTS = 16;
+
+    /** Whether to follow redirects, from the {@code redirect} request option (default true). */
+    private final boolean m_followRedirects;
+
     private final Number m_requestId;
     /** Whether the blocking Lua wrapper requested the private completion event. */
     private final boolean m_internalEvent;
@@ -169,8 +176,15 @@ public class HTTPRequest {
     public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
         final int timeout, final boolean binary, final Number requestId, final boolean internalEvent)
         throws LuaException {
+        this(url, postText, headers, verb, timeout, binary, requestId, internalEvent, true);
+    }
+
+    public HTTPRequest(final String url, final String postText, final Map<String, String> headers, final String verb,
+        final int timeout, final boolean binary, final Number requestId, final boolean internalEvent,
+        final boolean followRedirects) throws LuaException {
         m_requestId = requestId;
         m_internalEvent = internalEvent;
+        m_followRedirects = followRedirects;
         urlString = url;
         this.url = checkURL(url);
         this.m_timeout = timeout;
@@ -196,133 +210,198 @@ public class HTTPRequest {
                 }
 
                 try {
-                    HttpURLConnection connection = (HttpURLConnection) HTTPRequest.this.url.openConnection();
-
-                    if (m_timeout > 0) {
-                        connection.setConnectTimeout(m_timeout);
-                        connection.setReadTimeout(m_timeout);
+                    // Redirects are followed here rather than by HttpURLConnection: Java's own
+                    // follow-redirects bypass the domain patterns and the private-address rule on
+                    // every hop, which would let a public URL bounce a computer onto the LAN.
+                    URL current = HTTPRequest.this.url;
+                    String method;
+                    if (verb != null) {
+                        method = verb;
+                    } else if (postText != null) {
+                        method = "POST";
+                    } else {
+                        method = "GET";
                     }
 
-                    { // Setup connection
-                        if (verb != null) {
-                            connection.setRequestMethod(verb);
-                        } else if (postText != null) {
-                            connection.setRequestMethod("POST");
-                        } else {
-                            connection.setRequestMethod("GET");
+                    int redirects = 0;
+                    // Whether the body still applies: a 303 switches to GET, which must not
+                    // carry the original body. Any other method keeps it, including a verb
+                    // the caller chose explicitly (PUT, PATCH, ...).
+                    boolean sendBody = postText != null;
+                    while (true) {
+                        HttpURLConnection connection = (HttpURLConnection) current.openConnection();
+                        connection.setInstanceFollowRedirects(false);
+
+                        // Runs on this worker thread, where DNS already happens, so resolving a
+                        // host here never blocks a computer thread.
+                        PrivateAddresses.check(current);
+
+                        if (m_timeout > 0) {
+                            connection.setConnectTimeout(m_timeout);
+                            connection.setReadTimeout(m_timeout);
                         }
 
-                        connection.setRequestProperty("accept-charset", "UTF-8");
-                        if (postText != null) {
-                            connection
-                                .setRequestProperty("content-type", "application/x-www-form-urlencoded; charset=utf-8");
-                            connection.setRequestProperty("content-encoding", "UTF-8");
-                        }
+                        { // Setup connection
+                            try {
+                                connection.setRequestMethod(method);
+                            } catch (ProtocolException e) {
+                                // HttpURLConnection only accepts GET, POST, HEAD, OPTIONS, PUT,
+                                // DELETE and TRACE; notably PATCH is refused. Report that as a
+                                // policy-ish failure with a clear reason instead of letting it look
+                                // like a dead server.
+                                throw new LuaException("Unsupported HTTP method: " + method);
+                            }
 
-                        if (headers != null) {
-                            for (Map.Entry<String, String> header : headers.entrySet()) {
-                                connection.setRequestProperty(header.getKey(), header.getValue());
+                            connection.setRequestProperty("accept-charset", "UTF-8");
+                            if (sendBody) {
+                                connection.setRequestProperty(
+                                    "content-type",
+                                    "application/x-www-form-urlencoded; charset=utf-8");
+                                connection.setRequestProperty("content-encoding", "UTF-8");
+                            }
+
+                            if (headers != null) {
+                                for (Map.Entry<String, String> header : headers.entrySet()) {
+                                    connection.setRequestProperty(header.getKey(), header.getValue());
+                                }
+                            }
+
+                            if (sendBody) {
+                                connection.setDoOutput(true);
+                                OutputStream os = connection.getOutputStream();
+                                OutputStreamWriter osr = new OutputStreamWriter(os);
+                                BufferedWriter writer = new BufferedWriter(osr);
+                                writer.write(postText, 0, postText.length());
+                                writer.close();
                             }
                         }
 
-                        if (postText != null) {
-                            connection.setDoOutput(true);
-                            OutputStream os = connection.getOutputStream();
-                            OutputStreamWriter osr = new OutputStreamWriter(os);
-                            BufferedWriter writer = new BufferedWriter(osr);
-                            writer.write(postText, 0, postText.length());
-                            writer.close();
-                        }
-                    }
+                        int code = connection.getResponseCode();
 
-                    int code = connection.getResponseCode();
-                    String message = connection.getResponseMessage();
-
-                    // Published under `lock` (see the fields above). A response with no
-                    // reason phrase gives a null message, which HTTPResponse normalises.
-                    synchronized (lock) {
-                        responseCode = code;
-                        responseMessage = message;
-                    }
-
-                    // If we get an error code then use the error stream instead
-                    InputStream is;
-                    boolean responseSuccess;
-                    if (code >= 200 && code < 400) {
-                        is = connection.getInputStream();
-                        responseSuccess = true;
-                    } else {
-                        is = connection.getErrorStream();
-                        responseSuccess = false;
-                        if (is == null) {
-                            // Server returned an error code with no body (e.g. a bare
-                            // 404 with Content-Length: 0). Substitute an empty stream
-                            // so asResponse() always returns a non-null handle — which
-                            // is required by the 1.80pr1 "response handle on error" contract.
-                            is = new ByteArrayInputStream(new byte[0]);
-                        }
-                    }
-
-                    // Abort early if the server declares a body larger than the
-                    // configured download limit.
-                    long maxDownload = ComputerCraft.http_max_download;
-                    if (maxDownload > 0) {
-                        long contentLength = connection.getContentLengthLong();
-                        if (contentLength > maxDownload) {
+                        // A redirect is followed only when the option allows it, the target differs,
+                        // and the hop budget is not exhausted (upstream uses 16).
+                        URL target = m_followRedirects ? redirectTarget(current, connection, code) : null;
+                        if (target != null && redirects < MAX_REDIRECTS) {
+                            redirects++;
+                            // 303 explicitly means "GET the result"; other codes keep the method.
+                            if (code == 303) {
+                                method = "GET";
+                                sendBody = false;
+                            }
+                            connection.disconnect();
                             synchronized (lock) {
+                                if (cancelled) {
+                                    complete = true;
+                                    success = false;
+                                    result = null;
+                                    return;
+                                }
+                            }
+                            current = checkURL(target.toString());
+                            continue;
+                        }
+
+                        String message = connection.getResponseMessage();
+
+                        // Published under `lock` (see the fields above). A response with no
+                        // reason phrase gives a null message, which HTTPResponse normalises.
+                        synchronized (lock) {
+                            responseCode = code;
+                            responseMessage = message;
+                        }
+
+                        // If we get an error code then use the error stream instead
+                        InputStream is;
+                        boolean responseSuccess;
+                        if (code >= 200 && code < 400) {
+                            is = connection.getInputStream();
+                            responseSuccess = true;
+                        } else {
+                            is = connection.getErrorStream();
+                            responseSuccess = false;
+                            if (is == null) {
+                                // Server returned an error code with no body (e.g. a bare
+                                // 404 with Content-Length: 0). Substitute an empty stream
+                                // so asResponse() always returns a non-null handle — which
+                                // is required by the 1.80pr1 "response handle on error" contract.
+                                is = new ByteArrayInputStream(new byte[0]);
+                            }
+                        }
+
+                        // Abort early if the server declares a body larger than the
+                        // configured download limit.
+                        long maxDownload = ComputerCraft.http_max_download;
+                        if (maxDownload > 0) {
+                            long contentLength = connection.getContentLengthLong();
+                            if (contentLength > maxDownload) {
+                                synchronized (lock) {
+                                    complete = true;
+                                    success = false;
+                                    result = null;
+                                    failureReason = "Download limit exceeded";
+                                }
+                                is.close();
+                                connection.disconnect();
+                                return;
+                            }
+                        }
+
+                        // Read from the input stream
+                        ByteArrayOutputStream buffer = new ByteArrayOutputStream(Math.max(1024, is.available()));
+                        int nRead;
+                        byte[] data = new byte[1024];
+                        long totalRead = 0;
+                        boolean overLimit = false;
+                        while ((nRead = is.read(data, 0, data.length)) != -1) {
+                            synchronized (lock) {
+                                if (cancelled) break;
+                            }
+
+                            totalRead += nRead;
+                            if (maxDownload > 0 && totalRead > maxDownload) {
+                                overLimit = true;
+                                break;
+                            }
+
+                            buffer.write(data, 0, nRead);
+                        }
+                        is.close();
+
+                        synchronized (lock) {
+                            if (cancelled || overLimit) {
                                 complete = true;
                                 success = false;
                                 result = null;
-                                failureReason = "Download limit exceeded";
+                                if (overLimit) failureReason = "Download limit exceeded";
+                            } else {
+                                complete = true;
+                                success = responseSuccess;
+                                result = buffer.toByteArray();
+
+                                Map<String, String> headers = responseHeaders = new HashMap<>();
+                                for (Map.Entry<String, List<String>> header : connection.getHeaderFields()
+                                    .entrySet()) {
+                                    if (header.getKey() == null) continue; // skip the HTTP status-line pseudo-header
+                                    headers.put(header.getKey(), String.join(", ", header.getValue()));
+                                }
                             }
-                            is.close();
-                            connection.disconnect();
-                            return;
                         }
+
+                        connection.disconnect();
+                        break;
                     }
-
-                    // Read from the input stream
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream(Math.max(1024, is.available()));
-                    int nRead;
-                    byte[] data = new byte[1024];
-                    long totalRead = 0;
-                    boolean overLimit = false;
-                    while ((nRead = is.read(data, 0, data.length)) != -1) {
-                        synchronized (lock) {
-                            if (cancelled) break;
-                        }
-
-                        totalRead += nRead;
-                        if (maxDownload > 0 && totalRead > maxDownload) {
-                            overLimit = true;
-                            break;
-                        }
-
-                        buffer.write(data, 0, nRead);
-                    }
-                    is.close();
-
+                } catch (LuaException e) {
+                    // A policy refusal, not a fault: PrivateAddresses.check and the re-check of
+                    // each redirect hop raise here. The message must reach Lua as the failure
+                    // reason (otherwise every blocked request looks like "Could not connect"),
+                    // and it must not be logged as an error -- being refused is the feature
+                    // working, and a program can trigger it as often as it likes.
                     synchronized (lock) {
-                        if (cancelled || overLimit) {
-                            complete = true;
-                            success = false;
-                            result = null;
-                            if (overLimit) failureReason = "Download limit exceeded";
-                        } else {
-                            complete = true;
-                            success = responseSuccess;
-                            result = buffer.toByteArray();
-
-                            Map<String, String> headers = responseHeaders = new HashMap<>();
-                            for (Map.Entry<String, List<String>> header : connection.getHeaderFields()
-                                .entrySet()) {
-                                if (header.getKey() == null) continue; // skip the HTTP status-line pseudo-header
-                                headers.put(header.getKey(), String.join(", ", header.getValue()));
-                            }
-                        }
+                        complete = true;
+                        success = false;
+                        result = null;
+                        failureReason = e.getMessage();
                     }
-
-                    connection.disconnect();
                 } catch (IOException e) {
                     synchronized (lock) {
                         complete = true;
@@ -339,6 +418,47 @@ public class HTTPRequest {
                 }
             }
         });
+    }
+
+    /**
+     * Works out where a response redirects to, if it redirects at all.
+     *
+     * @param base       the URL that produced the response
+     * @param connection the connection, for the {@code Location} header
+     * @param code       the response code
+     * @return the absolute target URL, or {@code null} when this is not a redirect
+     */
+    static URL redirectTarget(URL base, HttpURLConnection connection, int code) {
+        switch (code) {
+            case 301: // HTTP_MOVED_PERM
+            case 302: // HTTP_MOVED_TEMP
+            case 303: // HTTP_SEE_OTHER
+            case 307: // HTTP_TEMP_REDIRECT
+            case 308: // HTTP_PERM_REDIRECT
+                break;
+            default:
+                return null;
+        }
+
+        String location = connection.getHeaderField("Location");
+        if (location == null || location.isEmpty()) return null;
+
+        try {
+            URL target = new URL(base, location);
+
+            // A redirect back to the same URL would loop until the hop budget runs out.
+            if (target.equals(base)) return null;
+
+            // Only http(s) is followable. A file: or jar: redirect must not be chased, and
+            // returning null (rather than throwing) leaves the 3xx response visible to Lua.
+            String scheme = target.getProtocol() != null ? target.getProtocol()
+                .toLowerCase() : "";
+            if (!scheme.equals("http") && !scheme.equals("https")) return null;
+
+            return target;
+        } catch (MalformedURLException e) {
+            return null;
+        }
     }
 
     public Number getRequestId() {

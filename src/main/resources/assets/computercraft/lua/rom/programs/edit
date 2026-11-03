@@ -13,11 +13,23 @@ if fs.exists( sPath ) and fs.isDir( sPath ) then
 	return
 end
 
+-- Create files with the configured extension by default (edit.default_extension, e.g. "lua").
+-- Only applies to a *new* file whose name has no extension, so an existing path is never changed.
+if not fs.exists( sPath ) and not string.find( sPath, "%." ) then
+	local sExtension = settings.get( "edit.default_extension" )
+	if type( sExtension ) == "string" and sExtension ~= "" then
+		sPath = sPath .. "." .. sExtension
+	end
+end
+
 local x,y = 1,1
 local w,h = term.getSize()
 local scrollX, scrollY = 0,0
 
 local tLines = {}
+-- The lexer state each line starts in, so a multi-line string or comment stays coloured on every
+-- line it covers. false means "nothing outstanding"; a table is the lexer's continuation.
+local tLineLexStates = {}
 local bRunning = true
 
 -- Colours
@@ -73,6 +85,9 @@ local function load( _sPath )
 	if #tLines == 0 then
 		table.insert( tLines, "" )
 	end
+
+	-- One state entry per line: the first line always starts fresh.
+	tLineLexStates = { false }
 end
 
 local function save( _sPath )
@@ -102,61 +117,111 @@ local function save( _sPath )
 	return ok, err
 end
 
-local tKeywords = {
-	["and"] = true,
-	["break"] = true,
-	["do"] = true,
-	["else"] = true,
-	["elseif"] = true,
-	["end"] = true,
-	["false"] = true,
-	["for"] = true,
-	["function"] = true,
-	["if"] = true,
-	["in"] = true,
-	["local"] = true,
-	["nil"] = true,
-	["not"] = true,
-	["or"] = true,
-	["repeat"] = true,
-	["return"] = true,
-	["then"] = true,
-	["true"] = true,
-	["until"]= true,
-	["while"] = true,
-}
+local tokens = require "cc.internal.syntax.parser".tokens
+local lex_one = require "cc.internal.syntax.lexer".lex_one
 
-local function tryWrite( sLine, regex, colour )
-	local match = string.match( sLine, regex )
-	if match then
-		if type(colour) == "number" then
-			term.setTextColour( colour )
-		else
-			term.setTextColour( colour(match) )
-		end
-		term.write( match )
-		term.setTextColour( textColour )
-		return string.sub( sLine, string.len(match) + 1 )
+-- Token colours, following the theme chosen above. Non-colour terminals fall back to shades of
+-- grey so strings and comments are still distinguishable from code.
+local tokenColours = {
+	[ tokens.STRING ] = term.isColour() and colours.red or textColour,
+	[ tokens.COMMENT ] = term.isColour() and colours.green or colours.lightGrey,
+	[ tokens.NUMBER ] = term.isColour() and colours.magenta or textColour,
+}
+for _, token in pairs( tokens ) do
+	if not tokenColours[ token ] then
+		tokenColours[ token ] = textColour
 	end
-	return nil
+end
+-- Keywords share one colour, whatever the terminal supports.
+for _, name in ipairs {
+	"AND", "BREAK", "DO", "ELSE", "ELSEIF", "END", "FALSE", "FOR", "FUNCTION", "GOTO", "IF", "IN",
+	"LOCAL", "NIL", "NOT", "OR", "REPEAT", "RETURN", "THEN", "TRUE", "UNTIL", "WHILE",
+} do
+	local token = tokens[ name ]
+	if token then tokenColours[ token ] = keywordColour end
 end
 
-local function writeHighlighted( sLine )
-	while string.len(sLine) > 0 do	
-		sLine = 
-			tryWrite( sLine, "^%-%-%[%[.-%]%]", commentColour ) or
-			tryWrite( sLine, "^%-%-.*", commentColour ) or
-			tryWrite( sLine, "^\".-[^\\]\"", stringColour ) or
-			tryWrite( sLine, "^\'.-[^\\]\'", stringColour ) or
-			tryWrite( sLine, "^%[%[.-%]%]", stringColour ) or
-			tryWrite( sLine, "^[%w_]+", function( match )
-				if tKeywords[ match ] then
-					return keywordColour
-				end
-				return textColour
-			end ) or
-			tryWrite( sLine, "^[^%w_]", textColour )
+-- The lexer reports syntax errors through this context; the editor has nothing to say about them
+-- (it highlights half-written code all the time), so it just swallows them.
+local lexContext = { line = function() end, report = function() end }
+
+--[[- Whether two continuation states are the same.
+
+A continuation is either `false`/`nil` (nothing outstanding) or a table produced by the lexer. They
+are compared shallowly: the lexer only ever produces small state tables, and comparing them decides
+whether the following lines need re-highlighting.
+]]
+local function sameState( a, b )
+	if a == b then return true end
+	if type( a ) ~= "table" or type( b ) ~= "table" then return false end
+	for k, v in pairs( a ) do
+		if b[ k ] ~= v then return false end
 	end
+	for k in pairs( b ) do
+		if a[ k ] == nil then return false end
+	end
+	return true
+end
+
+--[[- Draws one line, returning the lexer state the next line starts in.
+
+Colouring is driven by the real lexer rather than by pattern matching, which is what makes a
+multi-line string or a long comment stay coloured on every line it covers: each line is lexed
+starting from the state the previous line left behind.
+
+@tparam number nLine the line number to draw
+@return The continuation state for the line after this one.
+]]
+local function lexLine( nLine, bDraw )
+	local sContents = tLines[ nLine ]
+	local nPos, nToken, nFinish
+
+	local sState = tLineLexStates[ nLine ]
+	if type( sState ) == "table" then
+		-- Resume inside a string or comment started on an earlier line.
+		nToken, nFinish, _, sState = sState[1]( lexContext, sContents, table.unpack( sState, 2 ) )
+		nPos = 1
+	else
+		nPos = 1
+		nToken, _, nFinish, _, sState = lex_one( lexContext, sContents, 1 )
+	end
+
+	local nColour = term.getTextColour()
+	while nToken do
+		local newColour = tokenColours[ nToken ] or textColour
+		if bDraw and newColour ~= nColour then
+			term.setTextColour( newColour )
+			nColour = newColour
+		end
+		if bDraw then
+			term.write( string.sub( sContents, nPos, nFinish ) )
+		end
+
+		nPos = nFinish + 1
+		-- A continuation means the lexer stopped at the end of the line.
+		if sState then break end
+
+		nToken, _, nFinish, _, sState = lex_one( lexContext, sContents, nPos )
+	end
+
+	if bDraw then
+		term.write( string.sub( sContents, nPos ) )
+		term.setTextColour( textColour )
+	end
+	return sState or false
+end
+
+--[[- Draws one line, returning the lexer state the next line starts in.
+
+Colouring is driven by the real lexer rather than by pattern matching, which is what keeps a
+multi-line string or a long comment coloured on every line it covers: each line is lexed starting
+from the state the previous line left behind.
+
+@tparam number nLine the line number to draw
+@return The continuation state for the line after this one.
+]]
+local function writeHighlighted( nLine )
+	return lexLine( nLine, true )
 end
 
 local tCompletions
@@ -164,7 +229,14 @@ local nCompletion
 
 local tCompleteEnv = _ENV
 local function complete( sLine )
-    local nStartPos = string.find( sLine, "[a-zA-Z0-9_%.]+$" )
+    -- edit.autocomplete (on by default) can be turned off for people who want a plain editor.
+    if settings.get( "edit.autocomplete", true ) == false then
+        return nil
+    end
+
+    -- Include ':' so a method name after a dot-chain is completed as a whole ("table.ins" ->
+    -- "table.insert" rather than completing "ins" on its own).
+    local nStartPos = string.find( sLine, "[a-zA-Z0-9_%.:]+$" )
     if nStartPos then
         sLine = string.sub( sLine, nStartPos )
     end
@@ -200,33 +272,76 @@ local function writeCompletion( sLine )
     end
 end
 
-local function redrawText()
-    local cursorX, cursorY = x, y
-	for y=1,h-1 do
-		term.setCursorPos( 1 - scrollX, y )
-		term.clearLine()
+--[[- Redraws lines, following the lexer state downwards.
 
-		local sLine = tLines[ y + scrollY ]
-		if sLine ~= nil then
-			writeHighlighted( sLine )
-            if cursorY == y and cursorX == #sLine + 1 then
-                writeCompletion()
+Editing a line can change how the lines *after* it are coloured: opening a long comment, or
+closing one. So drawing continues past `_nEndY` while the state handed to the next line differs from
+the one recorded for it, stopping at the bottom of the screen. That keeps a long comment correctly
+coloured without redrawing the whole file on every keystroke.
+]]
+local function redrawLines( _nLine, _nEndY )
+    if not _nEndY then _nEndY = _nLine end
+
+    local nCursorX, nCursorY = x, y
+    local bChanged = false
+    while ( bChanged or _nLine <= _nEndY ) and _nLine - scrollY < h do
+        local nScreenY = _nLine - scrollY
+        if nScreenY < 1 then
+            -- Above the viewport: drawing it would write over the visible screen, so skip to the
+            -- first visible line and force a full redraw from there.
+            _nLine = scrollY + 1
+            bChanged = true
+            nScreenY = 1
+        end
+        do
+            term.setCursorPos( 1 - scrollX, nScreenY )
+            term.clearLine()
+
+            local sContents = tLines[ _nLine ]
+            if sContents == nil then break end
+
+            local sContinuation = writeHighlighted( _nLine )
+            if nCursorY == nScreenY and nCursorX == #sContents + 1 then
+                writeCompletion( sContents )
             end
-		end
-	end
-	term.setCursorPos( x - scrollX, y - scrollY )
+
+            -- Always record the state for the next line: leaving it nil would make that line lex
+            -- from scratch next time, losing the comment/string it is inside. Re-highlight the
+            -- following lines only when a state we already knew has moved.
+            if sContinuation == nil then sContinuation = false end
+            local sPrevious = tLineLexStates[ _nLine + 1 ]
+            local bKnown = sPrevious ~= nil
+            if not bKnown or not sameState( sPrevious, sContinuation ) then
+                tLineLexStates[ _nLine + 1 ] = sContinuation
+                bChanged = bKnown
+            else
+                bChanged = false
+            end
+
+            _nLine = _nLine + 1
+        end
+    end
+
+    term.setTextColour( textColour )
+    term.setCursorPos( x - scrollX, y - scrollY )
 end
 
-local function redrawLine(_nY)
-	local sLine = tLines[_nY]
-	if sLine then
-        term.setCursorPos( 1 - scrollX, _nY - scrollY )
-        term.clearLine()
-        writeHighlighted( sLine )
-        if _nY == y and x == #sLine + 1 then
-            writeCompletion()
+local function redrawText()
+    -- The top of the screen can start part-way through a string, so the state for the first visible
+    -- line has to be computed from the top of the file once. After that it is cached and edits only
+    -- re-lex what they touch.
+    if tLineLexStates[ scrollY + 1 ] == nil then
+        for i = 1, scrollY do
+            if tLines[ i ] == nil then break end
+            tLineLexStates[ i + 1 ] = lexLine( i, false )
         end
-        term.setCursorPos( x - scrollX, _nY - scrollY )
+    end
+    redrawLines( scrollY + 1, scrollY + h - 1 )
+end
+
+local function redrawLine( _nY )
+    if tLines[ _nY ] then
+        redrawLines( _nY )
     end
 end
 
@@ -369,21 +484,40 @@ local tMenuFuncs = {
 		bRunning = false
 	end,
 	Run = function()
-	    local sTempPath = "/.temp"
-        local ok, err = save( sTempPath )
-        if ok then
-            local nTask = shell.openTab( sTempPath )
-            if nTask then
-                shell.switchTab( nTask )
-            else
-                sStatus="Error starting Task"
-            end
-            fs.delete( sTempPath )
-        else
-            sStatus="Error saving to "..sTempPath
-        end
+		-- Launch through cc.internal.edit_runner rather than running a copy of the file: the
+		-- runner loads the buffer itself, so a runtime error names this file and points at the
+		-- right line even when the buffer was never saved, and it holds the tab open so the
+		-- error can be read instead of vanishing with the tab.
+		local sTitle = fs.getName( sPath )
+		if sTitle:sub( -4 ) == ".lua" then
+			sTitle = sTitle:sub( 1, -5 )
+		end
+		local sTempPath = (bReadOnly and ".temp." or fs.combine( fs.getDir( sPath ), ".temp." )) .. sTitle
+		if fs.exists( sTempPath ) then
+			sStatus = "Error saving to "..sTempPath
+			redrawMenu()
+			return
+		end
+
+		local file = fs.open( sTempPath, "w" )
+		if not file then
+			sStatus = "Error saving to "..sTempPath
+			redrawMenu()
+			return
+		end
+		local runHandler = [[return require("cc.internal.edit_runner")(%q, %q, %q)]]
+		file.write( runHandler:format( sTitle, "@/" .. sPath, table.concat( tLines, "\n" ) ) )
+		file.close()
+
+		local nTask = shell.openTab( "/" .. sTempPath )
+		if nTask then
+			shell.switchTab( nTask )
+		else
+			sStatus = "Error starting Task"
+		end
+		fs.delete( sTempPath )
 		redrawMenu()
-    end
+	end
 }
 
 local function doMenuItem( _n )
@@ -635,6 +769,7 @@ while bRunning do
 				elseif y<#tLines then
 					tLines[y] = tLines[y] .. tLines[y+1]
 					table.remove( tLines, y+1 )
+					table.remove( tLineLexStates, y+1 )
 					recomplete()
 					redrawText()
 				end
@@ -653,6 +788,7 @@ while bRunning do
 					local sPrevLen = string.len( tLines[y-1] )
 					tLines[y-1] = tLines[y-1] .. tLines[y]
 					table.remove( tLines, y )
+					table.remove( tLineLexStates, y )
 					setCursor( sPrevLen + 1, y - 1 )
 					redrawText()
 				end
@@ -669,6 +805,8 @@ while bRunning do
 				end
 				tLines[y] = string.sub(sLine,1,x-1)
 				table.insert( tLines, y+1, string.rep(' ',spaces)..string.sub(sLine,x) )
+				-- The new line's state is unknown until it is drawn.
+				table.insert( tLineLexStates, y+1, false )
 				setCursor( spaces + 1, y + 1 )
 				redrawText()
 

@@ -1,87 +1,145 @@
-
 local tArgs = { ... }
 if #tArgs > 0 then
-	print( "This is an interactive Lua prompt." )
-	print( "To run a lua program, just type its name." )
-	return
+    print("This is an interactive Lua prompt.")
+    print("To run a lua program, just type its name.")
+    return
 end
+
+local pretty = require "cc.pretty"
+local exception = require "cc.internal.exception"
 
 local bRunning = true
 local tCommandHistory = {}
 local tEnv = {
-	["exit"] = function()
-		bRunning = false
-	end,
-	["_echo"] = function( ... )
-	    return ...
-	end,
+    ["exit"] = function()
+        bRunning = false
+    end,
+    ["_echo"] = function(...)
+        return ...
+    end,
 }
-setmetatable( tEnv, { __index = _ENV } )
+setmetatable(tEnv, { __index = _ENV })
+
+-- Replace require with one that loads from the current directory rather than from
+-- /rom/programs, so `require "mylib"` works on the file the user is looking at.
+do
+    local make_package = require "cc.require".make
+    tEnv.require, tEnv.package = make_package(tEnv, shell.dir())
+end
 
 if term.isColour() then
-	term.setTextColour( colours.yellow )
+    term.setTextColour(colours.yellow)
 end
-print( "Interactive Lua prompt." )
-print( "Call exit() to exit." )
-term.setTextColour( colours.white )
+print("Interactive Lua prompt.")
+print("Call exit() to exit.")
+term.setTextColour(colours.white)
 
-while bRunning do
-	--if term.isColour() then
-	--	term.setTextColour( colours.yellow )
-	--end
-	write( "lua> " )
-	--term.setTextColour( colours.white )
+--[[- Whether a compile error means "the input is unfinished" rather than "this is wrong".
 
-	local s = read( nil, tCommandHistory, function( sLine )
-	    local nStartPos = string.find( sLine, "[a-zA-Z0-9_%.]+$" )
-	    if nStartPos then
-	        sLine = string.sub( sLine, nStartPos )
-	    end
-	    if #sLine > 0 then
-            return textutils.complete( sLine, tEnv )
+Lua reports an unterminated block or string at the end of the buffer, which the message marks with
+`<eof>`. Anything else is a real syntax error and should be shown immediately.
+]]
+local function isIncomplete(err)
+    return type(err) == "string" and string.find(err, "<eof>", 1, true) ~= nil
+end
+
+--[[- Reads one chunk, joining continuation lines while it cannot compile yet.
+
+Typing `function f()` and pressing enter should not be a syntax error: the REPL keeps reading until
+the code closes or the user submits a blank line.
+]]
+local function readChunk()
+    local complete = function(sLine)
+        if settings.get("lua.autocomplete", true) then
+            local nStartPos = string.find(sLine, "[a-zA-Z0-9_%.:]+$")
+            if nStartPos then
+                sLine = string.sub(sLine, nStartPos)
+            end
+            if #sLine > 0 then
+                return textutils.complete(sLine, tEnv)
+            end
         end
         return nil
-	end )
-	table.insert( tCommandHistory, s )
-	
-	local nForcePrint = 0
-	local func, e = load( s, "lua", "t", tEnv )
-	local func2, e2 = load( "return _echo("..s..");", "lua", "t", tEnv )
-	if not func then
-		if func2 then
-			func = func2
-			e = nil
-			nForcePrint = 1
-		end
-	else
-		if func2 then
-			func = func2
-		end
-	end
-	
-	if func then
-        local tResults = { pcall( func ) }
-        if tResults[1] then
-        	local n = 1
-        	while (tResults[n + 1] ~= nil) or (n <= nForcePrint) do
-        	    local value = tResults[ n + 1 ]
-        	    if type( value ) == "table" then
-            	    local ok, serialised = pcall( textutils.serialise, value )
-            	    if ok then
-            	        print( serialised )
-            	    else
-            	        print( tostring( value ) )
-            	    end
-            	else
-            	    print( tostring( value ) )
-            	end
-        		n = n + 1
-        	end
+    end
+
+    local input = read(nil, tCommandHistory, complete)
+    if input == nil then return nil end
+
+    while true do
+        local statement, statementErr = load(input, "lua", "t", tEnv)
+        local expression = load("return " .. input .. ";", "lua", "t", tEnv)
+        if statement or expression or not isIncomplete(statementErr) then
+            return input
+        end
+
+        -- Unfinished: ask for the rest. An empty line gives up on the continuation.
+        write("   > ")
+        local more = read(nil, tCommandHistory, complete)
+        if more == nil or more == "" then
+            return input
+        end
+        input = input .. "\n" .. more
+    end
+end
+
+local chunk_idx, chunk_map = 1, {}
+
+while bRunning do
+    write("lua> ")
+
+    local input = readChunk()
+    if input == nil then
+        print("")
+        break
+    end
+    table.insert(tCommandHistory, input)
+
+    -- Each input gets its own chunk name, so an error reads `lua[3]:1:` rather than a bare
+    -- `lua:1:` and the REPL can tell one input from another.
+    local name, offset = "=lua[" .. chunk_idx .. "]", 0
+
+    local func, e = load(input, name, "t", tEnv)
+    if load("return " .. input) then
+        -- Wrap the expression in a call to _echo(...), which prevents tail calls (and thus
+        -- confusing errors). The expression is checked separately so inputs like `)--`, which
+        -- would be parsed as `_echo()--)`, are not accepted.
+        func = load("return _echo(" .. input .. "\n)", name, "t", tEnv)
+        offset = 13
+    end
+
+    if func then
+        -- Remember the user's own text for this chunk so a runtime error can be reported with
+        -- its line and a caret under the failing token, rather than as a bare message. The
+        -- offset undoes the `return _echo(` wrapper added above.
+        chunk_map[name] = { contents = input, offset = offset }
+        chunk_idx = chunk_idx + 1
+
+        local results = table.pack(exception.try(func))
+        if results[1] then
+            for i = 2, results.n do
+                local value = results[i]
+                -- Pretty-print tables on multiple lines, honouring the two display settings.
+                local ok, serialised = pcall(pretty.pretty, value, {
+                    function_args = settings.get("lua.function_args"),
+                    function_source = settings.get("lua.function_source"),
+                })
+                if ok then
+                    pretty.print(serialised)
+                else
+                    print(tostring(value))
+                end
+            end
         else
-        	printError( tResults[2] )
+            printError(results[2])
+            exception.report(results[2], results[3], chunk_map)
         end
     else
-    	printError( e )
+        -- The multi-line reader above has already given incomplete input every chance, so
+        -- whatever is left is a genuine syntax error. Let the ROM's parser report it, which
+        -- points a caret at the offending token instead of echoing the loader's message.
+        local parser = require "cc.internal.syntax"
+        if parser.parse_repl(input) then printError(e) end
     end
-    
 end
+
+term.setTextColour(colours.white)

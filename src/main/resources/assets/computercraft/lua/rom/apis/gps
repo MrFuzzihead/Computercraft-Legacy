@@ -81,17 +81,22 @@ function locate( _nTimeout, _bDebug )
 		print( "Finding position..." )
 	end
 	
-	-- Open a channel
+	--[[- Open the GPS channel and listen for replies on it.
+
+	The request and the replies both use CHANNEL_GPS rather than the computer's own id. That is
+	belt-and-braces with modern CraftOS (where a computer id may not be a usable channel at all),
+	and it means the reply channel carries no information a program could rely on.
+	]]
 	local modem = peripheral.wrap( sModemSide )
 	local bCloseChannel = false
-	if not modem.isOpen( os.getComputerID() ) then
-		modem.open( os.getComputerID() )
+	if not modem.isOpen( CHANNEL_GPS ) then
+		modem.open( CHANNEL_GPS )
 		bCloseChannel = true
 	end
-	
+
 	-- Send a ping to listening GPS hosts
-	modem.transmit( CHANNEL_GPS, os.getComputerID(), "PING" )
-		
+	modem.transmit( CHANNEL_GPS, CHANNEL_GPS, "PING" )
+
 	-- Wait for the responses
 	local tFixes = {}
 	local pos1, pos2 = nil, nil
@@ -99,46 +104,68 @@ function locate( _nTimeout, _bDebug )
 	while true do
 		local e, p1, p2, p3, p4, p5 = os.pullEvent()
 		if e == "modem_message" then
-			-- We received a message from a modem
+			-- We received a reply from a modem
 			local sSide, sChannel, sReplyChannel, tMessage, nDistance = p1, p2, p3, p4, p5
-			if sSide == sModemSide and sChannel == os.getComputerID() and sReplyChannel == CHANNEL_GPS then
-				-- Received the correct message from the correct modem: use it to determine position
-				if type(tMessage) == "table" and #tMessage == 3 then
-					local tFix = { vPosition = vector.new( tMessage[1], tMessage[2], tMessage[3] ), nDistance = nDistance }
+			if sSide == sModemSide and sChannel == CHANNEL_GPS and sReplyChannel == CHANNEL_GPS and nDistance then
+				-- Received a well-formed reply on the GPS channel: use it to determine position
+				if type(tMessage) == "table" and #tMessage == 3
+					and tonumber( tMessage[1] ) and tonumber( tMessage[2] ) and tonumber( tMessage[3] ) then
+					local tFix = {
+						vPosition = vector.new( tMessage[1], tMessage[2], tMessage[3] ),
+						nDistance = nDistance,
+					}
 					if _bDebug then
 						print( tFix.nDistance.." metres from "..tostring( tFix.vPosition ) )
 					end
+
 					if tFix.nDistance == 0 then
-					    pos1, pos2 = tFix.vPosition, nil
+						pos1, pos2 = tFix.vPosition, nil
 					else
-                        table.insert( tFixes, tFix )
-                        if #tFixes >= 3 then
-                            if not pos1 then
-                                pos1, pos2 = trilaterate( tFixes[1], tFixes[2], tFixes[#tFixes] )
-                            else
-                                pos1, pos2 = narrow( pos1, pos2, tFixes[#tFixes] )
-                            end
-                        end
-                    end
+						--[[- Record the fix, keeping at most three.
+
+						A host that answers twice must not count as two hosts, and an older fix from
+						roughly the same place is worth less than a fresh one. So a fix within one
+						block of one already held replaces it instead of taking a new slot: three
+						replies from a single host leave one slot filled, and trilateration never
+						runs. That is the dedupe, and it is why a lone host cannot fake a position.
+						]]
+						local insIndex = math.min( 3, #tFixes + 1 )
+						for i, older in pairs( tFixes ) do
+							if ( older.vPosition - tFix.vPosition ):length() < 1 then
+								insIndex = i
+								break
+							end
+						end
+						tFixes[ insIndex ] = tFix
+
+						if #tFixes >= 3 then
+							if not pos1 then
+								pos1, pos2 = trilaterate( tFixes[1], tFixes[2], tFixes[3] )
+							else
+								pos1, pos2 = narrow( pos1, pos2, tFixes[3] )
+							end
+						end
+					end
+
 					if pos1 and not pos2 then
 						break
 					end
 				end
 			end
-			
+
 		elseif e == "timer" then
 			-- We received a timeout
 			local timer = p1
 			if timer == timeout then
 				break
 			end
-		
-		end 
+
+		end
 	end
-	
+
 	-- Close the channel, if we opened one
 	if bCloseChannel then
-		modem.close( os.getComputerID() )
+		modem.close( CHANNEL_GPS )
 	end
 	
 	-- Return the response

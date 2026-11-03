@@ -5,9 +5,11 @@ import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.item.ItemStack;
 
+import dan200.computercraft.ComputerCraft;
+import dan200.computercraft.shared.computer.inventory.IContainerComputer;
 import dan200.computercraft.shared.util.InventoryUtil;
 
-public class ContainerHeldItem extends Container {
+public class ContainerHeldItem extends Container implements IContainerComputer {
 
     private final ItemStack m_stack;
     private final int m_slot;
@@ -31,5 +33,18 @@ public class ContainerHeldItem extends Container {
         }
 
         return false;
+    }
+
+    /**
+     * The instance id of a pocket computer held in the slot this container is showing, or {@code -1}
+     * for anything else (printouts share this container).
+     */
+    @Override
+    public int getInstanceID() {
+        if (this.m_stack != null && this.m_stack.getItem() == ComputerCraft.Items.pocketComputer) {
+            return ComputerCraft.Items.pocketComputer.getInstanceID(this.m_stack);
+        }
+
+        return -1;
     }
 }

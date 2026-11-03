@@ -8,10 +8,11 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 
 import dan200.computercraft.api.turtle.ITurtleAccess;
+import dan200.computercraft.shared.computer.inventory.IContainerComputer;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
 import dan200.computercraft.shared.turtle.core.TurtleBrain;
 
-public class ContainerTurtle extends Container {
+public class ContainerTurtle extends Container implements IContainerComputer {
 
     private static final int PROGRESS_ID_SELECTED_SLOT = 0;
     public final int m_playerInvStartY;
@@ -96,6 +97,18 @@ public class ContainerTurtle extends Container {
     public boolean canInteractWith(EntityPlayer player) {
         TileTurtle turtle = ((TurtleBrain) this.m_turtle).getOwner();
         return turtle != null ? turtle.isUseableByPlayer(player) : false;
+    }
+
+    @Override
+    public int getInstanceID() {
+        if (this.m_turtle instanceof TurtleBrain) {
+            TileTurtle turtle = ((TurtleBrain) this.m_turtle).getOwner();
+            if (turtle != null) {
+                return turtle.getInstanceID();
+            }
+        }
+
+        return -1;
     }
 
     protected ItemStack tryItemMerge(EntityPlayer player, int slotNum, int firstSlot, int lastSlot, boolean reverse) {

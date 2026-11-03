@@ -256,8 +256,8 @@ class MonitorPeripheralTest {
     void blitRejectsInvalidColourCharactersBeforeTouchingTerminal() {
         MonitorPeripheral peripheral = new MonitorPeripheral(null);
         // The exact B10 reproduction ("x", "g", "0") plus further invalid chars
-        // ('A', ' ') outside the renderer's "0123456789abcdef" alphabet.
-        for (Object[] args : new Object[][] { { "x", "g", "0" }, { "xyz", "0g2", "fed" }, { "xyz", "012", "feA" },
+        // outside the renderer's "0123456789abcdef" alphabet. Uppercase is valid (Batch E).
+        for (Object[] args : new Object[][] { { "x", "g", "0" }, { "xyz", "0g2", "fed" }, { "xyz", "012", "feG" },
             { "xyz", "0 2", "fed" } }) {
             LuaException error = assertThrows(
                 LuaException.class,
@@ -289,7 +289,9 @@ class MonitorPeripheralTest {
         assertEquals("0123456789abcdef", TermAPI.checkColour("0123456789abcdef"));
         assertEquals("", TermAPI.checkColour(""));
         assertThrows(LuaException.class, () -> TermAPI.checkColour("g"));
-        assertThrows(LuaException.class, () -> TermAPI.checkColour("0F"));
+        // Batch E: the hex digits are accepted in either case, as CC:Tweaked's renderer does.
+        assertEquals("0F", TermAPI.checkColour("0F"));
+        assertEquals("ABCDEF", TermAPI.checkColour("ABCDEF"));
         assertThrows(LuaException.class, () -> TermAPI.checkColour("0 0"));
     }
 }

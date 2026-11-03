@@ -51,6 +51,8 @@ class CommandAPITest {
     private static final int METHOD_GET_BLOCK_POSITION = 3;
     private static final int METHOD_GET_BLOCK_INFO = 4;
     private static final int METHOD_GET_BLOCK_INFOS = 5;
+    private static final int METHOD_GET_DIMENSION = 6;
+    private static final int METHOD_GET_ENTITIES = 7;
 
     /**
      * A minimal {@link ILuaContext} that runs {@link ILuaTask} callbacks
@@ -92,8 +94,8 @@ class CommandAPITest {
     }
 
     @Test
-    void getMethodNamesHasSixMethods() {
-        assertEquals(6, api.getMethodNames().length);
+    void getMethodNamesHasEightMethods() {
+        assertEquals(8, api.getMethodNames().length);
     }
 
     @Test
@@ -124,6 +126,46 @@ class CommandAPITest {
     @Test
     void getMethodNamesContainsGetBlockInfos() {
         assertEquals("getBlockInfos", api.getMethodNames()[METHOD_GET_BLOCK_INFOS]);
+    }
+
+    @Test
+    void getMethodNamesContainsGetDimension() {
+        assertEquals("getDimension", api.getMethodNames()[METHOD_GET_DIMENSION]);
+    }
+
+    @Test
+    void getMethodNamesContainsGetEntities() {
+        assertEquals("getEntities", api.getMethodNames()[METHOD_GET_ENTITIES]);
+    }
+
+    @Test
+    void getBlockInfoAcceptsAStringDimension() {
+        // A named dimension is now valid input; without a server it fails at the world lookup
+        // rather than at argument validation.
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> api.callMethod(
+                SYNC_CONTEXT,
+                METHOD_GET_BLOCK_INFO,
+                new Object[] { 0.0, 64.0, 0.0, "minecraft:the_nether" }));
+        assertEquals("No server available", ex.getMessage());
+    }
+
+    @Test
+    void getEntitiesRejectsAnUnsupportedFilter() {
+        // tag= has no 1.7.10 equivalent; it must raise rather than silently match everything.
+        LuaException ex = assertThrows(
+            LuaException.class,
+            () -> api.callMethod(SYNC_CONTEXT, METHOD_GET_ENTITIES, new Object[] { "@e[tag=foo]" }));
+        assertTrue(
+            ex.getMessage()
+                .contains("Unsupported selector filter"),
+            ex.getMessage());
+    }
+
+    @Test
+    void getEntitiesRequiresAString() {
+        assertThrows(LuaException.class, () -> api.callMethod(SYNC_CONTEXT, METHOD_GET_ENTITIES, new Object[] { 1.0 }));
     }
 
     // =========================================================================

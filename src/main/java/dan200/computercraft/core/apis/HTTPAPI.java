@@ -160,6 +160,8 @@ public class HTTPAPI implements ILuaAPI {
                 boolean binary = args.length > 5 && Boolean.TRUE.equals(args[5]);
                 Number requestId = args.length > 6 && args[6] instanceof Number ? (Number) args[6] : null;
                 boolean internalEvent = args.length > 7 && Boolean.TRUE.equals(args[7]);
+                // Default true, as upstream: a request follows redirects unless told not to.
+                boolean redirect = args.length <= 8 || !Boolean.FALSE.equals(args[8]);
 
                 HashMap<String, String> headers = null;
                 if (args.length >= 3 && args[2] instanceof Map) {
@@ -190,7 +192,8 @@ public class HTTPAPI implements ILuaAPI {
                         timeout,
                         binary,
                         requestId,
-                        internalEvent);
+                        internalEvent,
+                        redirect);
                     synchronized (this.m_httpRequests) {
                         // Re-check under lock: another computer thread (advanced
                         // computers each run on their own task) may have raced us.
@@ -238,6 +241,10 @@ public class HTTPAPI implements ILuaAPI {
                 }
 
                 Number requestId = args.length > 2 && args[2] instanceof Number ? (Number) args[2] : null;
+                // Optional handshake timeout in seconds (the Lua options table's timeout field).
+                int handshakeTimeout = args.length > 3 && args[3] instanceof Number
+                    ? (int) (((Number) args[3]).doubleValue() * 1000)
+                    : 0;
                 int maxWebsockets = ComputerCraft.http_max_websockets;
                 synchronized (this.m_pendingWebsockets) {
                     synchronized (this.m_activeWebsockets) {
@@ -253,7 +260,8 @@ public class HTTPAPI implements ILuaAPI {
                         urlString,
                         headers,
                         this.m_apiEnvironment,
-                        requestId);
+                        requestId,
+                        handshakeTimeout);
                     synchronized (this.m_pendingWebsockets) {
                         this.m_pendingWebsockets.add(request);
                     }

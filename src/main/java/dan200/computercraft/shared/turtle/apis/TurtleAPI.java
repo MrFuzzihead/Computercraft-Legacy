@@ -3,11 +3,8 @@ package dan200.computercraft.shared.turtle.apis;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.minecraft.enchantment.Enchantment;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 
 import com.google.common.base.Optional;
 
@@ -37,6 +34,7 @@ import dan200.computercraft.shared.turtle.core.TurtleSelectCommand;
 import dan200.computercraft.shared.turtle.core.TurtleSuckCommand;
 import dan200.computercraft.shared.turtle.core.TurtleTransferToCommand;
 import dan200.computercraft.shared.turtle.core.TurtleTurnCommand;
+import dan200.computercraft.shared.util.ItemDetail;
 
 public class TurtleAPI implements ILuaAPI {
 
@@ -299,38 +297,10 @@ public class TurtleAPI implements ILuaAPI {
                 ItemStack stack = this.m_turtle.getInventory()
                     .getStackInSlot(slot);
                 if (stack != null && stack.stackSize > 0) {
-                    Item item = stack.getItem();
-                    String name = Item.itemRegistry.getNameForObject(item);
-                    int damage = stack.getItemDamage();
-                    int count41 = stack.stackSize;
-                    Map<Object, Object> table = new HashMap<>();
-                    table.put("name", name);
-                    table.put("damage", damage);
-                    table.put("count", count41);
-                    if (detailed) {
-                        table.put("displayName", stack.getDisplayName());
-                        table.put("maxDamage", stack.getMaxDamage());
-                        Map<Object, Object> enchantments = new HashMap<>();
-                        NBTTagList enchTags = stack.getEnchantmentTagList();
-                        if (enchTags != null) {
-                            for (int i = 0; i < enchTags.tagCount(); i++) {
-                                NBTTagCompound enchTag = enchTags.getCompoundTagAt(i);
-                                int enchId = enchTag.getShort("id");
-                                int enchLevel = enchTag.getShort("lvl");
-                                Enchantment ench = (enchId >= 0 && enchId < Enchantment.enchantmentsList.length)
-                                    ? Enchantment.enchantmentsList[enchId]
-                                    : null;
-                                Map<Object, Object> enchEntry = new HashMap<>();
-                                enchEntry.put("name", ench != null ? ench.getName() : "unknown");
-                                enchEntry.put("level", enchLevel);
-                                enchantments.put(i + 1, enchEntry);
-                            }
-                        }
-                        table.put("enchantments", enchantments);
-                    }
-                    return new Object[] { table };
+                    // The detailed form comes from the shared builder, so the turtle and the
+                    // inventory peripheral report identical fields.
+                    return new Object[] { detailed ? ItemDetail.full(stack) : ItemDetail.basic(stack) };
                 }
-
                 return new Object[] { null };
             }
             case 42:

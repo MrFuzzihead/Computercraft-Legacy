@@ -1,0 +1,5 @@
+about prints the version of CraftOS this computer is running, and the host mod it is
+running on.
+
+ex:
+"about"

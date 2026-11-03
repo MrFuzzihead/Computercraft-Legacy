@@ -49,7 +49,8 @@ function drawPixel( xPos, yPos, nColour )
 end
 
 function drawLine( startX, startY, endX, endY, nColour )
-    if type( startX ) ~= "number" or type( startX ) ~= "number" or
+    -- startY used to be checked twice, leaving a non-number startY to reach math.floor.
+    if type( startX ) ~= "number" or type( startY ) ~= "number" or
        type( endX ) ~= "number" or type( endY ) ~= "number" or
        (nColour ~= nil and type( nColour ) ~= "number") then
         error( "Expected startX, startY, endX, endY, colour", 2 )
@@ -69,6 +70,7 @@ function drawLine( startX, startY, endX, endY, nColour )
     end
 
     local minX = math.min( startX, endX )
+    local maxX, minY, maxY
     if minX == startX then
         minY = startY
         maxX = endX

@@ -60,6 +60,7 @@ import dan200.computercraft.shared.media.items.ItemDiskLegacy;
 import dan200.computercraft.shared.media.items.ItemPrintout;
 import dan200.computercraft.shared.media.items.ItemTreasureDisk;
 import dan200.computercraft.shared.network.ComputerCraftPacket;
+import dan200.computercraft.shared.network.FileUploadPacket;
 import dan200.computercraft.shared.network.PacketHandler;
 import dan200.computercraft.shared.peripheral.chatbox.BlockChatBox;
 import dan200.computercraft.shared.peripheral.common.BlockCable;
@@ -90,7 +91,14 @@ import dan200.computercraft.shared.util.IEntityDropConsumer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-@Mod(modid = ComputerCraft.MODID, name = ComputerCraft.MODID, version = Tags.VERSION)
+// The mod ships Java 17+ bytecode, so every client and server that runs it is already on lwjgl3ify
+// (which is what makes LWJGL2/Forge 1.7.10 work on a modern JVM). Declaring it here makes that
+// explicit, and guarantees LWJGL3 - and so the SDL3 classes behind file drag-and-drop - is present.
+@Mod(
+    modid = ComputerCraft.MODID,
+    name = ComputerCraft.MODID,
+    version = Tags.VERSION,
+    dependencies = "required-after:lwjgl3ify")
 public class ComputerCraft {
 
     public static final String MODID = "ComputerCraft";
@@ -110,6 +118,8 @@ public class ComputerCraft {
     public static int http_max_download = 16 * 1024 * 1024;
     public static int http_threads = 8;
     public static int http_timeout = 30000;
+    public static boolean http_allow_local = false;
+    public static int upload_size_limit = 512 * 1024;
     public static boolean disable_lua51_features = false;
     public static boolean enableCommandBlock = false;
     public static boolean turtlesNeedFuel = true;
@@ -198,6 +208,12 @@ public class ComputerCraft {
         prop = config.get("general", "http_timeout", http_timeout);
         prop.comment = "The default time (in milliseconds) to wait for a HTTP request before giving up. Set to 0 for no timeout.";
         http_timeout = Math.max(0, prop.getInt());
+        prop = config.get("general", "http_allow_local", http_allow_local);
+        prop.comment = "Allow HTTP and websocket requests to private, loopback, link-local and CGNAT addresses. Leave false to stop computers reaching the server's own network (routers, cloud metadata, LAN services).";
+        http_allow_local = prop.getBoolean(http_allow_local);
+        prop = config.get("general", "upload_size_limit", upload_size_limit);
+        prop.comment = "The maximum size (in bytes) of the files a player may drop onto a computer, in total and per file. Applies to the drag-and-drop upload from a lwjgl3ify client; set to 0 to disable file uploads entirely.";
+        upload_size_limit = Math.max(0, prop.getInt());
         prop = config.get("general", "disable_lua51_features", disable_lua51_features);
         prop.comment = "Set this to true to disable Lua 5.1 functions that will be removed in a future update. Useful for ensuring forward compatibility of your programs now.";
         disable_lua51_features = prop.getBoolean(disable_lua51_features);
@@ -345,6 +361,8 @@ public class ComputerCraft {
     @EventHandler
     public void onServerStarting(FMLServerStartingEvent event) {
         ItemTreasureDisk.registerDungeonLoot();
+        // /computercraft: list, turn on and shut down computers.
+        event.registerServerCommand(new dan200.computercraft.shared.command.CommandComputerCraft());
     }
 
     @EventHandler
@@ -462,6 +480,16 @@ public class ComputerCraft {
 
     public static void sendToServer(ComputerCraftPacket packet) {
         networkEventChannel.sendToServer(encode(packet));
+    }
+
+    /**
+     * Sends a payload that has its own codec (currently only file uploads) to the server, instead of
+     * the generic {@link ComputerCraftPacket} format.
+     */
+    public static void sendRawToServer(FileUploadPacket packet) {
+        ByteBuf buffer = Unpooled.buffer();
+        packet.encode(buffer);
+        networkEventChannel.sendToServer(new FMLProxyPacket(buffer, "CC"));
     }
 
     public static void handlePacket(ComputerCraftPacket packet, EntityPlayer player) {

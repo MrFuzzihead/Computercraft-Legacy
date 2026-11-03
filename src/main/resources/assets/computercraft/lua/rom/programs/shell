@@ -35,6 +35,37 @@ else
 	bgColour = colours.black
 end
 
+-- cc.require builds a private package/require pair for each program, rooted at that
+-- program's directory. Ported from CC:Tweaked; see rom/modules/main/cc/require.lua.
+local make_package
+
+-- Modern error reporting (traceback + hints). CC:Tweaked's cc.internal modules are used
+-- unmodified; they need the debug library, which this runtime now installs (Cobalt DebugLib).
+local exception = dofile( "rom/modules/main/cc/internal/exception.lua" )
+
+local function createShellEnv( sDir )
+	if not make_package then
+		-- Loaded lazily: nothing here needs it until a program is actually run.
+		make_package = dofile( "rom/modules/main/cc/require.lua" ).make
+	end
+
+	local tRunEnv = { shell = shell, multishell = multishell }
+	tRunEnv.require, tRunEnv.package = make_package( tRunEnv, sDir )
+	return tRunEnv
+end
+
+-- The first line of a file, or nil if it cannot be read.
+local function peekFirstLine( sPath )
+	local file = fs.open( sPath, "r" )
+	if not file then return nil end
+	local sLine = file.readLine and file.readLine() or nil
+	file.close()
+	return sLine
+end
+
+-- Forward declaration: executeProgram needs tokenise, which is defined below it.
+local executeProgram
+
 local function run( _sCommand, ... )
 	local sPath = shell.resolveProgram( _sCommand )
 	if sPath ~= nil then
@@ -42,9 +73,9 @@ local function run( _sCommand, ... )
 		if multishell then
 		    multishell.setTitle( multishell.getCurrent(), fs.getName( sPath ) )
 		end
-		local tRunEnv = setmetatable( {}, { __index = tEnv } )
-		tRunEnv.arg = { [0] = sPath, ... }
-   		local result = os.run( tRunEnv, sPath, ... )
+		local tArgs = { ... }
+		tArgs[0] = sPath
+   		local result = executeProgram( 8, sPath, tArgs )
 		tProgramStack[#tProgramStack] = nil
 		if multishell then
 		    if #tProgramStack > 0 then
@@ -74,6 +105,97 @@ local function tokenise( ... )
         bQuoted = not bQuoted
     end
     return tWords
+end
+
+-- Runs a program from sPath in its own environment, honouring a #! hashbang on the first
+-- line. Hashbangs may recurse, so nRemaining bounds the depth (upstream uses 8 as well).
+--
+-- The normal path still goes through os.run, which owns the strict-globals handling and
+-- the error printing; only the #! case is handled here.
+executeProgram = function( nRemaining, sPath, tArgs )
+	local sFirst = peekFirstLine( sPath )
+	if sFirst and string.sub( sFirst, 1, 2 ) == "#!" then
+		nRemaining = nRemaining - 1
+		if nRemaining <= 0 then
+			return false, "Hashbang recursion depth limit reached when loading file: " .. sPath
+		end
+
+		local tHashbangArgs = tokenise( string.sub( sFirst, 3 ) )
+		local sInterpreter = table.remove( tHashbangArgs, 1 )
+		if not sInterpreter then
+			return false, "Empty hashbang in file: " .. sPath
+		end
+
+		local sResolved = shell.resolveProgram( sInterpreter )
+		if not sResolved then
+			return false, "Hashbang program not found: " .. sInterpreter
+		elseif sResolved == "rom/programs/shell" and #tHashbangArgs == 0 then
+			-- "#!/rom/programs/shell" would expand to "shell <program>", which runs the
+			-- program again: an infinite loop. Guard against the obvious case.
+			return false, "Cannot use the shell as a hashbang program"
+		end
+
+		-- Pass an absolute path so the interpreter's own shell.resolve() calls do not prefix
+		-- it with the current directory.
+		table.insert( tHashbangArgs, "/" .. sPath )
+		for n = 1, #tArgs do
+			table.insert( tHashbangArgs, tArgs[n] )
+		end
+		-- arg[0] names the interpreter as written, which is what a shebang interpreter expects
+		-- (upstream does the same with originalHashbangPath).
+		tHashbangArgs[0] = sInterpreter
+		return executeProgram( nRemaining, sResolved, tHashbangArgs )
+	end
+
+	-- Read the whole file so it can be loaded (and reported on) here. sFirst was only peeked
+	-- for the hashbang, so re-open rather than keeping the handle across the recursion above.
+	local file, err = fs.open( sPath, "r" )
+	if not file then
+		return false, err or "No such file"
+	end
+	local sFirstLine = file.readLine() or ""
+	local sContents = sFirstLine .. "\n" .. ( file.readAll() or "" )
+	file.close()
+
+	local tRunEnv = setmetatable( createShellEnv( fs.getDir( sPath ) ), { __index = tEnv } )
+	tRunEnv.arg = tArgs
+
+	local fnFile, sLoadError = load( sContents, "@/" .. sPath, nil, tRunEnv )
+	if not fnFile then
+		-- A syntax error. Run the source through our own parser: if it parses, the failure is
+		-- from the loader and worth showing; if it does not, the parser can say why.
+		if #sContents < 1024 * 128 then
+			local okParser, parser = pcall( dofile, "rom/modules/main/cc/internal/syntax/init.lua" )
+			if okParser and parser and parser.parse_program then
+				if parser.parse_program( sContents ) then
+					printError( sLoadError )
+				end
+			else
+				printError( sLoadError )
+			end
+		else
+			printError( sLoadError )
+		end
+		return false
+	end
+
+	-- Same protection as os.run, applied here because this path loads the chunk itself.
+	if settings.get( "bios.strict_globals", false ) then
+		getmetatable( tRunEnv ).__newindex = function( _, name )
+			error( "Attempt to create global " .. tostring( name ), 2 )
+		end
+	end
+
+	local ok, err, co = exception.try( fnFile, table.unpack( tArgs, 1, #tArgs ) )
+	if ok then
+		return true
+	end
+
+	if err and err ~= "" then
+		printError( err )
+		exception.report( err, co )
+	end
+	return false
 end
 
 -- Install shell API
@@ -168,6 +290,10 @@ function shell.programs( _bIncludeHidden )
                 local sFile = tList[n]
 				if not fs.isDir( fs.combine( sPath, sFile ) ) and
 				   (_bIncludeHidden or string.sub( sFile, 1, 1 ) ~= ".") then
+					-- A file called "list.lua" is the program "list".
+					if #sFile > 4 and string.sub( sFile, -4 ) == ".lua" then
+						sFile = string.sub( sFile, 1, -5 )
+					end
 					tItems[ sFile ] = true
 				end
 			end
@@ -344,17 +470,77 @@ else
         shell.run( "/rom/startup" )
     end
 
-    -- Read commands and execute them
-    local tCommandHistory = {}
-    while not bExit do
-        term.redirect( parentTerm )
+    -- Packs an event with its true argument count, for re-dispatching into read().
+    -- (bios.lua's table.pack keeps no `n`, and read() cares about argument counts.)
+    local function pack( ... )
+        return { n = select( "#", ... ), ... }
+    end
+
+    -- The import module has to be loaded the way a *program* is loaded, not with the BIOS-level
+    -- require. That require runs modules in the global environment, where `shell` does not exist
+    -- (it is local to this program), and cc.internal.import resolves paths with shell.resolve - so
+    -- a drop used to die with "attempt to index global 'shell' (a nil value)".
+    local importModule
+    local function runImport( files )
+        if not importModule then
+            local tImportEnv = setmetatable( createShellEnv( shell.dir() ), { __index = tEnv } )
+            importModule = tImportEnv.require( "cc.internal.import" )
+        end
+        return importModule( files )
+    end
+
+    local function show_prompt()
         term.setBackgroundColor( bgColour )
         term.setTextColour( promptColour )
         write( shell.dir() .. "> " )
         term.setTextColour( textColour )
+    end
 
-        local sLine = read( nil, tCommandHistory, shell.complete )
-        table.insert( tCommandHistory, sLine )
-        shell.run( sLine )
+    -- Read commands and execute them
+    local tCommandHistory = {}
+    while not bExit do
+        term.redirect( parentTerm )
+        show_prompt()
+
+        local complete
+        if settings.get( "shell.autocomplete" ) ~= false then complete = shell.complete end
+
+        -- read() is run in a coroutine so that a file transfer can be handled *while* the prompt
+        -- is open, the way modern ComputerCraft does: abandon the prompt, run the import, redraw.
+        local co = coroutine.create( read )
+        local ok, result = coroutine.resume( co, nil, tCommandHistory, complete )
+        if not ok then error( result, 0 ) end
+
+        while coroutine.status( co ) ~= "dead" do
+            local event = pack( os.pullEvent() )
+            if event[1] == "file_transfer" then
+                -- Move off the current prompt line so the import output does not overwrite it.
+                local _, h = term.getSize()
+                local _, y = term.getCursorPos()
+                if y == h then
+                    term.scroll( 1 )
+                    term.setCursorPos( 1, y )
+                else
+                    term.setCursorPos( 1, y + 1 )
+                end
+                term.setCursorBlink( false )
+
+                local success, err = runImport( event[2].getFiles() )
+                if not success and err then printError( err ) end
+
+                show_prompt()
+                term.setCursorBlink( true )
+                -- Force read() to redraw over what we just printed.
+                event = { "term_resize", n = 1 }
+            end
+
+            if result == nil or event[1] == result or event[1] == "terminate" then
+                ok, result = coroutine.resume( co, table.unpack( event, 1, event.n ) )
+                if not ok then error( result, 0 ) end
+            end
+        end
+
+        table.insert( tCommandHistory, result )
+        shell.run( result )
     end
 end

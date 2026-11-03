@@ -134,14 +134,28 @@ class CcShellCompletionTest {
     private String buildPreamble() {
         return
         // ── fs mock ──────────────────────────────────────────────────────
-        "_c_path, _c_loc, _c_if, _c_id = nil, nil, nil, nil\n" + "fs = {}\n"
+        "_c_path, _c_loc, _c_if, _c_id, _c_hidden = nil, nil, nil, nil, nil\n" + "fs = {}\n"
+        // The module passes an options table; older callers pass booleans. Normalise both
+        // so assertions stay readable.
             + "function fs.complete(path, loc, inc_files, inc_dirs)\n"
             + "  _c_path = path\n"
             + "  _c_loc  = loc\n"
-            + "  _c_if   = inc_files\n"
-            + "  _c_id   = inc_dirs\n"
+            + "  if type(inc_files) == 'table' then\n"
+            + "    _c_if = inc_files.include_files\n"
+            + "    _c_id = inc_files.include_dirs\n"
+            + "    _c_hidden = inc_files.include_hidden\n"
+            + "  else\n"
+            + "    _c_if = inc_files\n"
+            + "    _c_id = inc_dirs\n"
+            + "  end\n"
             + "  return {'aaa', 'bbb'}\n"
             + "end\n"
+            // Completion now consults shell.autocomplete_hidden.\n"
+            + "_hidden_setting = nil\n"
+            + "settings = { get = function(name, default)\n"
+            + "  if name == 'shell.autocomplete_hidden' then return _hidden_setting end\n"
+            + "  return default\n"
+            + "end }\n"
             // ── help mock (must be global before module loads) ────────────
             + "help = {}\n"
             + "function help.completeTopic(text)\n"
@@ -234,6 +248,83 @@ class CcShellCompletionTest {
     }
 
     // ── Module structure ───────────────────────────────────────────────────────
+
+    // ── build(..., many) and hidden-file completion ────────────────────────────
+
+    @Test
+    void testBuildManyRepeatsTheLastCompleter() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            buildPreamble(),
+            "local fn = sc.build({ sc.file }, { sc.dir, many = true })\n"
+                + "local a = fn(shell_ref, 1, \"first\", {})\n"
+                + "local b = fn(shell_ref, 2, \"second\", {})\n"
+                + "local c = fn(shell_ref, 9, \"ninth\", {})\n"
+                + "_capture(#a, #b, #c, _c_path)");
+        assertEquals(2.0, cap.args[0], "first argument uses its own spec");
+        assertEquals(2.0, cap.args[1], "second argument uses the many spec");
+        assertEquals(2.0, cap.args[2], "arguments past the end keep using it");
+        assertEquals("ninth", cap.args[3], "the text should reach the completer");
+    }
+
+    @Test
+    void testBuildWithoutManyStopsAtTheLastSpec() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            buildPreamble(),
+            "local fn = sc.build({ sc.file }, { sc.dir })\n"
+                + "_capture(fn(shell_ref, 3, \"x\", {}) == nil, fn(shell_ref, 2, \"x\", {}) ~= nil)");
+        assertEquals(Boolean.TRUE, cap.args[0], "past the last spec there is no completion");
+        assertEquals(Boolean.TRUE, cap.args[1], "the last declared spec still works");
+    }
+
+    @Test
+    void testBuildRejectsManyInTheMiddle() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            buildPreamble(),
+            "local ok, err = pcall(sc.build, { sc.file, many = true }, { sc.dir })\n" + "_capture(ok, tostring(err))");
+        assertEquals(Boolean.FALSE, cap.args[0], "many is only valid on the last spec");
+        assertTrue(
+            String.valueOf(cap.args[1])
+                .contains("many"),
+            "the error should mention many, got: " + cap.args[1]);
+    }
+
+    @Test
+    void testBuildRejectsANonFunctionSpec() {
+        ResultCapture cap = new ResultCapture();
+        run(buildMachine(cap), buildPreamble(), "local ok, err = pcall(sc.build, { 42 })\n_capture(ok, tostring(err))");
+        assertEquals(Boolean.FALSE, cap.args[0]);
+    }
+
+    @Test
+    void testFilePassesHiddenSettingThrough() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            buildPreamble(),
+            "_hidden_setting = true\n" + "sc.file(shell_ref, 1, \"\", {})\n" + "_capture(_c_hidden)");
+        assertEquals(Boolean.TRUE, cap.args[0], "shell.autocomplete_hidden must reach fs.complete");
+    }
+
+    @Test
+    void testDirAndDirOrFilePassHiddenSettingThrough() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            buildPreamble(),
+            "_hidden_setting = false\n" + "sc.dir(shell_ref, 1, \"\", {})\n"
+                + "local fromDir = _c_hidden\n"
+                + "_hidden_setting = true\n"
+                + "sc.dirOrFile(shell_ref, 1, \"\", {})\n"
+                + "_capture(fromDir, _c_hidden)");
+        assertEquals(Boolean.FALSE, cap.args[0], "the setting is read, not hard-coded");
+        assertEquals(Boolean.TRUE, cap.args[1]);
+    }
 
     @Test
     void testModuleExposesFileFunction() {

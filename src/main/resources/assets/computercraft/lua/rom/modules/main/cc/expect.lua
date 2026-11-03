@@ -5,10 +5,10 @@
 --[[- The [`cc.expect`] library provides helper functions for verifying that
 function arguments are well-formed and of the correct type.
 
-Ported from CC:Tweaked. The `debug.getinfo` / `debug.getmetatable` calls from
-the upstream source have been removed because the debug library is not loaded
-in this environment; error messages therefore omit the function name and always
-use the raw `type()` string.
+Ported from CC:Tweaked. As in upstream, `debug.getinfo` is used to name the
+calling function in error messages and `debug.getmetatable` lets a value report
+its `__name`. Both are wrapped in pcall/guards, so the module still works if the
+debug library is ever removed from the runtime.
 
 @module cc.expect
 @since 1.84.0
@@ -33,6 +33,18 @@ use the raw `type()` string.
 ]]
 
 local native_select, native_type = select, type
+
+--- The name a value prefers for itself (its metatable's __name), else its Lua type.
+local function get_display_type(value, t)
+    if t ~= "table" and t ~= "userdata" then return t end
+    if not debug or not debug.getmetatable then return t end
+
+    local ok, metatable = pcall(debug.getmetatable, value)
+    if not ok or not metatable then return t end
+
+    local name = rawget(metatable, "__name")
+    if type(name) == "string" then return name else return t end
+end
 
 --- Build a human-readable list of type names from varargs.
 -- Strips any literal "nil" entries (they are implied when a value is absent).
@@ -69,8 +81,23 @@ local function expect(index, value, ...)
         if t == native_select(i, ...) then return value end
     end
 
+    -- Upstream names the calling function here. Cobalt 0.9.9's debug.getinfo reports `what`
+    -- but never `name`, so this stays nil in practice and the message keeps the older form.
+    -- The lookup is kept (it is guarded) so the nicer message appears if that changes.
+    local name
+    if debug and debug.getinfo then
+        local ok, info = pcall(debug.getinfo, 3, "nS")
+        if ok and info and info.name and info.name ~= "" and info.what ~= "C" then name = info.name end
+    end
+
+    t = get_display_type(value, t)
+
     local type_names = get_type_names(...)
-    error(("bad argument #%d (%s expected, got %s)"):format(index, type_names, t), 3)
+    if name then
+        error(("bad argument #%d to '%s' (%s expected, got %s)"):format(index, name, type_names, t), 3)
+    else
+        error(("bad argument #%d (%s expected, got %s)"):format(index, type_names, t), 3)
+    end
 end
 
 --- Expect a field of a table to have a specific type.
@@ -93,7 +120,7 @@ local function field(tbl, index, ...)
     if value == nil then
         error(("field '%s' missing from table"):format(index), 3)
     else
-        error(("bad field '%s' (%s expected, got %s)"):format(index, get_type_names(...), t), 3)
+        error(("bad field '%s' (%s expected, got %s)"):format(index, get_type_names(...), get_display_type(value, t)), 3)
     end
 end
 

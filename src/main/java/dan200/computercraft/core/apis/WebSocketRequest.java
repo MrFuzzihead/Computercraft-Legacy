@@ -50,7 +50,10 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
      * (e.g. firewall dropping SYN packets). 10 s is a reasonable upper bound for
      * an interactive game session.
      */
-    private static final int CONNECT_TIMEOUT_MS = 10_000;
+    static final int CONNECT_TIMEOUT_MS = 10_000;
+
+    /** Upper bound on a Lua-supplied handshake timeout, so a huge value cannot hang a pool slot. */
+    private static final int MAX_CONNECT_TIMEOUT_MS = 120_000;
 
     private final IAPIEnvironment m_environment;
     private final String m_urlString;
@@ -79,7 +82,23 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     public WebSocketRequest(String urlString, Map<String, String> headers, IAPIEnvironment environment,
         Number requestId) throws LuaException {
-        super(HTTPRequest.checkWebSocketURL(urlString), new Draft_6455(), nullToEmpty(headers), CONNECT_TIMEOUT_MS);
+        this(urlString, headers, environment, requestId, 0);
+    }
+
+    /**
+     * @param urlString   the ws:// or wss:// url
+     * @param headers     extra handshake headers
+     * @param environment the owning computer's environment, for events
+     * @param requestId   optional correlation id for the connection events
+     * @param timeoutMs   handshake timeout in milliseconds; 0 or negative uses the default
+     */
+    public WebSocketRequest(String urlString, Map<String, String> headers, IAPIEnvironment environment,
+        Number requestId, int timeoutMs) throws LuaException {
+        super(
+            HTTPRequest.checkWebSocketURL(urlString),
+            new Draft_6455(),
+            nullToEmpty(headers),
+            clampTimeout(timeoutMs));
         this.m_requestId = requestId;
         this.m_environment = environment;
         this.m_urlString = urlString;
@@ -253,5 +272,16 @@ public class WebSocketRequest extends WebSocketClient implements IWebSocketConne
 
     public String getURL() {
         return m_urlString;
+    }
+
+    /**
+     * Clamps a Lua-supplied handshake timeout into a sane range.
+     *
+     * @param timeoutMs the requested timeout in milliseconds
+     * @return the timeout to use
+     */
+    private static int clampTimeout(int timeoutMs) {
+        if (timeoutMs <= 0) return CONNECT_TIMEOUT_MS;
+        return Math.min(timeoutMs, MAX_CONNECT_TIMEOUT_MS);
     }
 }

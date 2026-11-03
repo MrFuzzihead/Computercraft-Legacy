@@ -84,6 +84,24 @@ class ShellAPITest {
         Object[] args;
     }
 
+    /**
+     * Source for a mock program that records how it was invoked.
+     *
+     * <p>
+     * The program writes into the machine's globals so the test can inspect what happened:
+     * {@code _prog_runs}, {@code _prog_arg0}, {@code _prog_args} and {@code _prog_env}.
+     * </p>
+     */
+    private static String recordingProgram() {
+        // Records into _G, because a program's own globals land in its private env.
+        return "_G._prog_runs = (_G._prog_runs or 0) + 1\n" + "_G._prog_arg0 = arg and arg[0]\n"
+            + "_G._prog_args = { ... }\n"
+            + "_G._prog_env = _ENV\n"
+            + "_G._prog_envs = _G._prog_envs or {}\n"
+            + "_G._prog_envs[#_G._prog_envs + 1] = _ENV\n"
+            + "_G._prog_running = shell.getRunningProgram()\n";
+    }
+
     private static CobaltMachine buildMachine(ResultCapture capture) {
         ComputerCraft.bigInteger = false;
         ComputerCraft.bitop = false;
@@ -170,6 +188,47 @@ class ShellAPITest {
         sb.append("  return base .. '/' .. rel\n");
         sb.append("end\n");
 
+        // Program sources, keyed by path. The shell opens programs itself now (to report
+        // tracebacks), so tests supply real source instead of asserting on os.run.
+        sb.append("_mock_sources = {}\n");
+        sb.append("function fs.open(p, mode)\n");
+        sb.append("  local src = _mock_sources[p]\n");
+        sb.append("  if src == nil then return nil end\n");
+        sb.append("  local pos = 1\n");
+        sb.append("  local file = {}\n");
+        sb.append("  function file.readLine()\n");
+        sb.append("    if pos > #src then return nil end\n");
+        sb.append("    local nl = src:find('\\n', pos, true)\n");
+        sb.append("    local line\n");
+        sb.append("    if nl then line = src:sub(pos, nl - 1); pos = nl + 1\n");
+        sb.append("    else line = src:sub(pos); pos = #src + 1 end\n");
+        sb.append("    return line\n");
+        sb.append("  end\n");
+        sb.append("  function file.readAll()\n");
+        sb.append("    local rest = src:sub(pos)\n");
+        sb.append("    pos = #src + 1\n");
+        sb.append("    return rest\n");
+        sb.append("  end\n");
+        sb.append("  function file.close() end\n");
+        sb.append("  return file\n");
+        sb.append("end\n");
+        sb.append("function fs.getDir(p)" + " return p:match('^(.*)/[^/]*$') or '' end\n");
+        // The shell reads bios.strict_globals when it runs a program.
+        sb.append("settings = { get = function(_, default) return default end }\n");
+        // The shell dofile()s cc.require (make) and cc.internal.exception (try/report) at load
+        // time; the syntax preview uses parse_program. One stub covers all three uses.
+        sb.append("function dofile(p)\n");
+        sb.append("  local m = {}\n");
+        sb.append("  m.make = function() return function() end, {} end\n");
+        sb.append("  m.try = function(f, ...)\n");
+        sb.append("    local r = { pcall(f, ...) }\n");
+        sb.append("    if r[1] then return true end\n");
+        sb.append("    return false, r[2], nil\n");
+        sb.append("  end\n");
+        sb.append("  m.report = function() end\n");
+        sb.append("  m.parse_program = function() return true end\n");
+        sb.append("  return m\n");
+        sb.append("end\n");
         sb.append("function fs.exists(p)  return _mock_files[p] == true end\n");
         sb.append("function fs.isDir(p)   return false end\n");
         sb.append("function fs.getName(p) return p:match('[^/]+$') or p end\n");
@@ -199,8 +258,23 @@ class ShellAPITest {
      * preamble injected. The combined chunk is:
      * {@code preamble + shellDefs + testLua}.
      */
+    /** Escapes a Lua source string into a Lua long-bracket literal. */
+    private static String luaQuote(String source) {
+        return "[==[\n" + source + "]==]";
+    }
+
     private static void run(CobaltMachine machine, String testLua, String... mockFiles) {
-        String combined = buildPreamble(mockFiles) + "\n" + shellDefs + "\n" + testLua;
+        String preamble = buildPreamble(mockFiles);
+        for (String file : mockFiles) {
+            preamble = preamble + "\n_mock_sources[\"" + file + "\"] = " + luaQuote(recordingProgram()) + "\n";
+        }
+        String combined = preamble + "\n" + shellDefs + "\n" + testLua;
+        if (System.getenv("DUMP_SHELL_PREAMBLE") != null) {
+            System.out.println(
+                "===PREAMBLE===\n" + combined.substring(
+                    Math.max(0, combined.indexOf("_mock_sources[\"") - 200),
+                    Math.min(combined.length(), combined.indexOf("_mock_sources[\"") + 900)));
+        }
         machine.loadBios(new ByteArrayInputStream(combined.getBytes(StandardCharsets.UTF_8)));
         for (int i = 0; i < 50 && !machine.isFinished(); i++) {
             machine.handleEvent(null, null);
@@ -238,9 +312,9 @@ class ShellAPITest {
     }
 
     @Test
-    void executeCallsOsRunWithNormalisedPath() {
+    void executeRunsProgramAtResolvedPath() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "shell.execute('/rom/programs/id')\n_capture(_os_run_path)", "rom/programs/id");
+        run(buildMachine(cap), "shell.execute('/rom/programs/id')\n_capture(_prog_arg0)", "rom/programs/id");
         assertNotNull(cap.args);
         assertEquals("rom/programs/id", cap.args[0], "leading slash must be stripped by fs.combine");
     }
@@ -250,7 +324,7 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "shell.execute('/rom/programs/prog', 'alpha', 'beta')\n_capture(_os_run_args[1], _os_run_args[2])",
+            "shell.execute('/rom/programs/prog', 'alpha', 'beta')\n_capture(_prog_args[1], _prog_args[2])",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("alpha", cap.args[0]);
@@ -258,25 +332,28 @@ class ShellAPITest {
     }
 
     @Test
-    void executeReturnsTrueWhenOsRunSucceeds() {
+    void executeReturnsTrueWhenTheProgramSucceeds() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_os_run_result = true\nlocal ok = shell.execute('/rom/programs/id')\n_capture(ok)",
-            "rom/programs/id");
+        run(buildMachine(cap), "local ok = shell.execute('/rom/programs/id')\n_capture(ok)", "rom/programs/id");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0]);
     }
 
     @Test
-    void executeReturnsFalseWhenOsRunFails() {
+    void executeReturnsFalseWhenTheProgramFails() {
         ResultCapture cap = new ResultCapture();
+        // Override the default recording source with a program that raises.
         run(
             buildMachine(cap),
-            "_os_run_result = false\nlocal ok = shell.execute('/rom/programs/id')\n_capture(ok)",
+            "_mock_sources['rom/programs/id'] = [[error('boom')]]\n" + "local ok = shell.execute('/rom/programs/id')\n"
+                + "_capture(ok, _printError_last)\n",
             "rom/programs/id");
         assertNotNull(cap.args);
-        assertFalse((Boolean) cap.args[0]);
+        assertFalse((Boolean) cap.args[0], "a failing program must make execute return false");
+        assertTrue(
+            String.valueOf(cap.args[1])
+                .contains("boom"),
+            "the error should be reported, got: " + cap.args[1]);
     }
 
     // =========================================================================
@@ -305,7 +382,7 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "shell.run('prog alpha beta')\n_capture(_os_run_args[1], _os_run_args[2])",
+            "shell.run('prog alpha beta')\n_capture(_prog_args[1], _prog_args[2])",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("alpha", cap.args[0]);
@@ -315,7 +392,7 @@ class ShellAPITest {
     @Test
     void runHandlesQuotedArgument() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "shell.run('prog \"hello world\"')\n_capture(_os_run_args[1])", "rom/programs/prog");
+        run(buildMachine(cap), "shell.run('prog \"hello world\"')\n_capture(_prog_args[1])", "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("hello world", cap.args[0], "quoted string must be a single token");
     }
@@ -323,10 +400,7 @@ class ShellAPITest {
     @Test
     void runReturnsTrueWhenProgramSucceeds() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "_os_run_result = true\nlocal ok = shell.run('prog')\n_capture(ok)",
-            "rom/programs/prog");
+        run(buildMachine(cap), "local ok = shell.run('prog')\n_capture(ok)", "rom/programs/prog");
         assertNotNull(cap.args);
         assertTrue((Boolean) cap.args[0]);
     }
@@ -409,18 +483,12 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "local env1, env2\n" + "local call = 0\n"
-                + "function os.run(env, path, ...)\n"
-                + "  call = call + 1\n"
-                + "  if call == 1 then env1 = env else env2 = env end\n"
-                + "  return true\n"
-                + "end\n"
-                + "shell.execute('/rom/programs/prog')\n"
-                + "shell.execute('/rom/programs/prog')\n"
-                + "_capture(env1 == env2)\n",
+            "shell.execute('/rom/programs/prog')\n" + "shell.execute('/rom/programs/prog')\n"
+                + "_capture(_prog_envs[1] == _prog_envs[2], #_prog_envs)\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertFalse((Boolean) cap.args[0], "each execute call must produce a fresh env table");
+        assertEquals(2.0, cap.args[1], "both runs should have executed");
     }
 
     @Test
@@ -451,10 +519,10 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "function os.run(env, path, ...) _capture(type(env.shell)) end\n" + "shell.execute('/rom/programs/prog')\n",
+            "shell.execute('/rom/programs/prog')\n_capture(type(_prog_env.shell), type(_prog_env.multishell))\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
-        assertEquals("table", cap.args[0], "per-run env must expose 'shell' via __index into the base tEnv");
+        assertEquals("table", cap.args[0], "the program env must expose 'shell'");
     }
 
     // =========================================================================
@@ -466,7 +534,7 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "function os.run(env, path, ...) _capture(type(env.arg)) end\n" + "shell.execute('/rom/programs/prog')\n",
+            "shell.execute('/rom/programs/prog')\n_capture(type(_prog_env.arg))\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("table", cap.args[0], "env.arg must be a table");
@@ -475,10 +543,7 @@ class ShellAPITest {
     @Test
     void argZeroIsResolvedProgramPath() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "function os.run(env, path, ...) _capture(env.arg[0]) end\n" + "shell.execute('/rom/programs/prog')\n",
-            "rom/programs/prog");
+        run(buildMachine(cap), "shell.execute('/rom/programs/prog')\n_capture(_prog_arg0)\n", "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("rom/programs/prog", cap.args[0], "arg[0] must be the resolved program path");
     }
@@ -488,8 +553,7 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(
             buildMachine(cap),
-            "function os.run(env, path, ...) _capture(env.arg[1]) end\n"
-                + "shell.execute('/rom/programs/prog', 'myarg')\n",
+            "shell.execute('/rom/programs/prog', 'myarg')\n_capture(_prog_args[1])\n",
             "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals("myarg", cap.args[0], "arg[1] must be the first argument passed to execute");
@@ -498,10 +562,7 @@ class ShellAPITest {
     @Test
     void argOneIsNilWhenCalledWithNoArguments() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "function os.run(env, path, ...) _capture(env.arg[1]) end\n" + "shell.execute('/rom/programs/prog')\n",
-            "rom/programs/prog");
+        run(buildMachine(cap), "shell.execute('/rom/programs/prog')\n_capture(_prog_args[1])\n", "rom/programs/prog");
         assertNotNull(cap.args);
         assertNull(cap.args[0], "arg[1] must be nil when program is called with no arguments");
     }
@@ -582,18 +643,12 @@ class ShellAPITest {
     @Test
     void getRunningProgramReturnsPathDuringExecution() {
         ResultCapture cap = new ResultCapture();
-        run(
-            buildMachine(cap),
-            "function os.run(env, path, ...)\n" + "  _capture(shell.getRunningProgram())\n"
-                + "  return true\n"
-                + "end\n"
-                + "shell.execute('/rom/programs/prog')\n",
-            "rom/programs/prog");
+        run(buildMachine(cap), "shell.execute('/rom/programs/prog')\n_capture(_prog_running)\n", "rom/programs/prog");
         assertNotNull(cap.args);
         assertEquals(
             "rom/programs/prog",
             cap.args[0],
-            "getRunningProgram must return the current program path during os.run");
+            "getRunningProgram must return the current program path while it runs");
     }
 
     // =========================================================================

@@ -3,6 +3,11 @@
 > Audited against [tweaked.cc](https://tweaked.cc/) on 2026-03-30.
 > This document tracks what is implemented in this 1.7.10 legacy fork versus the
 > CC:Tweaked reference, and provides a prioritized roadmap to close the gaps.
+>
+> **Feasibility follow-up:** see
+> [`CC_TWEAKED_1.120_PARITY_FEASIBILITY.md`](CC_TWEAKED_1.120_PARITY_FEASIBILITY.md)
+> for a platform-aware review of these gaps against 1.7.10/Forge, ETFR/HogUtils,
+> and features that cannot be meaningfully backported.
 
 ---
 

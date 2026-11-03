@@ -1,235 +1,325 @@
--- Definition for the IO API
+-- Emulates Lua's standard io library, following CC:Tweaked 1.120.2's rom/apis/io.
+--
+-- Ported from CC:Tweaked (CCPL). Three deliberate differences:
+--   * cc.expect is loaded with require() rather than upstream's dofile(), which is how the
+--     rest of this ROM's modules consume it. This BIOS defines require() before any API
+--     loads, so it is available here.
+--   * stdin's readLine is wrapped: upstream hands it straight to _G.read, so
+--     io.stdin:read("*L") would pass `true` as read()'s replace-character argument and
+--     raise "bad argument #1 (string expected, got boolean)". Terminal input has no
+--     trailing newline to preserve, so dropping the flag is correct.
+--   * upstream's "bad fileument #1" typo in io.input is fixed.
+--
+-- Handles are backed by fs.open, so the available methods are the ones the fs handles
+-- expose: read/readLine/readAll/write/writeLine/flush/close/seek depending on the mode.
 
-local g_defaultInput = {
-	bFileHandle = true,
-	bClosed = false,
-	close = function( self )
-	end,
-	read = function( self, _sFormat )
-		if _sFormat and _sFormat ~= "*l" then
-			error( "Unsupported format" )
-		end
-		return _G.read()
-	end,
-	lines = function( self )
-		return function()
-			return _G.read()
-		end
-	end,
-}
+local expect = require("cc.expect").expect
+local type_of = _G.type
 
-local g_defaultOutput = {
-	bFileHandle = true,
-	bClosed = false,
-	close = function( self )
-	end,
-	write = function( self, ... )
-		for i = 1, select( "#", ... ) do
-			_G.write( tostring( select( i, ... ) ) )
-		end
-		return self
-	end,
-	flush = function( self )
-	end,
-}
-
-local g_currentInput = g_defaultInput
-local g_currentOutput = g_defaultOutput
-
-function close( _file )
-	(_file or g_currentOutput):close()
+--- If we return nil then close the file, as we've reached the end.
+-- A wrapper rather than inline code so the varargs are preserved.
+local function checkResult(handle, ...)
+    if ... == nil and handle._autoclose and not handle._closed then handle:close() end
+    return ...
 end
 
+--- A file handle which can be read or written to.
+local handleMetatable
+handleMetatable = {
+    __name = "FILE*",
+    __tostring = function(self)
+        if self._closed then
+            return "file (closed)"
+        else
+            local hash = tostring(self._handle):match("table: (%x+)")
+            return "file (" .. (hash or "?") .. ")"
+        end
+    end,
+
+    __index = {
+        --- Close this file handle, freeing any resources it uses.
+        -- @treturn[1] true If this handle was successfully closed.
+        -- @treturn[2] nil, string If it could not be closed (standard streams).
+        close = function(self)
+            if type_of(self) ~= "table" or getmetatable(self) ~= handleMetatable then
+                error("bad argument #1 (FILE expected, got " .. type_of(self) .. ")", 2)
+            end
+            if self._closed then error("attempt to use a closed file", 2) end
+
+            local handle = self._handle
+            if handle.close then
+                self._closed = true
+                handle.close()
+                return true
+            else
+                return nil, "attempt to close standard stream"
+            end
+        end,
+
+        --- Flush any buffered output, forcing it to be written to the file.
+        flush = function(self)
+            if type_of(self) ~= "table" or getmetatable(self) ~= handleMetatable then
+                error("bad argument #1 (FILE expected, got " .. type_of(self) .. ")", 2)
+            end
+            if self._closed then error("attempt to use a closed file", 2) end
+
+            local handle = self._handle
+            if handle.flush then handle.flush() end
+            return true
+        end,
+
+        --- Returns an iterator that, each time it is called, returns a new line from the
+        -- file. Once the end has been reached nil is returned; the file is *not* closed
+        -- automatically (that only happens for io.lines).
+        -- @param ... The formats to pass to Handle:read for each line.
+        lines = function(self, ...)
+            if type_of(self) ~= "table" or getmetatable(self) ~= handleMetatable then
+                error("bad argument #1 (FILE expected, got " .. type_of(self) .. ")", 2)
+            end
+            if self._closed then error("attempt to use a closed file", 2) end
+
+            local handle = self._handle
+            -- read() accepts readLine as an alternative, so lines() does too. Upstream only checks
+            -- for read, which leaves io.stdin:lines() and io.lines() (no filename) returning
+            -- nil, "file is not readable" even though reading a line from stdin is possible.
+            if not handle.read and not handle.readLine then return nil, "file is not readable" end
+
+            local args = table.pack(...)
+            return function()
+                if self._closed then error("file is already closed", 2) end
+                return checkResult(self, self:read(table.unpack(args, 1, args.n)))
+            end
+        end,
+
+        --- Reads data from the file, using the specified formats. For each format provided,
+        -- the function returns either the data read or nil if no data could be read.
+        --
+        -- Formats: `l` (line, no newline), `L` (line, with newline), `a` (whole rest of
+        -- file), `n` (numbers, not implemented in CC). A leading `*` is accepted for Lua
+        -- 5.1 compatibility. No format means `l`.
+        read = function(self, ...)
+            if type_of(self) ~= "table" or getmetatable(self) ~= handleMetatable then
+                error("bad argument #1 (FILE expected, got " .. type_of(self) .. ")", 2)
+            end
+            if self._closed then error("attempt to use a closed file", 2) end
+
+            local handle = self._handle
+            if not handle.read and not handle.readLine then return nil, "Not opened for reading" end
+
+            local n = select("#", ...)
+            local output = {}
+            for i = 1, n do
+                local arg = select(i, ...)
+                local res
+                if type_of(arg) == "number" then
+                    if handle.read then res = handle.read(arg) end
+                elseif type_of(arg) == "string" then
+                    local format = arg:gsub("^%*", ""):sub(1, 1)
+
+                    if format == "l" then
+                        if handle.readLine then res = handle.readLine() end
+                    elseif format == "L" then
+                        if handle.readLine then res = handle.readLine(true) end
+                    elseif format == "a" then
+                        if handle.readAll then res = handle.readAll() or "" end
+                    elseif format == "n" then
+                        res = nil -- Not implemented in CC.
+                    else
+                        error("bad argument #" .. i .. " (invalid format)", 2)
+                    end
+                else
+                    error("bad argument #" .. i .. " (string expected, got " .. type_of(arg) .. ")", 2)
+                end
+
+                output[i] = res
+                if not res then break end
+            end
+
+            -- Default to "l" if possible
+            if n == 0 and handle.readLine then return handle.readLine() end
+            return table.unpack(output, 1, n)
+        end,
+
+        --- Seeks the file cursor to the specified position, returning the new position.
+        -- @tparam[opt] string whence "set", "cur" (default) or "end".
+        -- @tparam[opt] number offset The offset from the base. Defaults to 0.
+        seek = function(self, whence, offset)
+            if type_of(self) ~= "table" or getmetatable(self) ~= handleMetatable then
+                error("bad argument #1 (FILE expected, got " .. type_of(self) .. ")", 2)
+            end
+            if self._closed then error("attempt to use a closed file", 2) end
+
+            local handle = self._handle
+            if not handle.seek then return nil, "file is not seekable" end
+
+            -- A tail call, so error positions are preserved.
+            return handle.seek(whence, offset)
+        end,
+
+        --- Sets the buffering mode for an output file. No effect under ComputerCraft; it
+        -- exists for compatibility with base Lua.
+        setvbuf = function(self, mode, size) end,
+
+        --- Write one or more values to the file.
+        -- @tparam string|number ... The values to write.
+        -- @treturn[1] Handle The current file, allowing chained calls.
+        -- @treturn[2] nil, string If the file is not writable.
+        write = function(self, ...)
+            if type_of(self) ~= "table" or getmetatable(self) ~= handleMetatable then
+                error("bad argument #1 (FILE expected, got " .. type_of(self) .. ")", 2)
+            end
+            if self._closed then error("attempt to use a closed file", 2) end
+
+            local handle = self._handle
+            if not handle.write then return nil, "file is not writable" end
+
+            for i = 1, select("#", ...) do
+                local arg = select(i, ...)
+                expect(i, arg, "string", "number")
+                -- Convert with Lua's tostring rather than passing the value through. The fs
+                -- handles stringify a Java double, so file:write(1) would otherwise write
+                -- "1.0"; CC:Tweaked receives a Lua value and writes "1".
+                handle.write(tostring(arg))
+            end
+            return self
+        end,
+    },
+}
+
+local function make_file(handle)
+    return setmetatable({ _handle = handle }, handleMetatable)
+end
+
+-- readLine is wrapped so that read("*L") cannot pass a boolean into _G.read.
+local defaultInput = make_file({
+    readLine = function() return _G.read() end,
+})
+
+local defaultOutput = make_file({ write = _G.write })
+
+local defaultError = make_file({
+    write = function(...)
+        local oldColour
+        if term.isColour() then
+            oldColour = term.getTextColour()
+            term.setTextColour(colors.red)
+        end
+        _G.write(...)
+        if term.isColour() then term.setTextColour(oldColour) end
+    end,
+})
+
+local currentInput = defaultInput
+local currentOutput = defaultOutput
+
+--- A file handle representing the "standard input". Reading from it prompts the user.
+stdin = defaultInput
+
+--- A file handle representing the "standard output". Writing to it displays on screen.
+stdout = defaultOutput
+
+--- A file handle representing the "standard error" stream, which writes in red.
+stderr = defaultError
+
+--- Closes the provided file handle, defaulting to the current output file.
+function close(file)
+    if file == nil then return currentOutput:close() end
+
+    if type_of(file) ~= "table" or getmetatable(file) ~= handleMetatable then
+        error("bad argument #1 (FILE expected, got " .. type_of(file) .. ")", 2)
+    end
+    return file:close()
+end
+
+--- Flushes the current output file.
 function flush()
-	g_currentOutput:flush()
+    return currentOutput:flush()
 end
 
-function input( _arg )
-	if _G.type( _arg ) == "string" then
-		g_currentInput = open( _arg, "r" )
-	elseif _G.type( _arg ) == "table" then
-		g_currentInput = _arg
-	elseif _G.type( _arg ) == "nil" then
-		return g_currentInput
-	else
-		error( "Expected file name or file handle" )
-	end
+--- Get or set the current input file, by path or by handle.
+-- @treturn Handle The current input file.
+function input(file)
+    if type_of(file) == "string" then
+        local res, err = open(file, "r")
+        if not res then error(err, 2) end
+        currentInput = res
+    elseif type_of(file) == "table" and getmetatable(file) == handleMetatable then
+        currentInput = file
+    elseif file ~= nil then
+        error("bad argument #1 (FILE expected, got " .. type_of(file) .. ")", 2)
+    end
+
+    return currentInput
 end
 
-function lines( _sFileName )
-	if _sFileName then
-		return open( _sFileName, "r" ):lines()
-	else
-		return g_currentInput:lines()
-	end
+--- Opens the given file and returns an iterator over its lines. The file is closed
+-- automatically at end of file. With no filename, the current input is used instead.
+function lines(filename, ...)
+    expect(1, filename, "string", "nil")
+    if filename then
+        local ok, err = open(filename, "r")
+        if not ok then error(err, 2) end
+
+        -- Marks the handle as owned by io.lines, so it is closed at EOF.
+        ok._autoclose = true
+        return ok:lines(...)
+    else
+        return currentInput:lines(...)
+    end
 end
 
-function open( _sPath, _sMode )
-	local sMode = _sMode or "r"
+--- Open a file with the given mode, returning a handle or nil plus an error message.
+--
+-- Modes: "r", "w", "a", "r+", "w+"; a trailing "b" opens in binary mode, which has no
+-- effect on functionality here. An unsupported mode raises, matching CC:Tweaked, because
+-- fs.open rejects it rather than returning nil.
+function open(filename, mode)
+    expect(1, filename, "string")
+    expect(2, mode, "string", "nil")
 
-	-- Validate mode before calling fs.open so unsupported modes
-	-- produce a proper nil, err rather than a thrown error.
-	local validModes = { r = true, w = true, a = true, rb = true, wb = true, ab = true, ["r+"] = true, ["w+"] = true }
-	if not validModes[sMode] then
-		return nil, "Unsupported mode"
-	end
+    local file, err = fs.open(filename, mode or "r")
+    if not file then return nil, err end
 
-	-- fs.open reports nil, reason for every mode, so pass the real diagnostic on.
-	local file, err = fs.open( _sPath, sMode )
-	if not file then
-		return nil, err or "Failed to open file"
-	end
-
-	if sMode == "r"then
-		return {
-			bFileHandle = true,
-			bClosed = false,
-			close = function( self )
-				file.close()
-				self.bClosed = true
-			end,
-			read = function( self, _sFormat )
-				local sFormat = _sFormat or "*l"
-				if sFormat == "*l" then
-					return file.readLine()
-				elseif sFormat == "*a" then
-					return file.readAll()
-				else
-					error( "Unsupported format" )
-				end
-				return nil
-			end,
-			lines = function( self )
-				return function()
-					local sLine = file.readLine()
-					if sLine == nil then
-						file.close()
-						self.bClosed = true
-					end
-					return sLine
-				end
-			end,
-		}
-	elseif sMode == "w" or sMode == "a" then
-		return {
-			bFileHandle = true,
-			bClosed = false,
-			close = function( self )
-				file.close()
-				self.bClosed = true
-			end,
-			write = function( self, ... )
-				for i = 1, select( "#", ... ) do
-					file.write( tostring( select( i, ... ) ) )
-				end
-				return self
-			end,
-			flush = function( self )
-				file.flush()
-			end,
-		}
-
-	elseif sMode == "r+" or sMode == "w+" then
-		return {
-			bFileHandle = true,
-			bClosed = false,
-			close = function( self )
-				file.close()
-				self.bClosed = true
-			end,
-			read = function( self, _sFormat )
-				local sFormat = _sFormat or "*l"
-				if sFormat == "*l" then
-					return file.readLine()
-				elseif sFormat == "*a" then
-					return file.readAll()
-				else
-					error( "Unsupported format" )
-				end
-			end,
-			write = function( self, ... )
-				for i = 1, select( "#", ... ) do
-					file.write( tostring( select( i, ... ) ) )
-				end
-				return self
-			end,
-			seek = function( self, _sWhence, _nOffset )
-				return file.seek( _sWhence or "cur", _nOffset or 0 )
-			end,
-			lines = function( self )
-				return function()
-					local sLine = file.readLine()
-					if sLine == nil then
-						file.close()
-						self.bClosed = true
-					end
-					return sLine
-				end
-			end,
-			flush = function( self )
-				file.flush()
-			end,
-		}
-
-	elseif sMode == "rb" then
-		return {
-			bFileHandle = true,
-			bClosed = false,
-			close = function( self )
-				file.close()
-				self.bClosed = true
-			end,
-			read = function( self )
-				return file.read()
-			end,
-		}
-
-	elseif sMode == "wb" or sMode == "ab" then
-		return {
-			bFileHandle = true,
-			bClosed = false,
-			close = function( self )
-				file.close()
-				self.bClosed = true
-			end,
-			write = function( self, _number )
-				file.write( _number )
-			end,
-			flush = function( self )
-				file.flush()
-			end,
-		}
-
-	end
+    return make_file(file)
 end
 
-function output( _arg )
-	if _G.type( _arg ) == "string" then
-		g_currentOutput = open( _arg, "w" )
-	elseif _G.type( _arg ) == "table" then
-		g_currentOutput = _arg
-	elseif _G.type( _arg ) == "nil" then
-		return g_currentOutput
-	else
-		error( "Expected file name or file handle" )
-	end
+--- Get or set the current output file, by path or by handle.
+-- @treturn Handle The current output file.
+function output(file)
+    if type_of(file) == "string" then
+        local res, err = open(file, "wb")
+        if not res then error(err, 2) end
+        currentOutput = res
+    elseif type_of(file) == "table" and getmetatable(file) == handleMetatable then
+        currentOutput = file
+    elseif file ~= nil then
+        error("bad argument #1 (FILE expected, got " .. type_of(file) .. ")", 2)
+    end
+
+    return currentOutput
 end
 
-function read( ... )
-	return input():read( ... )
+--- Read from the currently opened input file.
+-- Equivalent to io.input():read(...).
+function read(...)
+    return currentInput:read(...)
 end
 
-function type( _handle )
-	if _G.type( _handle ) == "table" and _handle.bFileHandle == true then
-		if _handle.bClosed then
-			return "closed file"
-		else
-			return "file"
-		end
-	end
-	return nil
+--- Checks whether obj is a file handle, and whether it is open.
+-- @treturn string|nil "file", "closed file", or nil if not a file handle.
+function type(obj)
+    if type_of(obj) == "table" and getmetatable(obj) == handleMetatable then
+        if obj._closed then
+            return "closed file"
+        else
+            return "file"
+        end
+    end
+    return nil
 end
 
-function write( ... )
-	return output():write( ... )
+--- Write to the currently opened output file.
+-- Equivalent to io.output():write(...).
+function write(...)
+    return currentOutput:write(...)
 end

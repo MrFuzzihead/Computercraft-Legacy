@@ -34,6 +34,7 @@ import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
+import dan200.computercraft.api.peripheral.IMultiTypePeripheral;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.shared.common.BlockGeneric;
 import dan200.computercraft.shared.peripheral.PeripheralType;
@@ -452,11 +453,33 @@ public class TileCable extends TileModemBase implements INetwork {
         }
     }
 
-    private String getTypeRemote(String remoteName) {
+    /**
+     * Every type a remote peripheral reports, primary first, or {@code null} if it is not present.
+     *
+     * @param remoteName the remote peripheral's name
+     * @return the type strings, or {@code null}
+     */
+    private String[] getTypesRemote(String remoteName) {
         synchronized (this.m_peripheralsByName) {
             TileCable.RemotePeripheralWrapper wrapper = this.m_peripheralWrappersByName.get(remoteName);
-            return wrapper != null ? wrapper.getType() : null;
+            return wrapper != null ? wrapper.getTypes() : null;
         }
+    }
+
+    /**
+     * The remote peripheral's types as a {@code ";"}-joined string, or {@code null} if it is absent.
+     *
+     * <p>
+     * Joining keeps the historical single-string contract for callers that only want a string,
+     * while carrying every type for a peripheral that declares more than one.
+     * </p>
+     *
+     * @param remoteName the remote peripheral's name
+     * @return the joined types, or {@code null}
+     */
+    private String getTypeRemote(String remoteName) {
+        String[] types = getTypesRemote(remoteName);
+        return types != null ? String.join(";", types) : null;
     }
 
     private String[] getMethodNamesRemote(String remoteName) {
@@ -712,12 +735,29 @@ public class TileCable extends TileModemBase implements INetwork {
         private Packet() {}
     }
 
-    private static class Peripheral extends ModemPeripheral {
+    /**
+     * The types a wired modem reports: {@code "modem"} first, then {@code "peripheral_hub"}.
+     *
+     * <p>
+     * {@code "peripheral_hub"} is what modern CraftOS programs check before looking for
+     * {@code getNamesRemote} and friends, so a program written against CC:Tweaked can detect this
+     * peripheral without probing for methods. The first entry stays {@code "modem"} for code that
+     * only reads the first return value.
+     * </p>
+     */
+    public static final String[] PERIPHERAL_TYPES = { "modem", "peripheral_hub" };
+
+    private static class Peripheral extends ModemPeripheral implements IMultiTypePeripheral {
 
         private TileCable m_entity;
 
         public Peripheral(TileCable entity) {
             this.m_entity = entity;
+        }
+
+        @Override
+        public String[] getTypes() {
+            return PERIPHERAL_TYPES;
         }
 
         @Override
@@ -782,9 +822,10 @@ public class TileCable extends TileModemBase implements INetwork {
                     String type = this.m_entity.getTypeRemote(this.parseString(arguments, 0));
                     return new Object[] { type != null };
                 case 2: {
-                    String fullType2 = this.m_entity.getTypeRemote(this.parseString(arguments, 0));
-                    if (fullType2 == null) return null;
-                    String[] typeParts = fullType2.split(";");
+                    // Multiple return values, primary type first, exactly like peripheral.getType
+                    // does for a directly attached peripheral.
+                    String[] typeParts = this.m_entity.getTypesRemote(this.parseString(arguments, 0));
+                    if (typeParts == null) return null;
                     Object[] typeResult = new Object[typeParts.length];
                     System.arraycopy(typeParts, 0, typeResult, 0, typeParts.length);
                     return typeResult;
@@ -811,11 +852,11 @@ public class TileCable extends TileModemBase implements INetwork {
                 case 5: {
                     String remoteName5 = this.parseString(arguments, 0);
                     String checkType5 = this.parseString(arguments, 1);
-                    String type5 = this.m_entity.getTypeRemote(remoteName5);
-                    if (type5 == null) {
+                    String[] types5 = this.m_entity.getTypesRemote(remoteName5);
+                    if (types5 == null) {
                         throw new LuaException("No peripheral: " + remoteName5);
                     }
-                    for (String t : type5.split(";")) {
+                    for (String t : types5) {
                         if (t.equals(checkType5)) return new Object[] { true };
                     }
                     return new Object[] { false };
@@ -870,6 +911,7 @@ public class TileCable extends TileModemBase implements INetwork {
         private IComputerAccess m_computer;
         private String m_name;
         private String m_type;
+        private String[] m_types;
         private String[] m_methods;
         private Map<String, Integer> m_methodMap;
         private TileCable m_entity;
@@ -881,6 +923,10 @@ public class TileCable extends TileModemBase implements INetwork {
             this.m_name = name;
             this.m_entity = entity;
             this.m_type = peripheral.getType();
+            // A remote peripheral may declare more than one type; the primary one stays first so
+            // getTypeRemote's first return value is unchanged.
+            this.m_types = peripheral instanceof IMultiTypePeripheral ? ((IMultiTypePeripheral) peripheral).getTypes()
+                : new String[] { this.m_type };
             this.m_methods = peripheral.getMethodNames();
 
             assert this.m_type != null;
@@ -908,6 +954,15 @@ public class TileCable extends TileModemBase implements INetwork {
 
         public String getType() {
             return this.m_type;
+        }
+
+        /**
+         * Every type this remote peripheral reports, primary first.
+         *
+         * @return the type strings; never {@code null}, and never empty
+         */
+        public String[] getTypes() {
+            return this.m_types != null && this.m_types.length > 0 ? this.m_types : new String[] { this.m_type };
         }
 
         public String[] getMethodNames() {

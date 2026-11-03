@@ -50,7 +50,11 @@ local _help_api = help
 -- @tparam {string...} previous The arguments already typed.
 -- @treturn {string...} A list of completion suffixes.
 local function file(shell, index, text, previous)
-    return fs.complete(text, shell.dir(), true, false)
+    return fs.complete(text, shell.dir(), {
+        include_files = true,
+        include_dirs = false,
+        include_hidden = settings.get("shell.autocomplete_hidden"),
+    })
 end
 
 --- Complete the name of a directory relative to the current working directory.
@@ -65,7 +69,11 @@ end
 -- @tparam {string...} previous The arguments already typed.
 -- @treturn {string...} A list of completion suffixes.
 local function dir(shell, index, text, previous)
-    return fs.complete(text, shell.dir(), false, true)
+    return fs.complete(text, shell.dir(), {
+        include_files = false,
+        include_dirs = true,
+        include_hidden = settings.get("shell.autocomplete_hidden"),
+    })
 end
 
 --- Complete the name of a file or directory relative to the current working
@@ -81,7 +89,11 @@ end
 -- @tparam {string...} previous The arguments already typed.
 -- @treturn {string...} A list of completion suffixes.
 local function dirOrFile(shell, index, text, previous)
-    return fs.complete(text, shell.dir(), true, true)
+    return fs.complete(text, shell.dir(), {
+        include_files = true,
+        include_dirs = true,
+        include_hidden = settings.get("shell.autocomplete_hidden"),
+    })
 end
 
 --- Complete the name of a program on the [`shell.path`].
@@ -239,32 +251,56 @@ end
 --         )
 --     )
 local function build(...)
-    local n = select("#", ...)
+    local arguments = table.pack(...)
     local completers = {}
-    for i = 1, n do
-        local spec = select(i, ...)
-        if type(spec) == "function" then
-            completers[i] = spec
-        elseif type(spec) == "table" and type(spec[1]) == "function" then
-            if #spec > 1 then
-                -- Factory spec: pre-apply extra args once at build time.
-                local args = {}
-                for j = 2, #spec do args[j - 1] = spec[j] end
-                completers[i] = spec[1](table.unpack(args))
+    for i = 1, arguments.n do
+        local arg = arguments[i]
+        if arg ~= nil then
+            if type(arg) == "function" then
+                arg = { arg }
+                arguments[i] = arg
+            end
+
+            if type(arg) ~= "table" or type(arg[1]) ~= "function" then
+                error(("Bad table entry #1 at argument #%d (function expected, got %s)"):format(i, type(arg)), 2)
+            end
+
+            -- "many" means this completer keeps being used for every argument after it, so it
+            -- only makes sense on the last spec.
+            if arg.many and i < arguments.n then
+                error(("Unexpected 'many' field on argument #%d (should only occur on the last argument)"):format(i), 2)
+            end
+
+            if #arg > 1 then
+                -- Factory form: { cc.completion.choice, { "yes", "no" } }. The extra entries are
+                -- applied once, at build time, and the returned function is the completer.
+                local tArgs = {}
+                for j = 2, #arg do tArgs[j - 1] = arg[j] end
+                completers[i] = arg[1](table.unpack(tArgs))
             else
-                -- Table with only a function: treat it as a direct completer.
-                completers[i] = spec[1]
+                completers[i] = arg[1]
             end
         end
-        -- nil specs leave completers[i] as nil → no completion for this arg.
     end
+
+    local function isMany(index)
+        local arg = arguments[index]
+        return arg ~= nil and arg.many == true
+    end
+
     return function(shell, index, text, previous)
-        local fn = completers[index]
-        if type(fn) == "function" then
-            -- Normalise index to 1: the spec function is responsible for one
-            -- argument only; `build` has already handled the argument mapping.
-            return fn(shell, 1, text, previous)
+        local completer = completers[index]
+        if not completer then
+            if index <= arguments.n then return end
+
+            -- Past the last declared argument: only continue if that one was marked "many".
+            completer, index = completers[arguments.n], arguments.n
+            if not completer or not isMany(index) then return end
         end
+
+        -- Our completers take the argument index as their second parameter (upstream drops it),
+        -- so it is normalised to 1: each spec describes exactly one argument.
+        return completer(shell, 1, text, previous)
     end
 end
 

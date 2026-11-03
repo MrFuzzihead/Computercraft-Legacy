@@ -1,0 +1,8 @@
+motd prints the message of the day.
+
+The messages are read from the paths in the "motd.path" setting, which is a colon
+separated list of files. One line is picked at random each time.
+
+The message of the day on boot can be turned off with:
+
+    set motd.enable false

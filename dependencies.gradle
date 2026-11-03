@@ -34,6 +34,20 @@
  * For more details, see https://docs.gradle.org/8.0.1/userguide/java_library_plugin.html#sec:java_library_configurations_graph
  */
 dependencies {
+    // SDL3, for OS file drag-and-drop. Compile-time only: lwjgl3ify puts LWJGL3 and its native
+    // libraries on the runtime classpath and is declared as a required mod dependency, so nothing
+    // here is shipped. The version follows the LWJGL3 line lwjgl3ify 3.0.x ships; update it
+    // together with lwjgl3ify, not on its own.
+    compileOnly("org.lwjgl:lwjgl-sdl:3.4.2")
+    // Only for the @Lwjgl3Aware marker annotation: lwjgl3ify rewrites every org/lwjgl/ reference in
+    // mod bytecode to org/lwjglx/ (so legacy LWJGL2 calls hit its shims), which would send our LWJGL3
+    // classes into a namespace that has no SDL. The annotation opts a class out of that. Version is
+    // irrelevant beyond "has the annotation"; bump together with the runtime.
+    compileOnly("com.github.GTNewHorizons:lwjgl3ify:3.0.25:api")
+    // Present at test runtime so the drop watcher can be loaded at all. There are no natives here,
+    // so the watcher's failure path is what gets exercised - which is the point.
+    testRuntimeOnly("org.lwjgl:lwjgl-sdl:3.4.2")
+
     shadowImplementation("cc.tweaked:cobalt:0.9.9")
     shadowImplementation("org.java-websocket:Java-WebSocket:1.5.6")
 

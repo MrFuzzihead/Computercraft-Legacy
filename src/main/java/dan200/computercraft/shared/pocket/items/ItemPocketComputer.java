@@ -29,9 +29,9 @@ import dan200.computercraft.shared.computer.core.ClientComputer;
 import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.items.IComputerItem;
+import dan200.computercraft.shared.pocket.PocketUpgrades;
 import dan200.computercraft.shared.pocket.apis.PocketAPI;
 import dan200.computercraft.shared.pocket.peripherals.PocketChatBoxPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketEnderModemPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketModemPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketNpcDetectorPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketNpcInterfacePeripheral;
@@ -450,18 +450,12 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                 PocketAPI pocketAPI = new PocketAPI(computer);
                 computer.addAPI(pocketAPI);
                 s_pocketAPIs.put(instanceID, pocketAPI);
-                if (this.getHasModem(stack)) {
-                    computer.setPeripheral(2, new PocketModemPeripheral());
-                } else if (this.getHasEnderModem(stack)) {
-                    computer.setPeripheral(2, new PocketEnderModemPeripheral());
-                } else if (this.getHasSpeaker(stack)) {
-                    computer.setPeripheral(2, new PocketSpeakerPeripheral());
-                } else if (this.getHasChatBox(stack)) {
-                    computer.setPeripheral(2, new PocketChatBoxPeripheral());
-                } else if (this.getHasNpcDetector(stack)) {
-                    computer.setPeripheral(2, new PocketNpcDetectorPeripheral());
-                } else if (this.getHasNpcInterface(stack)) {
-                    computer.setPeripheral(2, new PocketNpcInterfacePeripheral(stack));
+                // One table decides which upgrade attaches which peripheral, shared with
+                // pocket.equipBack so the two paths cannot drift.
+                int upgrade = this.getUpgrade(stack);
+                if (upgrade >= 0) {
+                    IPeripheral peripheral = PocketUpgrades.createPeripheral(upgrade, stack);
+                    if (peripheral != null) computer.setPeripheral(2, peripheral);
                 }
 
                 ComputerCraft.serverComputerRegistry.add(instanceID, computer);
@@ -552,8 +546,8 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         return computer != null ? computer.getRootMount() : null;
     }
 
-    private int getInstanceID(ItemStack stack) {
-        NBTTagCompound compound = stack.getTagCompound();
+    public int getInstanceID(ItemStack stack) {
+        NBTTagCompound compound = stack != null ? stack.getTagCompound() : null;
         return compound != null && compound.hasKey("instanceID") ? compound.getInteger("instanceID") : -1;
     }
 
@@ -593,6 +587,19 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         } else {
             return 0;
         }
+    }
+
+    /**
+     * The upgrade id installed in this pocket computer.
+     *
+     * @param stack the pocket computer stack
+     * @return the NBT upgrade id, or {@code -1} when nothing supported is installed
+     */
+    public int getUpgrade(ItemStack stack) {
+        NBTTagCompound compound = stack.getTagCompound();
+        if (compound == null || !compound.hasKey("upgrade")) return -1;
+        int upgrade = compound.getInteger("upgrade");
+        return PocketUpgrades.isUpgrade(upgrade) ? upgrade : -1;
     }
 
     public boolean getHasModem(ItemStack stack) {

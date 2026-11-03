@@ -1,29 +1,294 @@
-tArgs = { ... }
+local tArgs = { ... }
+local sTopic
 if #tArgs > 0 then
-	sTopic = tArgs[1]
+    sTopic = tArgs[1]
 else
-	sTopic = "intro"
+    sTopic = "intro"
 end
 
 if sTopic == "index" then
-	print( "Help topics availiable:" )
-	local tTopics = help.topics()
-	textutils.pagedTabulate( tTopics )
-	return
+    print("Help topics available:")
+    local tTopics = help.topics()
+    textutils.pagedTabulate(tTopics)
+    return
 end
-	
-local w,h = term.getSize()
-local sFile = help.lookup( sTopic )
-local file = ((sFile ~= nil) and io.open( sFile )) or nil
-local nLinesPrinted = 0
-if file then
-	local sLine = file:read()
-	local nLines = 0
-	while sLine do
-		nLines = nLines + textutils.pagedPrint( sLine, (h-3) - nLines )
-    	sLine = file:read()
+
+local strings = require "cc.strings"
+
+local function min_of(a, b, default)
+    if not a and not b then return default end
+    if not a then return b end
+    if not b then return a end
+    return math.min(a, b)
+end
+
+--[[- Parse a markdown string, extracting headings and highlighting some basic constructs.
+
+Returns the text with a matching foreground/background colour string per character (for blit), plus
+a list of headings with the offset of the line each one starts on, so the menu can jump between
+sections.
+
+Only three constructs are handled: `#` headings, bullet lists, and `inline code`. That is
+deliberately the whole of the ROM's markdown support — the help files ship with this repository, so
+there is no need for a general parser.
+]]
+local function parse_markdown(text)
+    local len = #text
+    local oob = len + 1
+
+    -- `%f[^\n\0]` matches the start of a line or of the document.
+    local heading = "%f[^\n\0](#+ +)([^\n]*)"
+    local bullet = "%f[^\n\0]( *)[.*]( +)"
+    local code = "`([^`]+)`"
+
+    local new_text, fg, bg = "", "", ""
+    local function append(txt, fore, back)
+        new_text = new_text .. txt
+        fg = fg .. (fore or "0"):rep(#txt)
+        bg = bg .. (back or "f"):rep(#txt)
     end
-	file:close()
-else
-	print( "No help available" )
+
+    local next_header = text:find(heading)
+    local next_bullet = text:find(bullet)
+    local next_block = min_of(next_header, next_bullet, oob)
+
+    local next_code, next_code_end = text:find(code)
+
+    local sections = {}
+
+    local start = 1
+    while start <= len do
+        if start == next_block then
+            if start == next_header then
+                local _, fin, head, content = text:find(heading, start)
+                sections[#new_text + 1] = content
+                append(head .. content, "4", "f")
+                start = fin + 1
+
+                next_header = text:find(heading, start)
+            else
+                local _, fin, space, content = text:find(bullet, start)
+                append(space .. "\7" .. content)
+                start = fin + 1
+
+                next_bullet = text:find(bullet, start)
+            end
+
+            next_block = min_of(next_header, next_bullet, oob)
+        elseif next_code and next_code_end < next_block then
+            -- Inline code spans are drawn as black on light grey.
+            if start < next_code then append(text:sub(start, next_code - 1)) end
+            local content = text:match(code, next_code)
+            append(content, "0", "7")
+
+            start = next_code_end + 1
+            next_code, next_code_end = text:find(code, start)
+        else
+            append(text:sub(start, next_block - 1))
+            start = next_block
+
+            if next_code then next_code, next_code_end = text:find(code, start) end
+        end
+    end
+
+    return new_text, fg, bg, sections
 end
+
+local function word_wrap_basic(text, width)
+    local lines, fg, bg = strings.wrap(text, width), {}, {}
+    local fg_line, bg_line = ("0"):rep(width), ("f"):rep(width)
+
+    -- Normalise to exact width so blit never pads or overruns.
+    for k, line in pairs(lines) do
+        lines[k] = strings.ensure_width(line, width)
+        fg[k] = fg_line
+        bg[k] = bg_line
+    end
+
+    return lines, fg, bg, {}
+end
+
+local function word_wrap_markdown(text, width)
+    local text, fg, bg, sections = parse_markdown(text)
+
+    local lines = strings.wrap(text, width)
+    local fglines, bglines, section_list, section_n = {}, {}, {}, 1
+
+    -- Colour strings are per character, so each wrapped line takes the slice of the colour strings
+    -- that corresponds to where it was found. Lines are found in order, so `start` only moves
+    -- forwards.
+    local start = 1
+    for k, line in pairs(lines) do
+        local pos = text:find(line, start, true)
+        lines[k], fglines[k], bglines[k] = strings.ensure_width(line, width),
+            strings.ensure_width(fg:sub(pos, pos + #line), width),
+            strings.ensure_width(bg:sub(pos, pos + #line), width)
+
+        if sections[pos] then
+            section_list[section_n], section_n = { content = sections[pos], offset = k - 1 }, section_n + 1
+        end
+
+        start = pos + 1
+    end
+
+    return lines, fglines, bglines, section_list
+end
+
+local sFile = help.lookup(sTopic)
+local file = sFile ~= nil and io.open(sFile) or nil
+if not file then
+    printError("No help available")
+    return
+end
+
+local contents = file:read("*a")
+file:close()
+
+--[[- Whether a topic should use the section/menu renderer.
+
+Upstream keys this off a `.md` extension, because its build turns the docs into markdown files. The
+topics that ship with this repository are extensionless plain text, and only some of them use
+markdown headings at all, so the content is inspected as well: a `.md` name or any `#` heading line
+gets the rich renderer, everything else stays plain.
+]]
+local function looksMarkdown(name, contents)
+    if name:sub(-3) == ".md" then
+        return true
+    end
+    -- %f[^\n\0] is the same start-of-line frontier the parser uses for headings.
+    return contents:find("%f[^\n\0]#+ ") ~= nil
+end
+
+local word_wrap = looksMarkdown(sFile, contents) and word_wrap_markdown or word_wrap_basic
+local width, height = term.getSize()
+local content_height = height - 1
+local lines, fg, bg, sections = word_wrap(contents, width)
+local print_height = #lines
+
+-- If it fits on screen there is nothing to scroll, so draw it and stop.
+if print_height <= content_height then
+    local _, y = term.getCursorPos()
+    for i = 1, print_height do
+        if y + i - 1 > height then
+            term.scroll(1)
+            term.setCursorPos(1, height)
+        else
+            term.setCursorPos(1, y + i - 1)
+        end
+
+        term.blit(lines[i], fg[i], bg[i])
+    end
+    return
+end
+
+local current_section = nil
+local offset = 0
+
+--- The section whose heading is at or above the top of the view, or nil if there are none.
+local function find_section()
+    for i = #sections, 1, -1 do
+        if sections[i].offset <= offset then
+            return i
+        end
+    end
+end
+
+local function draw_menu()
+    term.setTextColor(colors.yellow)
+    term.setCursorPos(1, height)
+    term.clearLine()
+
+    local tag = "Help: " .. sTopic
+    if current_section then
+        tag = tag .. (" (%s)"):format(sections[current_section].content)
+    end
+    term.write(tag)
+
+    if width >= #tag + 16 then
+        term.setCursorPos(width - 14, height)
+        term.write("Press Q to exit")
+    end
+end
+
+local function draw()
+    for y = 1, content_height do
+        term.setCursorPos(1, y)
+        if y + offset > print_height then
+            -- Only reachable after the terminal is resized larger than the document.
+            term.clearLine()
+        else
+            term.blit(lines[y + offset], fg[y + offset], bg[y + offset])
+        end
+    end
+
+    local new_section = find_section()
+    if new_section ~= current_section then
+        current_section = new_section
+        draw_menu()
+    end
+end
+
+draw()
+draw_menu()
+
+while true do
+    local event, param = os.pullEventRaw()
+    if event == "key" then
+        if param == keys.up and offset > 0 then
+            offset = offset - 1
+            draw()
+        elseif param == keys.down and offset < print_height - content_height then
+            offset = offset + 1
+            draw()
+        elseif param == keys.pageUp and offset > 0 then
+            offset = math.max(offset - content_height + 1, 0)
+            draw()
+        elseif param == keys.pageDown and offset < print_height - content_height then
+            offset = math.min(offset + content_height - 1, print_height - content_height)
+            draw()
+        elseif param == keys.home then
+            offset = 0
+            draw()
+        elseif param == keys.left and current_section and current_section > 1 then
+            -- Jump to the previous section.
+            offset = sections[current_section - 1].offset
+            draw()
+        elseif param == keys.right and current_section and current_section < #sections then
+            offset = sections[current_section + 1].offset
+            draw()
+        elseif param == keys["end"] then
+            offset = print_height - content_height
+            draw()
+        elseif param == keys.q then
+            -- Swallow the "q" so it does not land on the shell prompt.
+            require "cc.internal.event".discard_char()
+            break
+        end
+    elseif event == "mouse_scroll" then
+        if param < 0 and offset > 0 then
+            offset = offset - 1
+            draw()
+        elseif param > 0 and offset <= print_height - content_height then
+            offset = offset + 1
+            draw()
+        end
+    elseif event == "term_resize" then
+        local new_width, new_height = term.getSize()
+
+        if new_width ~= width then
+            lines, fg, bg = word_wrap(contents, new_width)
+            print_height = #lines
+        end
+
+        width, height = new_width, new_height
+        content_height = height - 1
+        offset = math.max(math.min(offset, print_height - content_height), 0)
+        draw()
+        draw_menu()
+    elseif event == "terminate" then
+        break
+    end
+end
+
+term.setCursorPos(1, 1)
+term.clear()
