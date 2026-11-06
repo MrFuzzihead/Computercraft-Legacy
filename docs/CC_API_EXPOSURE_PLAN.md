@@ -101,62 +101,71 @@ are untouched throughout.
 
 ## 2. Peripherals++ — what can be deprecated
 
-Repo analysed: `austinv11/PeripheralsPlusPlus` @ `master`. Mechanisms: one ASM
-`IClassTransformer`, one `AccessTransformer`, and Java reflection (`ReflectionHelper`
-+ `ComputerCraftRegistry`).
+**Fork, not upstream.** The workspace fork `PeripheralsPlusPlus` (pinned to
+`Computercraft-Legacy:3.2.0:dev`) has already been ported to GTNH mixins — the
+upstream ASM transformer, `AccessTransformer`, and reflection helpers are gone.
+What remains is: **3 late (CC-targeting) mixins** + **4 early (vanilla-accessor)
+mixins** + `hooks/ComputerCraftRegistry`. All analysis below is against the fork.
 
-### P++-1 — ASM transformer (hardest; bytecode-level, cannot be fully deprecated)
+### P++-1 — `ItemPocketComputerMixin` (3 hooks) → retire via pocket-upgrade seam
 
-`Transformer#transformPocketComputerCreateServerComputer` patches
-`ItemPocketComputer` at instruction offsets (11th `INVOKEVIRTUAL` in
-`createServerComputer`; first `ASTORE` in `getItemStackDisplayName`/`onUpdate`).
-Injections into `ComputerCraftHooks.{onPocketComputerCreate,getName,update}`.
-**No CC change can remove this** — the hook *is* the feature (pocket-peripheral
-gate). What CC **can** do is replace the fragile offset scheme with a seam:
+Replaces the old ASM transformer: `createServerComputer` @RETURN attach,
+`onUpdate`/`func_77663_a` modify-expression update, `getItemStackDisplayName`/
+`func_77653_i` display-name override — all delegating to `ComputerCraftHooks`.
+**No CC change can remove the hooks of logic itself**, but CC can replace the
+mixin indirection with a seam, exactly as upstream analysis recommended:
 
 - add `IPocketComputerUpgrade` / `PocketComputerUpgradeEvent` fired from
-  `ItemPocketComputer.createServerComputer` (and display-name/update tick points)
-  so P++ registers a listener instead of bytecode-patching. Offsets drift — this is
-  where the mod breaks on every CC release.
+  `ItemPocketComputer` (create/refresh/name points) so P++ registers a listener.
+  The mixin then deletes; offsets/`@Local` args no longer drive the design.
 
-### P++-2 — reflection on `ComputerCraft` provider/registry lists
+Precedent already in CC: `ServerComputer.setPeripheral(int, IPeripheral)` is public
+and is the real attachment point P++ writes through.
 
-`ComputerCraftRegistry` reflects `ComputerCraft.peripheralProviders`,
-`bundledRedstoneProviders`, `mediaProviders` (private static lists; `ComputerCraft.
-serverComputerRegistry` is already public) and `CCTurtleProxyCommon.
-m_turtleUpgrades` (private) to register P++'s providers. CC fix: expose public
-`registerPeripheralProvider` / `registerBundledRedstoneProvider` /
-`registerMediaProvider` (we already have the `registerPeripheralProvider`-style
-helper precedent used by `getPeripheralAt`) and a public
-`CCTurtleProxyCommon#registerTurtleUpgrade(ITurtleUpgrade)` —
-`registerTurtleUpgradeInternal` is private today; widen or publish a public
-delegate. Deprecates the reflective registry entirely; P++ registers via API.
+### P++-2 — `PocketAPIMixin` (behaviour guard) → CC bug fix, not API exposure
 
-### P++-3 — reflection crawling (`ReflectionHelper` → `Computer`)
+`@Shadow ItemStack m_stack` + `@Inject` on the **private** `PocketAPI#doEquipBack`
+to refuse overwriting any installed upgrade. The mixin's javadoc records the CC
+bug: `PocketAPI#doEquipBack` only refuses when `PocketUpgrades.isUpgrade(id)`
+recognises *its own* upgrade (ids 1–6), so it would orphan P++'s id 7+ upgrades.
+Our copy has the same guard (checked: `PocketAPI:146` refuses only when
+`PocketUpgrades.isUpgrade(tag.getInteger("upgrade"))` is true). **Fix the check in
+CC** (refuse whenever any `upgrade` key is present) and the mixin deletes — no
+new API surface. This is the correct route: route 2 (implement the fix in CC).
 
-To reach Lua globals, P++ crawls `ServerComputer.m_computer` (private) →
-`Computer.m_machine` (private) → `CobaltMachine.globals` (private `LuaTable`)
-and reflectively calls `CobaltMachine.toValue(Object)` (2-arity; the public
-`toValue(Object, Map)` exists). CC fix: publish `ServerComputer#getComputer()`
-and `Computer#getLuaMachine()` (same as Phase 1 — shared dep) plus
-`CobaltMachine#getGlobals()` / `getLuaState()` (same Phase-1 `CobaltMachine_
-Accessor` successors). Deprecates this chain; P++ walks the public graph.
-`fn = toValue(...)` remains a P++-side choice unless CC publishes a 1-arg
-`toValue(Object)` overload.
+### P++-3 — `CCTurtleProxyCommonAccessor` → public CC getter
 
-### P++-4 — AccessTransformer — NOT deprecable by CC
+`@Accessor("m_turtleUpgrades") Map<Integer, ITurtleUpgrade> ppp$getTurtleUpgrades()`
+read side of `hooks.ComputerCraftRegistry.getTurtleUpgrades()` (NEI recipe handler
+iterates the map). CC already exposes `CCTurtleProxyCommon#getTurtleUpgrade(int)`
+and `#registerTurtleUpgrade(ITurtleUpgrade)` (public) — only whole-map iteration
+is missing. CC fix: publish `CCTurtleProxyCommon#getTurtleUpgrades()` (unmodifiable
+`Collection`/`Map` view). Deprecates the accessor with a 1-line change on each side.
+The old upstream reflective unwrapping of `turtleProxy`/`m_turtleUpgrades` is
+already gone from the fork — this accessor is the only remnant.
 
-`ppp_at.cfg` widens vanilla `ItemBucket`, `Gui`, `EntityLiving`, `EntityLivingBase`,
-`BlockDispenser` members. Zero CC targets. No action.
+### P++-4 — Early (vanilla) accessors — NOT deprecable by CC
 
-### P++-5 — `Language.hashLanguage` reflection
+`EntityLivingAccessor`, `EntityLivingBaseAccessor`, `ItemBucketAccessor`,
+`GuiAccessor` replace the old `ppp_at.cfg` access transformer (the cfg file is
+deleted from the fork; `EarlyMixinsLoader.getASmTransformerClass()` returns
+`null`). Zero CC targets. No action.
 
-`ReflectionHelper` reflects vanilla `net.minecraft.client.resources.Language.hash
-Language`. Zero CC targets. No action.
+### P++-5 — `IPocketComputerUpgrade` — already clean
+
+P++'s own pocket-upgrade contract (ids ≥ 7, `createPeripheral`/`update`/
+`onRightClick`). It's the *consumer's* interface, not a hack — nothing to expose.
+If CC adopts a pocket-upgrade registry (P++-1), align the upgrade-id ranges so
+they don't collide (CC reserves 1–6; P++ starts at 7).
 
 ---
 
-## 3. OpenPeripheralCore (`OpenMods/OpenPeripheral`) — what can be deprecated
+## 3. OpenPeripheralCore — what can be deprecated
+
+**Fork:** workspace `OpenPeripheral` (`MrFuzzihead/OpenPeripheral`), upstream
+`OpenMods/OpenPeripheral`. Commits since upstream are build-only (GTNH convention
+dsl, OpenModsLib 0.10.15 downgrade). Mechanism surface identical to upstream —
+verified against the fork.
 
 Mechanisms: `openmods.reflection` (OpenModsLib `FieldAccess`/`MethodAccess`/
 `ReflectionHelper`) + plain `java.lang.reflect`. Finding up front: **most of Core's
@@ -177,6 +186,10 @@ already public (`IPeripheralProvider`). No CC change is needed or useful for Cor
 ---
 
 ## 4. OpenPeripheralAddons — what can be deprecated
+
+**Fork:** workspace `OpenPeripheral-Addons` (`MrFuzzihead/OpenPeripheral-Addons`),
+upstream `OpenMods/OpenPeripheral-Addons` — build bump to CC 3.2.0 / OP 2.0.0.
+Mechanism surface identical to upstream — verified against the fork.
 
 Mechanisms: `openmods.reflection.FieldAccess` / `MethodAccess`. Only one file
 reflects CC internals: `TileEntityPeripheralProxy`:
@@ -199,6 +212,10 @@ Everything else in Addons (peripherals themselves, GUI, OC bridge) uses public
 ---
 
 ## 5. OpenPeripheralIntegrations — what can be deprecated
+
+**Fork:** workspace `OpenPeripheral-Integration` (singular), upstream
+`OpenMods/OpenPeripheral-Integration` — build bump to CC 3.2.0. Mechanism surface
+identical to upstream — verified against the fork.
 
 Mechanisms: `openmods.reflection.MethodAccess` over **public-static item helpers**
 on CC classes — i.e. fragile string-based lookup, not access to privates. All four
@@ -233,13 +250,13 @@ deprecable by CC work.
 
 | CC addition | Deprecates (consumer side) |
 |---|---|
-| Phase-1 getters/setters + widenings (see §1) | 9 CCTweaks accessors; P++ `ReflectionHelper` chain (partially); exposes P++ `ComputerCraftRegistry` |
-| `IPocketComputerUpgrade` / upgrade-event seam in `ItemPocketComputer` | P++ ASM transformer's offset surgery (P++-1) |
-| Public `registerPeripheralProvider` / `registerBundledRedstoneProvider` / `registerMediaProvider` + public `CCTurtleProxyCommon#registerTurtleUpgrade` | P++ `ComputerCraftRegistry` reflection (P++-2) |
-| `CobaltMachine#getGlobals()` (+ `getLuaState()` already in Phase 1) | P++ globals crawl (P++-3) |
+| Phase-1 getters/setters + widenings (see §1) | 9 CCTweaks accessors |
+| `IPocketComputerUpgrade` / upgrade-event seam in `ItemPocketComputer` | P++ `ItemPocketComputerMixin` (P++-1) |
+| Fix `PocketAPI#doEquipBack` to refuse *any* installed upgrade | P++ `PocketAPIMixin` (P++-2) — behaviour fix, no new API |
+| `CCTurtleProxyCommon#getTurtleUpgrades()` (public read view) | P++ `CCTurtleProxyCommonAccessor` (P++-3) |
 | `TileCable#isPeripheralAccessAllowed()` (or `getPeripheralAccessAllowed()`) | OPA `TileEntityPeripheralProxy` field reflection (OPA-1) |
 | **No CC action** — keep existing public statics public | OP-Integrations' 4 `MethodAccess` providers keep resolving |
-| **No CC action** | P++ AT (vanilla targets), P++ `Language.hashLanguage`, all Core reflection (own/adapter classes) |
+| **No CC action** | P++ early (vanilla) accessors, all Core reflection (own/adapter classes) |
 
 ---
 
@@ -249,8 +266,8 @@ deprecable by CC work.
 2. Phase 1 getters/setters/widenings + `TileCable#isPeripheralAccessAllowed()`
    (one branch, all additive). Retires 9 CCTweaks accessors and shrinks OPA + P++.
 3. `ICableNode` hook (2a) — small, high-value for multipart.
-4. Pocket-upgrade seam + `register*Provider` publics (P++-1/2) — small surface,
-   retires a whole coremod transformer and a reflective registry.
+4. Pocket-upgrade seam + `PocketAPI` any-upgrade fix + `CCTurtleProxyCommon#
+   getTurtleUpgrades()` (P++-1/2/3) — small surface, retires all 3 P++ late mixins.
 5. Fuel registry (2b), placement hook (2c), lifecycle seam (2d) per CCTweaks appetite.
 6. `TileCable_Mixin` merge-vs-interim decision (Phase 3) — only if CCTweaks still
    wants the extended network after 2a–2d land.
@@ -260,7 +277,7 @@ deprecable by CC work.
 ## References
 
 - CCTweaks inventory: `CCTweaks-Legacy/docs/remove-cc-mixins.md`
-- Peripherals++ source: `https://github.com/austinv11/PeripheralsPlusPlus`
-- OpenPeripheralCore: `https://github.com/OpenMods/OpenPeripheral`
-- OpenPeripheralAddons: `https://github.com/OpenMods/OpenPeripheral-Addons`
-- OpenPeripheralIntegrations: `https://github.com/OpenMods/OpenPeripheral-Integration`
+- Peripherals++ **fork**: `MrFuzzihead/PeripheralsPlusPlus` @ `main` (pinned to `Computercraft-Legacy:3.2.0:dev`); upstream `austinv11/PeripheralsPlusPlus` cited only to note the ASM/reflection that was already ported away
+- OpenPeripheralCore fork: `MrFuzzihead/OpenPeripheral` (upstream `OpenMods/OpenPeripheral`)
+- OpenPeripheralAddons fork: `MrFuzzihead/OpenPeripheral-Addons` (upstream `OpenMods/OpenPeripheral-Addons`)
+- OpenPeripheralIntegrations fork: `MrFuzzihead/OpenPeripheral-Integration` (upstream `OpenMods/OpenPeripheral-Integration`)
