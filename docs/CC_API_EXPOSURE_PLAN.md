@@ -46,28 +46,39 @@ Consequences worth stating plainly:
 
 ## 1. The deliverable
 
-**Ten public members + one guard fix, all additive, no existing code path changes.**
+**Status: landed on this branch (phase 1).** Ten public members + one guard fix, all additive, no
+existing code path changes. The test map is at the end of this section.
 
-| # | Public member | Consumer (addon) | What it retires on their side |
-|---|---|---|---|
-| 1 | `TileCable#getAttachedPeripheralID()` | CCTweaks `PartModem` | `TileCable_Accessor` |
-| 2 | `TileCable#getModemSideTexture(int anim)` | CCTweaks `PartModem` | `TileCable_Accessor` |
-| 3 | `TileCable#isPeripheralAccessAllowed()` | OPA `TileEntityPeripheralProxy` | `FieldAccess` on `m_peripheralAccessAllowed` |
-| 4 | `TileTurtle#setMoved(boolean)` | CCTweaks `ItemComputerUpgrade` | `TileTurtle_Accessor` |
-| 5 | `TileComputerBase#transferStateFrom(TileComputerBase)` → public | CCTweaks `ItemComputerUpgrade` | `TileComputerBase_Invoker` |
-| 6 | `ItemPocketComputer#createServerComputer(...)` → public | CCTweaks `PocketAccess` | `ItemPocketComputer_Invoker` |
-| 7 | `Computer#getLuaMachine()` | CCTweaks `ItemDebugger` | `Computer_Accessor` |
-| 8 | `ServerComputer#getComputer()` | CCTweaks `ItemDebugger` | `ServerComputer_Accessor` |
-| 9 | `CobaltMachine#getLuaState()` | CCTweaks `ItemDebugger` | `CobaltMachine_Accessor` |
-| 10 | `CCTurtleProxyCommon#getTurtleUpgrades()` (unmodifiable view) | P++ NEI handler | `CCTurtleProxyCommonAccessor` |
-| 11 | `PocketAPI#doEquipBack` — refuse *any* installed upgrade | P++ `PocketAPIMixin` | `PocketAPIMixin` |
+| # | Public member | Consumer (addon) | What it retires on their side | Test |
+|---|---|---|---|---|
+| 1 | `TileCable#getAttachedPeripheralID()` | CCTweaks `PartModem` | `TileCable_Accessor` | `TileCableExposureTest` |
+| 2 | `TileCable#getModemSideTexture(int anim)` | CCTweaks `PartModem` | `TileCable_Accessor` | `TileCableExposureTest` |
+| 3 | `TileCable#isPeripheralAccessAllowed()` | OPA `TileEntityPeripheralProxy` | `FieldAccess` on `m_peripheralAccessAllowed` | `TileCableExposureTest` |
+| 4 | `TileTurtle#setMoved(boolean)` | CCTweaks `ItemComputerUpgrade` | `TileTurtle_Accessor` | `TileTurtleMovedTest` |
+| 5 | `TileComputerBase#transferStateFrom(TileComputerBase)` → public | CCTweaks `ItemComputerUpgrade` | `TileComputerBase_Invoker` | `TileComputerBaseTransferStateTest` |
+| 6 | `ItemPocketComputer#createServerComputer(...)` → public | CCTweaks `PocketAccess` | `ItemPocketComputer_Invoker` | `ItemPocketComputerServerComputerTest` |
+| 7 | `Computer#getLuaMachine()` | CCTweaks `ItemDebugger` | `Computer_Accessor` | `ComputerGetLuaMachineTest` |
+| 8 | `ServerComputer#getComputer()` | CCTweaks `ItemDebugger` | `ServerComputer_Accessor` | `ServerComputerGetComputerTest` |
+| 9 | `CobaltMachine#getLuaState()` | CCTweaks `ItemDebugger` | `CobaltMachine_Accessor` | `CobaltMachineLuaStateTest` |
+| 10 | `CCTurtleProxyCommon#getTurtleUpgrades()` (unmodifiable view) | P++ NEI handler | `CCTurtleProxyCommonAccessor` | `CCTurtleProxyCommonTurtleUpgradesTest` |
+| 11 | `PocketAPI#doEquipBack` — refuse *any* installed upgrade | P++ `PocketAPIMixin` | `PocketAPIMixin` | `PocketAPIEquipGuardTest` |
 
-Item 11 is the only behaviour change, and it is **unreachable without a third party**:
-`PocketAPI.java:147` currently refuses only when `PocketUpgrades.isUpgrade(id)` holds,
-i.e. `1 ≤ id ≤ NPC_INTERFACE` (`PocketUpgrades.java:75`), and every writer of the
-`upgrade` tag in CC is `PocketUpgrades`-driven. Widening the guard to "any `upgrade` key
-present" therefore cannot alter a CC-only world. It ships with a test pinning ids 1–6
-and the absent-tag case, and a `NOTICE` line.
+`AddonApiSurfaceTest` re-asserts items 1–10 reflectively (declaring class, name, parameters, return
+type, `public`), so a later refactor cannot quietly narrow one back and leave the addons stuck.
+
+Item 11 is the only behaviour change, and it is **unreachable without a third party**: the
+guard used to refuse only when `PocketUpgrades.isUpgrade(id)` held, i.e.
+`1 ≤ id ≤ NPC_INTERFACE` (`PocketUpgrades.java:75`), and every writer of the `upgrade` tag
+in CC is `PocketUpgrades`-driven. Widening the guard to "any `upgrade` key present"
+therefore cannot alter a CC-only world. `PocketAPIEquipGuardTest` pins ids 1–6, ids
+outside that range, a non-integer value, the absent-tag case, and that a refusal touches
+neither the inventory nor the existing tag. `NOTICE` section 2 records the divergence.
+
+Tests are chosen per member by what is actually assertable headless: the getters are
+backed by state the tests can reach directly (NBT, mocks, a real `ServerComputer`), and
+nothing is asserted through a Minecraft client renderer. The two branches that cannot be
+reached in a unit test are called out in the test javadoc — `world.isRemote` and the
+"no computer id yet" path in `createServerComputer`, both covered in game.
 
 ### Not in this release
 
@@ -89,14 +100,16 @@ let the addons prove the surface is sufficient in practice, then design the seam
 against that experience. If you would rather not cut two tags, B is defensible — the
 seams are small — but they are the only thing in this plan that needs a spec.
 
-### Two members worth a second look before cutting
+### Two members worth a second look (both resolved: kept)
 
 - **Items 7–9** exist only for CCTweaks' `ItemDebugger`. Three public members for a
-  debug item is a poor trade if the debugger is not sacred — dropping it deletes
+  debug item is a poor trade if the debugger is not sacred — dropping it would delete
   `Computer_Accessor`, `ServerComputer_Accessor` and `CobaltMachine_Accessor` for free.
+  Kept: they are three one-line accessors over fields that already exist, and the debug
+  item is in-tree, so the alternative was keeping the addon's accessors.
 - **Item 6** exists only for CCTweaks' `PocketAccess` (its integration with P++). The
-  merged mod would own both sides, so the widening may be short-lived. Harmless to
-  ship, but note it is provisional.
+  merged mod would own both sides, so the widening may be short-lived. Kept: harmless,
+  and removing a public member later is cheaper than leaving the addon with an invoker.
 
 ---
 
@@ -247,12 +260,12 @@ to this release.
 
 ## 7. Sequence for the release
 
-1. Rebase on PR #28 (full wired modem); nothing in §1 conflicts with it.
-2. Decide the two open items: keep or drop `ItemDebugger` (items 7–9), keep or drop the
-   `PocketAccess` integration (item 6).
-3. Land items 1–11 as one additive commit set, plus the item-11 reachability test and
-   the `NOTICE` line.
-4. `./gradlew build test` and a `runServer25` smoke boot; no behaviour change expected.
+1. ~~Rebase on PR #28 (full wired modem)~~ — done; this branch is cut from it.
+2. ~~Decide the two open items~~ — both kept (§1).
+3. ~~Land items 1–11~~ — done, with a unit test per member, a reflective contract test,
+   the `NOTICE` line and the `TWEAKEDCC_COVERAGE.md` note.
+4. `./gradlew build test` green. A `runServer25` smoke boot is still worth doing before
+   the tag; no behaviour change is expected outside the `pocket.equipBack` guard.
 5. Tag. Hand the addons the member list in §1 as their contract.
 
 ---

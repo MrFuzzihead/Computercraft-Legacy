@@ -283,6 +283,15 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         }
     }
 
+    /**
+     * The Cobalt Lua state this machine owns. Exposed so debugging tools can inspect the live VM (globals, call
+     * stack, GC) without reaching into the machine's private fields. The state is created in the constructor and never
+     * replaced, so it is stable for the machine's lifetime; it must only be touched from the computer thread.
+     */
+    public LuaState getLuaState() {
+        return this.state;
+    }
+
     @Override
     public void softAbort(String message) {
         softAbort = message;

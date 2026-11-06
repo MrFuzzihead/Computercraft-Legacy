@@ -142,9 +142,11 @@ public class PocketAPI implements ILuaAPI {
             return new Object[] { false, "Cannot find player" };
         }
 
-        // Refuse if an upgrade is already equipped. Any supported id counts, not just the modem.
+        // Refuse if any upgrade is already installed. "Installed" means the NBT key is present, not that its
+        // value is one of ours: a third-party upgrade writes its own id into the same key, and treating those as
+        // free would let equipBack() overwrite it (and leak the peripheral it had attached).
         NBTTagCompound tag = stack.getTagCompound();
-        if (tag != null && tag.hasKey("upgrade") && PocketUpgrades.isUpgrade(tag.getInteger("upgrade"))) {
+        if (hasInstalledUpgrade(tag)) {
             return new Object[] { false, "Upgrade already equipped" };
         }
 
@@ -187,6 +189,22 @@ public class PocketAPI implements ILuaAPI {
         }
 
         return new Object[] { false, "No upgrade to equip" };
+    }
+
+    /**
+     * Whether the stack's NBT records an installed upgrade.
+     *
+     * <p>
+     * The key's value is deliberately not interpreted: ComputerCraft owns ids 1-6, but addons register their own ids
+     * into the same {@code upgrade} key on the same item, so any present value means a peripheral is attached and
+     * {@link #doEquipBack()} must not install a second one on top of it.
+     * </p>
+     *
+     * @param tag the pocket computer stack's tag compound, may be {@code null}
+     * @return whether an upgrade id is recorded
+     */
+    private static boolean hasInstalledUpgrade(NBTTagCompound tag) {
+        return tag != null && tag.hasKey("upgrade");
     }
 
     /**

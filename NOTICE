@@ -111,6 +111,17 @@ That backport is substantial, and predates the Minecraft
     than a copy of the 1.20 code, but the feature and its name/ID/NBT semantics
     are derived from the upstream classes listed above.
 
+  - one deliberate behavioural divergence, in this project's own code: the
+    `upgrade` guard at the head of `PocketAPI`'s `pocket.equipBack()`
+    (dan200.computercraft.shared.pocket.apis.PocketAPI). ComputerCraft 1.7.10
+    refused to equip only when the stored id was 1 (its one upgrade); the early
+    port here refused when the id was one of 1-6. Both let an addon's own
+    upgrade id in the same NBT key be overwritten, which orphans the peripheral
+    that upgrade had attached, because `pocket.unequipBack()` can only give back
+    ids it knows. The guard now refuses whenever the key is present. No
+    ComputerCraft-only world is affected, since every writer of that key in
+    this mod goes through PocketUpgrades. No upstream code is involved.
+
 LWJGL 3 (including lwjgl-sdl) is a compile-time dependency only. It is not
 bundled or shaded: lwjgl3ify provides it at runtime, and the mod declares
 lwjgl3ify as a required dependency. LWJGL is BSD-3-Clause.

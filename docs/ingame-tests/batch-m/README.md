@@ -53,9 +53,26 @@ computers on a cable.
    the shared table.
 6. **Wireless still works** (`rednet.open('back')`, `rednet.broadcast`) — the modem path through the
    same table must not regress.
+7. **A foreign upgrade id is not overwritten.** Give yourself a pocket computer carrying an upgrade
+   id ComputerCraft does not own, hold it, and call `pocket.equipBack()`:
+
+   ```
+   /give @p computercraft:pocket_computer 1 0 {upgrade:7}
+   ```
+
+   `equipBack()` must return `false, "Upgrade already equipped"`, and the tag must still read
+   `upgrade:7` afterwards (`/data get entity @p SelectedItem.tag`). Before this change it returned
+   `true` and replaced the id with ComputerCraft's own, orphaning whatever peripheral id 7 had
+   attached — and `unequipBack()` could not give it back. Ids 1–6 behave as they always did.
 
 ## Covered by JVM tests instead
 
+* `PocketAPIEquipGuardTest` (18) — the `upgrade` guard end to end through `callMethod`: ids 1–6 still
+  refuse, ids 0/7/8/100/32766/-1 now refuse too, a non-integer value refuses (presence of the key is
+  what "installed" means), the absent-tag and no-`upgrade`-key cases still report `"No upgrade to
+  equip"`, and a refusal leaves both the inventory and the existing tag untouched. Staged check 7 is
+  the in-game counterpart; the unit test is the authority because it can drive ids no in-game item
+  has.
 * `PocketUpgradesTest` (11) — every item type maps to its id and back, the on-disk ids are pinned,
   non-upgrade items are rejected, each upgrade builds its own peripheral, the ender modem stays a
   subclass of the modem (existing `instanceof` checks depend on it), and out-of-range NBT values are

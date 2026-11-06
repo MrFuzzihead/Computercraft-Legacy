@@ -1,6 +1,7 @@
 package dan200.computercraft.shared.proxy;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,6 +97,16 @@ public abstract class CCTurtleProxyCommon implements ICCTurtleProxy {
         }
 
         return null;
+    }
+
+    /**
+     * An unmodifiable live view of the registered turtle upgrades, keyed by upgrade id. Intended for read-only
+     * consumers such as recipe browsers, which need the whole table rather than one id at a time.
+     *
+     * @return an unmodifiable view; later registrations are still visible through it
+     */
+    public Map<Integer, ITurtleUpgrade> getTurtleUpgrades() {
+        return Collections.unmodifiableMap(this.m_turtleUpgrades);
     }
 
     public static boolean isUpgradeSuitableForFamily(ComputerFamily family, ITurtleUpgrade upgrade) {

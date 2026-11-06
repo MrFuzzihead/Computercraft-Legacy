@@ -73,11 +73,13 @@ Behavioral fidelity fixes applied:
 
 | Method | Notes |
 |---|---|
-| `pocket.equipBack()` | ✅ Searches the carrying player's inventory for a `WirelessModem` item, consumes one, sets `upgrade = 1` in the pocket computer's NBT, and attaches a `PocketModemPeripheral` to peripheral slot 2. Returns `true` on success or `false, reason` on failure. Runs on the main thread via `ILuaContext.executeMainThreadTask`. |
-| `pocket.unequipBack()` | ✅ Detaches the modem peripheral from slot 2, clears the `upgrade` key from the pocket computer's NBT, and returns a `WirelessModem` item to the player's inventory (or drops it if full). Returns `true` on success or `false, reason` on failure. |
-| `pocket.isEquipped()` | ✅ Returns `true` if `upgrade == 1` in the pocket computer's NBT (i.e., a modem is currently equipped). Reads the volatile stack reference directly — no main-thread dispatch required. |
+| `pocket.equipBack()` | ✅ Searches the carrying player's inventory for any item the upgrade table (`PocketUpgrades`) recognises — wireless modem, ender modem, speaker, chat box, NPC detector, NPC interface — consumes one, records its id in the pocket computer's NBT and attaches the matching peripheral to slot 2. Refuses when **any** `upgrade` key is already present, including ids this mod does not own (see below). Runs on the main thread via `ILuaContext.executeMainThreadTask`. |
+| `pocket.unequipBack()` | ✅ Detaches the peripheral from slot 2, clears the `upgrade` key, and returns the item for the upgrade that is actually installed (not always a modem) to the player's inventory, or drops it if full. Returns `true` on success or `false, reason` on failure. |
+| `pocket.isEquipped()` | ✅ Returns `true` if the installed `upgrade` id is one this mod knows. Reads the volatile stack reference directly — no main-thread dispatch required. |
 
 The player/stack/inventory references used by `equipBack` and `unequipBack` are refreshed every game tick by `ItemPocketComputer.onUpdate` via `PocketAPI.update(player, stack, inventory)`. A static `Map<instanceID, PocketAPI>` in `ItemPocketComputer` keeps the mapping between `ServerComputer` instances and their `PocketAPI` objects.
+
+**Divergence from ComputerCraft 1.7.10 and CC: Tweaked:** `equipBack` refuses to equip whenever the `upgrade` key is present, not only when its value is one of ours. ComputerCraft 1.7.10 tested `upgrade == 1` and early versions of this port tested `PocketUpgrades.isUpgrade(id)`; both let an addon's own upgrade id be silently overwritten, orphaning the peripheral it had attached, since `unequipBack` can only return ids it knows. Ids 1–6 are unaffected, and no ComputerCraft-only world can reach the new branch, because every writer of that key in this mod is driven by `PocketUpgrades`. See `NOTICE` section 2 and `PocketAPIEquipGuardTest`. `isEquipped` deliberately keeps the known-id test: a foreign upgrade is not *this* API's upgrade to report.
 
 ---
 

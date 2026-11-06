@@ -62,6 +62,16 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
         return this.m_moved;
     }
 
+    /**
+     * Marks this turtle as having moved (or as having handed its state to another tile). Set when a turtle is picked up
+     * or placed, and cleared when the brain is told the turtle is once again in place.
+     *
+     * @param moved whether the turtle has moved since it last settled
+     */
+    public void setMoved(boolean moved) {
+        this.m_moved = moved;
+    }
+
     protected TurtleBrain createBrain() {
         return new TurtleBrain(this);
     }
@@ -482,6 +492,6 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
         this.m_inventoryChanged = copy.m_inventoryChanged;
         this.m_brain = copy.m_brain;
         this.m_brain.setOwner(this);
-        copy.m_moved = true;
+        copy.setMoved(true);
     }
 }

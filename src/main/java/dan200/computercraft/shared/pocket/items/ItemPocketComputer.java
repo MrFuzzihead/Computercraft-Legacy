@@ -410,7 +410,20 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         s_icons[9] = iconRegister.registerIcon("computercraft:pocketComputerBlinkAdvancedModemOn");
     }
 
-    private ServerComputer createServerComputer(World world, IInventory inventory, ItemStack stack) {
+    /**
+     * Builds (or fetches from the registry) the server computer backing a pocket computer stack.
+     *
+     * <p>
+     * Exposed so addons that keep their own pocket-computer items can drive the same instance bookkeeping instead of
+     * reimplementing it. Returns {@code null} on the client and when the stack has no usable instance id.
+     * </p>
+     *
+     * @param world     the world the pocket computer is in
+     * @param inventory the inventory a "computer is in inventory" session belongs to, or {@code null}
+     * @param stack     the pocket computer stack
+     * @return the server computer, or {@code null}
+     */
+    public ServerComputer createServerComputer(World world, IInventory inventory, ItemStack stack) {
         if (world.isRemote) {
             return null;
         } else {
