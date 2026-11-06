@@ -18,10 +18,25 @@ public abstract class TileModemBase extends TilePeripheralBase {
     protected TileModemBase(IIcon[] icons) {
         super(icons);
         this.m_icons = icons;
-        this.m_modem = this.createPeripheral();
     }
 
     protected abstract ModemPeripheral createPeripheral();
+
+    /**
+     * Get this tile's primary modem peripheral, creating it on first use.
+     *
+     * <p>
+     * Creation is lazy so subclasses can initialise shared state before their first peripheral is built. A normal
+     * modem creates one peripheral; the full wired modem creates six and keeps the first as its primary.
+     * </p>
+     */
+    protected final ModemPeripheral getModem() {
+        if (this.m_modem == null) {
+            this.m_modem = this.createPeripheral();
+        }
+
+        return this.m_modem;
+    }
 
     @Override
     public synchronized void destroy() {
@@ -72,13 +87,15 @@ public abstract class TileModemBase extends TilePeripheralBase {
     @Override
     public void updateEntity() {
         super.updateEntity();
-        if (!this.worldObj.isRemote && this.m_modem.pollChanged()) {
+        if (!this.worldObj.isRemote && this.getModem()
+            .pollChanged()) {
             this.updateAnim();
         }
     }
 
     protected void updateAnim() {
-        if (this.m_modem.isActive()) {
+        if (this.getModem()
+            .isActive()) {
             this.setAnim(1);
         } else {
             this.setAnim(0);
@@ -105,7 +122,7 @@ public abstract class TileModemBase extends TilePeripheralBase {
 
     @Override
     public IPeripheral getPeripheral(int side) {
-        return side == this.getDirection() ? this.m_modem : null;
+        return side == this.getDirection() ? this.getModem() : null;
     }
 
     protected boolean isAttached() {

@@ -1,6 +1,7 @@
 package dan200.computercraft.shared.peripheral.modem;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,6 +37,7 @@ import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IMultiTypePeripheral;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.peripheral.IPeripheralTargeted;
 import dan200.computercraft.shared.common.BlockGeneric;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.peripheral.common.BlockCable;
@@ -50,10 +52,11 @@ public class TileCable extends TileModemBase implements INetwork {
     private static int s_nextUniqueSearchID = 1;
     private Map<Integer, Set<IReceiver>> m_receivers = new HashMap<>();
     private Queue<TileCable.Packet> m_transmitQueue = new LinkedList<>();
+    private final ModemState m_modemState = new ModemState();
     private boolean m_peripheralAccessAllowed = false;
     private int m_attachedPeripheralID = -1;
     private Map<String, IPeripheral> m_peripheralsByName = new HashMap<>();
-    private Map<String, TileCable.RemotePeripheralWrapper> m_peripheralWrappersByName = new HashMap<>();
+    private final Set<TileCable.Peripheral> m_attachedPeripherals = new HashSet<>();
     private boolean m_peripheralsKnown = false;
     private boolean m_destroyed = false;
     private int m_lastSearchID = 0;
@@ -76,12 +79,32 @@ public class TileCable extends TileModemBase implements INetwork {
         return side != 2 && side != 5 ? s_modemIcons[on ? 2 : 0] : s_modemIcons[on ? 3 : 1];
     }
 
+    /**
+     * Returns the modem face icon for an animation state (0 = off, 1 = on, 2 = peripheral, 3 = on + peripheral).
+     * Used by the full wired modem, whose six faces all use the face texture. Icons are only populated on the client;
+     * callers rendering on a server get {@code null}, as with any other block icon.
+     */
+    public static IIcon getModemFaceTexture(int anim) {
+        return s_modemIcons[(Math.max(0, Math.min(3, anim))) * 2];
+    }
+
+    /**
+     * Whether a peripheral is a wired modem. Wired modems must not be exposed as local peripherals of another modem.
+     */
+    public static boolean isWiredModemPeripheral(IPeripheral peripheral) {
+        return peripheral instanceof TileCable.Peripheral;
+    }
+
     public static IIcon getCableItemTexture(int side) {
         return side != 2 && side != 3 ? s_cableIcons[0] : s_cableIcons[1];
     }
 
     public TileCable() {
         super(s_modemIcons);
+    }
+
+    protected ModemState getModemState() {
+        return this.m_modemState;
     }
 
     @Override
@@ -161,6 +184,12 @@ public class TileCable extends TileModemBase implements INetwork {
                     this.setLabel(null);
                     this.worldObj.setBlockMetadataWithNotify(this.xCoord, this.yCoord, this.zCoord, 13, 3);
             }
+        }
+
+        if (!this.worldObj.isRemote && this.m_peripheralAccessAllowed) {
+            // 1.7.10 does not tell us which neighbour changed, so re-scan the network when this modem is acting as a
+            // hub. This is what lets a chest placed next to an already-enabled modem become visible.
+            this.networkChanged();
         }
     }
 
@@ -294,7 +323,8 @@ public class TileCable extends TileModemBase implements INetwork {
     @Override
     protected void updateAnim() {
         int anim = 0;
-        if (this.m_modem.isActive()) {
+        if (this.getModem()
+            .isActive()) {
             anim++;
         }
 
@@ -433,74 +463,39 @@ public class TileCable extends TileModemBase implements INetwork {
         return false;
     }
 
-    private void attachPeripheral(String periphName, IPeripheral peripheral) {
-        if (!this.m_peripheralWrappersByName.containsKey(periphName)) {
-            TileCable.RemotePeripheralWrapper wrapper = new TileCable.RemotePeripheralWrapper(
-                peripheral,
-                this.m_modem.getComputer(),
-                periphName,
-                this);
-            this.m_peripheralWrappersByName.put(periphName, wrapper);
-            wrapper.attach();
-        }
-    }
-
-    private void detachPeripheral(String periphName) {
-        if (this.m_peripheralWrappersByName.containsKey(periphName)) {
-            TileCable.RemotePeripheralWrapper wrapper = this.m_peripheralWrappersByName.get(periphName);
-            this.m_peripheralWrappersByName.remove(periphName);
-            wrapper.detach();
+    /**
+     * The current network-wide peripheral map. A copy is returned so callers can use it without holding the map
+     * lock while peripherals attach or detach.
+     */
+    Map<String, IPeripheral> getNetworkPeripherals() {
+        synchronized (this.m_peripheralsByName) {
+            return new HashMap<>(this.m_peripheralsByName);
         }
     }
 
     /**
-     * Every type a remote peripheral reports, primary first, or {@code null} if it is not present.
-     *
-     * @param remoteName the remote peripheral's name
-     * @return the type strings, or {@code null}
+     * The local peripheral name a modem on the given side must not see as a remote peripheral.
      */
-    private String[] getTypesRemote(String remoteName) {
-        synchronized (this.m_peripheralsByName) {
-            TileCable.RemotePeripheralWrapper wrapper = this.m_peripheralWrappersByName.get(remoteName);
-            return wrapper != null ? wrapper.getTypes() : null;
+    protected String getLocalPeripheralNameForSide(int side) {
+        return this.getConnectedPeripheralName();
+    }
+
+    /**
+     * Add this node's local peripherals to the network map.
+     */
+    protected void collectLocalPeripherals(Map<String, IPeripheral> peripherals) {
+        IPeripheral peripheral = this.getConnectedPeripheral();
+        String name = this.getConnectedPeripheralName();
+        if (peripheral != null && name != null) {
+            peripherals.put(name, peripheral);
         }
     }
 
     /**
-     * The remote peripheral's types as a {@code ";"}-joined string, or {@code null} if it is absent.
-     *
-     * <p>
-     * Joining keeps the historical single-string contract for callers that only want a string,
-     * while carrying every type for a peripheral that declares more than one.
-     * </p>
-     *
-     * @param remoteName the remote peripheral's name
-     * @return the joined types, or {@code null}
+     * Whether this node exposes local peripherals to the wired network.
      */
-    private String getTypeRemote(String remoteName) {
-        String[] types = getTypesRemote(remoteName);
-        return types != null ? String.join(";", types) : null;
-    }
-
-    private String[] getMethodNamesRemote(String remoteName) {
-        synchronized (this.m_peripheralsByName) {
-            TileCable.RemotePeripheralWrapper wrapper = this.m_peripheralWrappersByName.get(remoteName);
-            return wrapper != null ? wrapper.getMethodNames() : null;
-        }
-    }
-
-    private Object[] callMethodRemote(String remoteName, ILuaContext context, String method, Object[] arguments)
-        throws LuaException, InterruptedException {
-        TileCable.RemotePeripheralWrapper wrapper;
-        synchronized (this.m_peripheralsByName) {
-            wrapper = this.m_peripheralWrappersByName.get(remoteName);
-        }
-
-        if (wrapper != null) {
-            return wrapper.callMethod(context, method, arguments);
-        } else {
-            throw new LuaException("No peripheral: " + remoteName);
-        }
+    protected boolean canExposePeripheral() {
+        return this.getPeripheralType() == PeripheralType.WiredModemWithCable;
     }
 
     public void networkChanged() {
@@ -554,47 +549,29 @@ public class TileCable extends TileModemBase implements INetwork {
     }
 
     private void findPeripherals() {
-        final TileCable origin = this;
+        final Map<String, IPeripheral> newPeripheralsByName = new HashMap<>();
+        if (this.canExposePeripheral()) {
+            this.searchNetwork(new TileCable.ICableVisitor() {
+
+                @Override
+                public void visit(TileCable modem, int distance) {
+                    modem.collectLocalPeripherals(newPeripheralsByName);
+                }
+            });
+        }
+
         synchronized (this.m_peripheralsByName) {
-            final Map<String, IPeripheral> newPeripheralsByName = new HashMap<>();
-            if (this.getPeripheralType() == PeripheralType.WiredModemWithCable) {
-                this.searchNetwork(new TileCable.ICableVisitor() {
+            this.m_peripheralsByName.clear();
+            this.m_peripheralsByName.putAll(newPeripheralsByName);
+        }
 
-                    @Override
-                    public void visit(TileCable modem, int distance) {
-                        if (modem != origin) {
-                            IPeripheral peripheral = modem.getConnectedPeripheral();
-                            String periphName = modem.getConnectedPeripheralName();
-                            if (peripheral != null && periphName != null) {
-                                newPeripheralsByName.put(periphName, peripheral);
-                            }
-                        }
-                    }
-                });
-            }
+        List<TileCable.Peripheral> attached;
+        synchronized (this.m_attachedPeripherals) {
+            attached = new ArrayList<>(this.m_attachedPeripherals);
+        }
 
-            Iterator<String> it = this.m_peripheralsByName.keySet()
-                .iterator();
-
-            while (it.hasNext()) {
-                String periphName = it.next();
-                if (!newPeripheralsByName.containsKey(periphName)) {
-                    this.detachPeripheral(periphName);
-                    it.remove();
-                }
-            }
-
-            for (String periphName : newPeripheralsByName.keySet()) {
-                if (!this.m_peripheralsByName.containsKey(periphName)) {
-                    IPeripheral peripheral = newPeripheralsByName.get(periphName);
-                    if (peripheral != null) {
-                        this.m_peripheralsByName.put(periphName, peripheral);
-                        if (this.isAttached()) {
-                            this.attachPeripheral(periphName, peripheral);
-                        }
-                    }
-                }
-            }
+        for (TileCable.Peripheral peripheral : attached) {
+            peripheral.syncPeripherals(newPeripheralsByName);
         }
     }
 
@@ -628,7 +605,7 @@ public class TileCable extends TileModemBase implements INetwork {
         }
     }
 
-    private IPeripheral getConnectedPeripheral() {
+    protected IPeripheral getConnectedPeripheral() {
         if (this.m_peripheralAccessAllowed && this.getPeripheralType() == PeripheralType.WiredModemWithCable) {
             int dir = this.getDirection();
             int x = this.xCoord + Facing.offsetsXForSide[dir];
@@ -747,12 +724,24 @@ public class TileCable extends TileModemBase implements INetwork {
      */
     public static final String[] PERIPHERAL_TYPES = { "modem", "peripheral_hub" };
 
-    private static class Peripheral extends ModemPeripheral implements IMultiTypePeripheral {
+    protected static class Peripheral extends ModemPeripheral implements IMultiTypePeripheral, IPeripheralTargeted {
 
-        private TileCable m_entity;
+        private final TileCable m_entity;
+        private final int m_side;
+        private final Map<String, TileCable.RemotePeripheralWrapper> m_peripheralWrappersByName = new HashMap<>();
 
         public Peripheral(TileCable entity) {
+            this(entity, -1, entity != null ? entity.getModemState() : new ModemState());
+        }
+
+        public Peripheral(TileCable entity, int side) {
+            this(entity, side, entity != null ? entity.getModemState() : new ModemState());
+        }
+
+        public Peripheral(TileCable entity, int side, ModemState state) {
+            super(state);
             this.m_entity = entity;
+            this.m_side = side;
         }
 
         @Override
@@ -772,11 +761,82 @@ public class TileCable extends TileModemBase implements INetwork {
 
         @Override
         protected Vec3 getPosition() {
-            int direction = this.m_entity.getDirection();
+            int direction = this.m_side >= 0 ? this.m_side : this.m_entity.getDirection();
             int x = this.m_entity.xCoord + Facing.offsetsXForSide[direction];
             int y = this.m_entity.yCoord + Facing.offsetsYForSide[direction];
             int z = this.m_entity.zCoord + Facing.offsetsZForSide[direction];
             return Vec3.createVectorHelper(x + 0.5, y + 0.5, z + 0.5);
+        }
+
+        private String getLocalPeripheralName() {
+            int side = this.m_side >= 0 ? this.m_side : this.m_entity.getDirection();
+            return this.m_entity.getLocalPeripheralNameForSide(side);
+        }
+
+        private String[] getTypesRemote(String remoteName) {
+            synchronized (this) {
+                TileCable.RemotePeripheralWrapper wrapper = this.m_peripheralWrappersByName.get(remoteName);
+                return wrapper != null ? wrapper.getTypes() : null;
+            }
+        }
+
+        private String getTypeRemote(String remoteName) {
+            String[] types = this.getTypesRemote(remoteName);
+            return types != null ? String.join(";", types) : null;
+        }
+
+        private String[] getMethodNamesRemote(String remoteName) {
+            synchronized (this) {
+                TileCable.RemotePeripheralWrapper wrapper = this.m_peripheralWrappersByName.get(remoteName);
+                return wrapper != null ? wrapper.getMethodNames() : null;
+            }
+        }
+
+        private Object[] callMethodRemote(String remoteName, ILuaContext context, String method, Object[] arguments)
+            throws LuaException, InterruptedException {
+            TileCable.RemotePeripheralWrapper wrapper;
+            synchronized (this) {
+                wrapper = this.m_peripheralWrappersByName.get(remoteName);
+            }
+
+            if (wrapper != null) {
+                return wrapper.callMethod(context, method, arguments);
+            } else {
+                throw new LuaException("No peripheral: " + remoteName);
+            }
+        }
+
+        void syncPeripherals(Map<String, IPeripheral> peripherals) {
+            String localName = this.getLocalPeripheralName();
+            synchronized (this) {
+                Iterator<Map.Entry<String, TileCable.RemotePeripheralWrapper>> it = this.m_peripheralWrappersByName
+                    .entrySet()
+                    .iterator();
+                while (it.hasNext()) {
+                    Map.Entry<String, TileCable.RemotePeripheralWrapper> entry = it.next();
+                    IPeripheral target = peripherals.get(entry.getKey());
+                    if (target == null || !entry.getValue()
+                        .isFor(target)) {
+                        entry.getValue()
+                            .detach();
+                        it.remove();
+                    }
+                }
+
+                for (Map.Entry<String, IPeripheral> entry : peripherals.entrySet()) {
+                    if (entry.getKey()
+                        .equals(localName)) continue;
+                    if (!this.m_peripheralWrappersByName.containsKey(entry.getKey())) {
+                        TileCable.RemotePeripheralWrapper wrapper = new TileCable.RemotePeripheralWrapper(
+                            entry.getValue(),
+                            this.getComputer(),
+                            entry.getKey(),
+                            this.m_entity);
+                        this.m_peripheralWrappersByName.put(entry.getKey(), wrapper);
+                        wrapper.attach();
+                    }
+                }
+            }
         }
 
         @Override
@@ -808,30 +868,30 @@ public class TileCable extends TileModemBase implements INetwork {
             String[] methods = super.getMethodNames();
             switch (method - methods.length) {
                 case 0:
-                    synchronized (this.m_entity.m_peripheralsByName) {
+                    synchronized (this) {
                         int idx = 1;
                         Map<Object, Object> table = new HashMap<>();
 
-                        for (String name : this.m_entity.m_peripheralWrappersByName.keySet()) {
+                        for (String name : this.m_peripheralWrappersByName.keySet()) {
                             table.put(idx++, name);
                         }
 
                         return new Object[] { table };
                     }
                 case 1:
-                    String type = this.m_entity.getTypeRemote(this.parseString(arguments, 0));
+                    String type = this.getTypeRemote(this.parseString(arguments, 0));
                     return new Object[] { type != null };
                 case 2: {
                     // Multiple return values, primary type first, exactly like peripheral.getType
                     // does for a directly attached peripheral.
-                    String[] typeParts = this.m_entity.getTypesRemote(this.parseString(arguments, 0));
+                    String[] typeParts = this.getTypesRemote(this.parseString(arguments, 0));
                     if (typeParts == null) return null;
                     Object[] typeResult = new Object[typeParts.length];
                     System.arraycopy(typeParts, 0, typeResult, 0, typeParts.length);
                     return typeResult;
                 }
                 case 3:
-                    String[] methodNames = this.m_entity.getMethodNamesRemote(this.parseString(arguments, 0));
+                    String[] methodNames = this.getMethodNamesRemote(this.parseString(arguments, 0));
                     if (methodNames == null) {
                         return null;
                     }
@@ -848,11 +908,11 @@ public class TileCable extends TileModemBase implements INetwork {
                     String methodName = this.parseString(arguments, 1);
                     Object[] methodArgs = new Object[arguments.length - 2];
                     System.arraycopy(arguments, 2, methodArgs, 0, arguments.length - 2);
-                    return this.m_entity.callMethodRemote(remoteName, context, methodName, methodArgs);
+                    return this.callMethodRemote(remoteName, context, methodName, methodArgs);
                 case 5: {
                     String remoteName5 = this.parseString(arguments, 0);
                     String checkType5 = this.parseString(arguments, 1);
-                    String[] types5 = this.m_entity.getTypesRemote(remoteName5);
+                    String[] types5 = this.getTypesRemote(remoteName5);
                     if (types5 == null) {
                         throw new LuaException("No peripheral: " + remoteName5);
                     }
@@ -862,7 +922,7 @@ public class TileCable extends TileModemBase implements INetwork {
                     return new Object[] { false };
                 }
                 case 6: {
-                    String localName = this.m_entity.getConnectedPeripheralName();
+                    String localName = this.getLocalPeripheralName();
                     return localName != null ? new Object[] { localName } : null;
                 }
                 default:
@@ -873,22 +933,23 @@ public class TileCable extends TileModemBase implements INetwork {
         @Override
         public void attach(IComputerAccess computer) {
             super.attach(computer);
-            synchronized (this.m_entity.m_peripheralsByName) {
-                for (String periphName : this.m_entity.m_peripheralsByName.keySet()) {
-                    IPeripheral peripheral = this.m_entity.m_peripheralsByName.get(periphName);
-                    if (peripheral != null) {
-                        this.m_entity.attachPeripheral(periphName, peripheral);
-                    }
-                }
+            synchronized (this.m_entity.m_attachedPeripherals) {
+                this.m_entity.m_attachedPeripherals.add(this);
             }
+            this.syncPeripherals(this.m_entity.getNetworkPeripherals());
         }
 
         @Override
-        public synchronized void detach(IComputerAccess computer) {
-            synchronized (this.m_entity.m_peripheralsByName) {
-                for (String periphName : this.m_entity.m_peripheralsByName.keySet()) {
-                    this.m_entity.detachPeripheral(periphName);
+        public void detach(IComputerAccess computer) {
+            synchronized (this) {
+                for (TileCable.RemotePeripheralWrapper wrapper : this.m_peripheralWrappersByName.values()) {
+                    wrapper.detach();
                 }
+                this.m_peripheralWrappersByName.clear();
+            }
+
+            synchronized (this.m_entity.m_attachedPeripherals) {
+                this.m_entity.m_attachedPeripherals.remove(this);
             }
 
             super.detach(computer);
@@ -902,6 +963,11 @@ public class TileCable extends TileModemBase implements INetwork {
             } else {
                 return false;
             }
+        }
+
+        @Override
+        public Object getTarget() {
+            return this.m_entity;
         }
     }
 
@@ -969,6 +1035,10 @@ public class TileCable extends TileModemBase implements INetwork {
             return this.m_methods;
         }
 
+        public boolean isFor(IPeripheral peripheral) {
+            return this.m_peripheral == peripheral || this.m_peripheral.equals(peripheral);
+        }
+
         public Object[] callMethod(ILuaContext context, String methodName, Object[] arguments)
             throws LuaException, InterruptedException {
             if (this.m_methodMap.containsKey(methodName)) {
@@ -1022,19 +1092,16 @@ public class TileCable extends TileModemBase implements INetwork {
         @Override
         public Map<String, IPeripheral> getAvailablePeripherals() {
             Map<String, IPeripheral> peripherals = new HashMap<>(this.m_computer.getAvailablePeripherals());
-            synchronized (m_entity.m_peripheralsByName) {
-                peripherals.putAll(m_entity.m_peripheralsByName);
-            }
+            peripherals.putAll(this.m_entity.getNetworkPeripherals());
             return Collections.unmodifiableMap(peripherals);
         }
 
         @Override
         public IPeripheral getAvailablePeripheral(String name) {
-            synchronized (m_entity.m_peripheralsByName) {
-                IPeripheral peripheral = m_entity.m_peripheralsByName.get(name);
-                if (peripheral != null) {
-                    return peripheral;
-                }
+            IPeripheral peripheral = this.m_entity.getNetworkPeripherals()
+                .get(name);
+            if (peripheral != null) {
+                return peripheral;
             }
             return m_computer.getAvailablePeripheral(name);
         }

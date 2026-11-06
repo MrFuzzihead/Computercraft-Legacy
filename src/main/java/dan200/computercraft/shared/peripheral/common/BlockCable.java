@@ -26,6 +26,10 @@ public final class BlockCable extends BlockPeripheralBase {
             }
         }
 
+        if (ComputerCraft.Blocks.wiredModemFull != null && block == ComputerCraft.Blocks.wiredModemFull) {
+            return true;
+        }
+
         return false;
     }
 

@@ -67,6 +67,7 @@ import dan200.computercraft.shared.peripheral.common.BlockCable;
 import dan200.computercraft.shared.peripheral.common.BlockPeripheral;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.modem.BlockAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.BlockWiredModemFull;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
 import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
 import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
@@ -763,6 +764,7 @@ public class ComputerCraft {
         public static BlockChatBox chatBox;
         public static BlockRedstoneRelay redstoneRelay;
         public static BlockAdvancedWirelessModem advancedWirelessModem;
+        public static BlockWiredModemFull wiredModemFull;
         public static dan200.computercraft.compat.customnpcs.peripheral.npcdetector.BlockNpcDetector npcDetector;
         public static dan200.computercraft.compat.customnpcs.peripheral.npcinterface.BlockNpcInterface npcInterface;
         public static dan200.computercraft.compat.customnpcs.peripheral.traderrole.BlockTraderRole traderRole;
