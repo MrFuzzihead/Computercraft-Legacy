@@ -46,7 +46,13 @@ public class RFRefuelHandler implements TurtleRefuelHandler {
         }
 
         IEnergyContainerItem container = (IEnergyContainerItem) stack.getItem();
-        int rfLimit = Math.min(EnergyRefuel.energy(fuelUnits, rfPerFuel), container.getMaxEnergyStored(stack));
+        int affordable = EnergyRefuel.unitsAffordable(container.getEnergyStored(stack), rfPerFuel);
+        if (affordable <= 0) {
+            // An empty cell: recognised, but there is nothing worth taking.
+            return OptionalInt.of(0);
+        }
+
+        int rfLimit = EnergyRefuel.energy(Math.min(fuelUnits, affordable), rfPerFuel);
         int taken = 0;
         int step = 1;
         // Extract in a loop: containers are allowed to hand back less than asked for, and a single call would then

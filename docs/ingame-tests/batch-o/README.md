@@ -16,6 +16,8 @@ installed.
 | IC2 | not supported by ComputerCraft | a charged `IElectricItem` is **drained**, not consumed; 25 EU per fuel unit by default (`turtleEuRefuelAmount`) |
 | CoFH RF | not supported by ComputerCraft | a charged `IEnergyContainerItem` is drained; 100 RF per fuel unit by default (`turtleRfRefuelAmount`) |
 | `refuel(0)` | probe, returned success/failure | probe delegated to handlers, which must report recognition but consume nothing |
+| electric items | not supported | a charged item is **drained, not consumed**: it stays in the slot with less charge, and the item count does not change |
+| partial units | n/a | only **whole** fuel units are paid for: a battery with less charge than one unit costs is left alone rather than drained for nothing |
 | nearly-full tank | items were consumed and the excess fuel was clamped away | only the items that fit are consumed |
 | `turtleDisabledActions` | respected | still respected — and now also on the electric paths |
 | handler bugs | n/a | a negative yield, or consumption during the `refuel(0)` probe, throws immediately |
@@ -38,7 +40,7 @@ Then run `o1_turtle_fuel` **on a turtle**. It checks what a turtle can see on it
 |---|---|
 | fuel surface | `getFuelLevel` / `getFuelLimit` are numbers (or `unlimited`), the level never exceeds the limit |
 | empty-slot guard | `refuel(1)` fails with `No items to combust`, and `refuel(0)` fails too |
-| probe and consume | if any slot holds a burnable or charged item, `refuel(0)` recognises it and `refuel(1)` raises fuel without lowering it |
+| probe and consume | if any slot holds a burnable or charged item, `refuel(0)` recognises it and `refuel(1)` raises fuel; the run prints the item name, counts and both fuel readings so a failure is self-diagnosing |
 
 Everything else is staged at the end of the run, because a turtle program cannot put items in its own inventory.
 
@@ -51,6 +53,12 @@ Everything else is staged at the end of the run, because a turtle program cannot
    old code consumed first and let `addFuel` clamp, silently destroying the difference.
 4. **IC2 battery** — `refuel(0)` true; `refuel(1)` raises fuel and **the battery is still in the slot** with less
    charge. That is the whole point of the electric path: drained, not eaten.
+
+   Note the scale: `refuel(1)` means *one fuel unit*, so it costs 25 EU — a quarter of a percent of a 10,000 EU RE
+   battery. To spend a whole battery, ask for more units: `turtle.refuel(400)` for 10,000 EU at the default ratio, or
+   the `refuel all` program. A battery also reports `true` to `turtle.refuel(0)` while empty, because the probe answers
+   "is this item fuel?", not "will this call gain anything?" — the second half of the check above expects no gain
+   then.
 5. **IC2 ratio** — 25 EU per fuel by default, so a 10000 EU battery is 400 fuel. Change `turtleEuRefuelAmount` and the
    yield should scale; set it to 0 and batteries must stop being accepted.
 6. **CoFH energy cell** — same as (4)/(5) with `turtleRfRefuelAmount` (100 RF per fuel by default).
@@ -70,8 +78,9 @@ Everything else is staged at the end of the run, because a turtle program cannot
   returned to the inventory.
 * `TurtleRefuelCommandTest` (8) — the disabled-actions check, both failure messages, fuel added, no animation when no
   fuel is gained, and the slot/limit/stack handed to the handler.
-* `EnergyRefuelTest` (11) — the electric arithmetic: capping to remaining tank space, never negative, saturating
-  instead of overflowing an `int`, whole-unit conversion with the remainder left in the item.
+* `EnergyRefuelTest` (15) — the electric arithmetic: capping to remaining tank space, never negative, saturating
+  instead of overflowing an `int`, whole-unit conversion with the remainder left in the item, and refusing a battery
+  that cannot pay for one whole unit.
 * `ElectricRefuelIntegrationTest` (3) — the class-load shim: `register()` outside a running game is a no-op that
   registers nothing, so a JVM without IC2 or CoFH never resolves their API classes.
 * `ComputerCraftAPIRefuelHandlerTest` (3) — the reflective bridge reaches the registry, and the method it reflects into

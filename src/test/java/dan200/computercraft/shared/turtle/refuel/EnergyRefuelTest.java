@@ -92,6 +92,38 @@ class EnergyRefuelTest {
     }
 
     // =========================================================================
+    // unitsAffordable
+    // =========================================================================
+
+    @Test
+    void countsTheWholeUnitsAnItemCanPayFor() {
+        // A 10,000 EU RE battery at 25 EU per fuel is worth 400 units.
+        assertEquals(400, EnergyRefuel.unitsAffordable(10_000, 25));
+        assertEquals(40, EnergyRefuel.unitsAffordable(10_000, 250));
+    }
+
+    @Test
+    void refusesAPartialUnitRatherThanDrainingForNothing() {
+        // 24 EU at 25 per unit: taking it would delete the charge and grant no fuel.
+        assertEquals(0, EnergyRefuel.unitsAffordable(24, 25));
+        assertEquals(1, EnergyRefuel.unitsAffordable(25, 25));
+        assertEquals(1, EnergyRefuel.unitsAffordable(49, 25));
+    }
+
+    @Test
+    void handlesAnEmptyOrMisconfiguredItem() {
+        assertEquals(0, EnergyRefuel.unitsAffordable(0, 25));
+        assertEquals(0, EnergyRefuel.unitsAffordable(-5, 25));
+        assertEquals(0, EnergyRefuel.unitsAffordable(10_000, 0));
+        assertEquals(0, EnergyRefuel.unitsAffordable(10_000, -1));
+    }
+
+    @Test
+    void saturatesRatherThanOverflowing() {
+        assertEquals(Integer.MAX_VALUE, EnergyRefuel.unitsAffordable(Integer.MAX_VALUE * 4.0, 1));
+    }
+
+    // =========================================================================
     // fuelFrom
     // =========================================================================
 

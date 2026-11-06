@@ -53,6 +53,15 @@ public class IC2RefuelHandler implements TurtleRefuelHandler {
             return OptionalInt.of(0);
         }
 
+        // Pay only for whole units: a nearly-empty battery must not be drained for fuel that then rounds down to
+        // nothing, which would delete charge the player never got fuel for.
+        int affordable = EnergyRefuel.unitsAffordable(ElectricItem.manager.getCharge(stack), euPerFuel);
+        if (affordable <= 0) {
+            return OptionalInt.of(0);
+        }
+
+        fuelUnits = Math.min(fuelUnits, affordable);
+
         // Charging from a battery in the turtle's own inventory: no tier limit, no external transfer limit,
         // and never a dry run.
         double discharged = ElectricItem.manager

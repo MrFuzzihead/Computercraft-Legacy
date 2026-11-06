@@ -42,6 +42,10 @@ local function skip(label)
   print("SKIP " .. label)
 end
 
+local function note(text)
+  _transcript[#_transcript + 1] = text
+end
+
 local function group(name, fn)
   local okRun, err = pcall(fn)
   if not okRun then ok(name .. " crashed", false, err) end
@@ -125,25 +129,49 @@ local function probeAndConsume()
 
     pass("refuel(0) recognises the item in slot " .. candidate)
 
+    local beforeDetail = turtle.getItemDetail(candidate) or {}
     local beforeItems = turtle.getItemCount(candidate)
     local beforeFuel = turtle.getFuelLevel()
     local okRefuel = turtle.refuel(1)
-
-    eq("refuel(1) succeeds for a recognised item", true, okRefuel)
-
+    local afterDetail = turtle.getItemDetail(candidate) or {}
     local afterItems = turtle.getItemCount(candidate)
     local afterFuel = turtle.getFuelLevel()
 
-    ok(
-      "fuel did not go down",
-      afterFuel == "unlimited" or beforeFuel == "unlimited" or afterFuel >= beforeFuel,
-      tostring(beforeFuel) .. " -> " .. tostring(afterFuel)
+    note(
+      ("     slot %d held %s x%d at fuel %s; now x%d at fuel %s"):format(
+        candidate,
+        tostring(beforeDetail.name),
+        beforeItems,
+        tostring(beforeFuel),
+        afterItems,
+        tostring(afterFuel)
+      )
     )
-    ok(
-      "either the item was consumed or the tank was already full",
-      afterItems < beforeItems or afterFuel == beforeFuel,
-      tostring(beforeItems) .. " -> " .. tostring(afterItems) .. " items"
-    )
+
+    eq("refuel(1) succeeds for a recognised item", true, okRefuel)
+
+    local unlimited = beforeFuel == "unlimited" or afterFuel == "unlimited"
+    local tankFull = (not unlimited) and beforeFuel >= turtle.getFuelLimit()
+
+    ok("fuel did not go down", unlimited or afterFuel >= beforeFuel, tostring(beforeFuel) .. " -> " .. tostring(afterFuel))
+
+    if afterItems < beforeItems then
+      -- Burnable fuel: the item is gone, so it must have paid out unless the tank was already full.
+      ok("a consumed item added fuel", unlimited or afterFuel > beforeFuel or tankFull, tostring(beforeFuel) .. " -> " .. tostring(afterFuel))
+    else
+      -- Charged fuel: the item is drained, not eaten. It stays in the slot and the fuel still goes up, unless the
+      -- battery was empty or the tank was already full.
+      ok(
+        "an unconsumed item is still the same item",
+        afterItems == beforeItems and afterDetail.name == beforeDetail.name,
+        tostring(beforeDetail.name) .. " -> " .. tostring(afterDetail.name)
+      )
+      ok(
+        "a drained item added fuel, or it had none to give",
+        unlimited or afterFuel > beforeFuel or tankFull,
+        tostring(beforeFuel) .. " -> " .. tostring(afterFuel)
+      )
+    end
   end)
 end
 

@@ -51,6 +51,22 @@ final class EnergyRefuel {
     }
 
     /**
+     * How many whole fuel units an item can pay for. Partial units are deliberately refused: taking the energy and then
+     * rounding the fuel down would delete charge the player never spent.
+     *
+     * @param storedEnergy  EU or RF the item currently holds
+     * @param energyPerFuel EU or RF per fuel unit
+     * @return the number of whole fuel units available, never negative
+     */
+    static int unitsAffordable(double storedEnergy, int energyPerFuel) {
+        if (energyPerFuel <= 0 || storedEnergy <= 0) {
+            return 0;
+        }
+
+        return (int) Math.min(Math.floor(storedEnergy / energyPerFuel), Integer.MAX_VALUE);
+    }
+
+    /**
      * The whole fuel units an amount of energy buys. The remainder is left in the item: charging a turtle for more
      * than it received would lose energy on every refuel.
      *
