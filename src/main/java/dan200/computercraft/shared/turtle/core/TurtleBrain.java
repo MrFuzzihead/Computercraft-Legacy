@@ -178,6 +178,16 @@ public class TurtleBrain implements ITurtleAccess {
     }
 
     /**
+     * Whether the family cache has been primed.
+     *
+     * @return whether {@link #getFamily()} can answer without reading the world
+     * @see TileTurtle#primeFamilyCache()
+     */
+    public boolean hasFamily() {
+        return this.m_family != null;
+    }
+
+    /**
      * Prime the family cache. Must only be called from the main thread.
      */
     public void setFamily(ComputerFamily family) {
@@ -549,7 +559,9 @@ public class TurtleBrain implements ITurtleAccess {
 
     @Override
     public int getFuelLimit() {
-        return this.m_owner.getFamily() == ComputerFamily.Advanced ? ComputerCraft.advancedTurtleFuelLimit
+        // Read through the cache, not through the owner: this is called from a computer worker thread by
+        // turtle.getFuelLimit()/getFuelLevel(), and TileComputerBase#getFamily reads the world block.
+        return this.getFamily() == ComputerFamily.Advanced ? ComputerCraft.advancedTurtleFuelLimit
             : ComputerCraft.turtleFuelLimit;
     }
 

@@ -25,6 +25,7 @@ import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
 import dan200.computercraft.api.turtle.TurtleSide;
 import dan200.computercraft.api.turtle.TurtleUpgradeType;
+import dan200.computercraft.shared.computer.blocks.BlockComputerBase;
 import dan200.computercraft.shared.computer.blocks.TileComputerBase;
 import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.IComputer;
@@ -74,6 +75,31 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
 
     protected TurtleBrain createBrain() {
         return new TurtleBrain(this);
+    }
+
+    /**
+     * Fills in the brain's family cache if it is still empty.
+     *
+     * <p>
+     * {@code createComputer} primes the cache, but that only runs when the server computer is <em>created</em>. After a
+     * chunk reload the tile finds its computer in the registry instead, so the cache stays empty while that computer's
+     * programs keep running - and {@code turtle.getFuelLimit()} would then read the world block from a computer worker
+     * thread, which HodgePodge's {@code ServerThreadLongHashMap} reports as an off-thread read.
+     * </p>
+     *
+     * <p>
+     * Cheap in the steady state: one null check per tick and one world read for the life of the turtle.
+     * </p>
+     */
+    protected void primeFamilyCache() {
+        if (this.m_brain.hasFamily()) {
+            return;
+        }
+
+        BlockComputerBase block = this.getBlock();
+        if (block != null) {
+            this.m_brain.setFamily(block.getFamily(this.worldObj, this.xCoord, this.yCoord, this.zCoord));
+        }
     }
 
     protected final ServerComputer createComputer(int instanceID, int id, int termWidth, int termHeight) {
@@ -219,6 +245,10 @@ public class TileTurtle extends TileComputerBase implements ITurtleTile, IInvent
 
     @Override
     public void updateEntity() {
+        // Before super.updateEntity(): a turtle program may already be running on this tile's computer (a chunk reload
+        // finds it in the registry rather than creating it), and the first thing it can ask for is its fuel limit,
+        // which reads the family. Priming here keeps that read on the main thread.
+        this.primeFamilyCache();
         super.updateEntity();
         this.m_brain.update();
         synchronized (this.m_inventory) {
