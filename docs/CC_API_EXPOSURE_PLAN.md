@@ -1,41 +1,48 @@
-# CC API Exposure Plan — removing CC mechanisms from the three maintained forks
+# CC API Exposure Plan — removing every CC mechanism from the three forks
 
-**Goal.** Remove every ComputerCraft-targeting mechanism — mixin, accessor, invoker,
-ASM transformer, reflection, access transformer — from the three maintained forks
+**Objective.** **Zero** ComputerCraft-targeting mechanisms — mixin, accessor, invoker,
+ASM transformer, reflection, access transformer — in any of the three maintained forks
 (`CCTweaks-Legacy`, `PeripheralsPlusPlus`, `OpenPeripheral` + `-Addons` +
-`-Integration`), while holding `Computercraft-Legacy` to **1:1 behavioural parity
-with upstream CC: Tweaked**.
+`-Integration`).
+
+**Constraint.** `Computercraft-Legacy` stays **1:1 with upstream CC: Tweaked**. Parity
+constrains *how* a mechanism is removed; it never decides *whether* it is removed.
 
 **Status.** Branch `feature/api-exposure-for-mixin-removal`, cut from
-`feature/wired-modem-full-cleanroom` (PR #28). Everything below is verified against
-the workspace forks at their current `main`, not against upstream addon sources.
+`feature/wired-modem-full-cleanroom` (PR #28). All fork facts below are verified
+against the workspace forks at `main`, not against upstream addon sources.
 
-**Non-goals.** Restructuring the addons; porting addon features into CC; any CC
-change whose only justification is saving an addon a mixin.
+**Non-goals.** Porting addon features into CC; restructuring the addons beyond what a
+mechanism removal requires.
 
 ---
 
-## 0. Decision hierarchy
+## 0. How a mechanism gets removed
 
-Every mechanism is judged against these tiers, in order. Lower tiers win.
+The ladder is about the *method*. Always take the highest applicable rung.
 
-| Tier | Meaning | Parity risk | Default |
+| Rung | Method | CC change | Parity risk |
 |---|---|---|---|
-| **T0** | Delete in the addon — the mechanism is unused, or something already public does the job. | none | preferred |
-| **T1** | **Pure visibility** in CC — a getter/setter over existing state, or `private`/`protected` → `public`. Returns/writes the value verbatim; no new logic, no call site changes, no new branch or interface. | none: the emitted code for every existing path is unchanged | preferred where T0 fails |
-| **T2** | **Additive API** in CC — a new public member CC itself never calls, or one carrying a little logic of its own (a view, a copy, a derived value). | none at runtime; permanent surface | acceptable, sparingly |
-| **T3** | **Additive hook** in CC — a new call site / branch that a third party registers into. | low, *if* the fallback is provably today's code path | avoid |
-| **T4** | **Behaviour change** in CC internals. | direct | reject, unless unreachable without a third party |
-| **T5** | Keep the mechanism in the addon. | none | the correct answer surprisingly often |
+| **M1** | Delete — unused, or something already public does the job. | none | none |
+| **M2** | Replace with an existing public CC member. | none | none |
+| **M3** | CC **visibility**: new getter/setter over existing state, or `private`/`protected` → `public`. Verbatim value, no new logic. | additive, no new call sites | none — bytecode for every existing path is unchanged |
+| **M4** | CC **additive seam**: a new interface/registry/hook that CC consults, with the no-consumer path identical to today. | additive, *new call sites* | low, and must be proven by test |
+| **M5** | **Addon owns the code** — reimplement the addon side so it no longer patches CC (own tile/block, own renderer, direct calls). | none | none — the work lands in the addon |
+| **M6** | CC **internals behaviour change** to absorb the mechanism. | behavioural divergence | rejected |
+| **M7** | Keep the mechanism. **Interim only**, with a named endgame rung. | none | none |
 
-**Load-bearing rule:** an addon that currently uses `@Overwrite` can almost always
-switch to a **cancellable `@Inject` at `HEAD` that falls through** to CC's original
-body. `@Inject` + fall-through *is* the extensibility seam — it lives in the addon,
-changes nothing in CC, and preserves CC's own logic for everyone else. A CC-side hook
-is only warranted when the addon needs to observe something it cannot reach at all.
+M3 is what "preserve CC behaviour (getters/setters)" means; M4 is your "OK to add to
+the API where necessary". M4 must earn its place: it is the only rung that puts new
+code *inside* a CC execution path, so each seam needs a fallback assertion.
 
-Applied consistently, this rule deletes most of the CC API the previous revision of
-this document asked for.
+**A note on `@Overwrite` → cancellable `@Inject`.** This trick preserves CC's logic
+while the addon keeps its hook. It is a *behaviour* improvement, not a removal — it
+stays a mixin, so it is always M7, never a destination. Do it where a mixin survives
+the interim anyway; do not count it as progress on this goal.
+
+**Current state: 23 CC-targeting mechanisms (files or lookup sites) across the forks.
+Target: 0.** Fifteen yield to M1–M3 (no new CC call sites at all), six need an M4
+seam, one is M5, and `TileCable_Mixin` alone is the M4-or-M5 decision (§8).
 
 ---
 
@@ -69,7 +76,7 @@ behaviour mixins (6 CC, 3 OpenPeripheral, 1 multipart).
 
 **5 target OpenPeripheral** (`AdapterPeripheral_Mixin`, `ClassMethodsComposer_Accessor`,
 `ComposedMethodsFactory_Accessor`, `ModuleComputerCraft_Mixin`, `PeripheralProxy_Mixin`) —
-out of scope here; nothing in CC helps them.
+no CC involvement anywhere in them. Out of scope.
 
 ### PeripheralsPlusPlus — fork `main`
 
@@ -82,243 +89,251 @@ out of scope here; nothing in CC helps them.
 | `CCTurtleProxyCommonAccessor` | accessor | `CCTurtleProxyCommon.m_turtleUpgrades` |
 | 4 × `early/*Accessor` | accessors | `EntityLiving`, `EntityLivingBase`, `ItemBucket`, `Gui` — **vanilla, not CC** |
 
-The upstream ASM transformer, `ppp_at.cfg` access transformer and reflective
-`ComputerCraftRegistry` unwrapping are already gone from the fork.
+The fork already dropped upstream's ASM transformer, `ppp_at.cfg` and the reflective
+`ComputerCraftRegistry` unwrapping.
 
 ### OpenPeripheral (Core / Addons / Integration) — forks
 
-No CC-targeting mixins and no ASM/AT anywhere. Mechanism surface is
+No CC-targeting mixins, no ASM, no AT anywhere. Mechanism surface is
 `openmods.reflection` only, and only three files reach CC:
 
-| Fork | File | What it touches | Verdict |
+| Fork | File | What it touches | Rung |
 |---|---|---|---|
-| Addons | `TileEntityPeripheralProxy` | `TileCable.m_peripheralAccessAllowed` (private field) + `togglePeripheralAccess` (already public) | 1 getter fixes it |
-| Integrations | `ComputerMetaProvider`, `MediaMetaProvider`, `PrintoutMetaProvider`, `TurtleMetaProvider` | **already-public** CC members via string-based `MethodAccess` | nothing to do |
+| Addons | `TileEntityPeripheralProxy` | `TileCable.m_peripheralAccessAllowed` (private field) + `togglePeripheralAccess` (already public) | M3 |
+| Integrations | `ComputerMetaProvider`, `MediaMetaProvider`, `PrintoutMetaProvider`, `TurtleMetaProvider` | already-public CC members, via string-based `MethodAccess` | **M2** — see §6 |
 | Core | `PeripheralProvider`, `ProxyAdapterPeripheral` | the public `IPeripheralProvider` contract; reflection over its own proxy class | nothing to do |
 
 ---
 
-## 2. Corrections to the previous revision
-
-The earlier draft was written before the parity constraint was ranked first, and its
-inventory had four errors. Both are fixed here.
+## 2. Corrections to the earlier revisions
 
 1. **`ModuleComputerCraft_Mixin` is not a CC mixin** — it targets
-   `openperipheral.interfaces.cc.ModuleComputerCraft` and lives in the
-   `OPENPERIPHERAL` enum group. CC-targeting count is 15, not 16.
-2. **Three files were missing or mis-attributed.** The old Phase-1 table folded
-   `ItemPocketComputer_Invoker` (`createServerComputer`) and
-   `TileComputerBase_Invoker` (`transferStateFrom`) into "`TileTurtle_Accessor`
-   (part)", and omitted `PeripheralWrapper_Accessor` entirely.
-3. **`PeripheralAPI_Accessor` and `PeripheralWrapper_Accessor` are unnecessary.**
-   Our `IComputerAccess` already declares `getAvailablePeripherals()` /
-   `getAvailablePeripheral(String)` (the CC:T backport), and
-   `PeripheralAPI$PeripheralWrapper` **already implements them**
-   (`PeripheralAPI.java:501` / `:515`). CCTweaks' `PeripheralAPI_Mixin` implements
-   `IComputerAccess` and can simply call `this.getAvailablePeripherals()`. Both
-   accessor files delete with **no CC change at all**. Likewise the old "add
-   `PeripheralAPI#getEnvironment()`" row is dead.
-4. **`TileCable#setAttachedPeripheralID` is not needed** — nothing in CCTweaks writes
-   the field; only `PartModem` reads it.
+   `openperipheral.interfaces.cc.ModuleComputerCraft`. CC count is 15, not 16.
+2. **Three files were missing or mis-attributed**: `ItemPocketComputer_Invoker` and
+   `TileComputerBase_Invoker` were folded into "`TileTurtle_Accessor` (part)", and
+   `PeripheralWrapper_Accessor` was absent.
+3. **`PeripheralAPI_Accessor` + `PeripheralWrapper_Accessor` need nothing.** Our
+   `IComputerAccess.getAvailablePeripherals()` backport is already implemented on
+   `PeripheralAPI$PeripheralWrapper` (`PeripheralAPI.java:501` / `:515`); CCTweaks'
+   mixin implements `IComputerAccess` and can call `this.getAvailablePeripherals()`.
+   Both are **M1**.
+4. **`TileCable#setAttachedPeripheralID` is not needed** — nothing writes the field.
+5. **`TileTurtle` has no `setMoved`** (`m_moved` is assigned directly at
+   `TileTurtle.java:485`), so that half is an add, not a widening. `getMoved` has no
+   caller — `hasMoved()` is already public.
+6. **`OP-Integrations` compiles against CC** (`dependencies.gradle:39`,
+   `api("com.github.MrFuzzihead:Computercraft-Legacy:3.2.0:dev")`), and
+   `ComputerFamily` is a **public enum**
+   (`ComputerFamily.java:3`). Four `MethodAccess` sites are replaceable with direct
+   calls today — no CC change.
+7. **`TileCable_Mixin` has 6 dead/failing `@Overwrite`s** against our `TileCable`
+   (`attachPeripheral`, `detachPeripheral` — no such method; `getTypeRemote`,
+   `getMethodNamesRemote`, `callMethodRemote` — exist only on the inner
+   `TileCable$Peripheral`; `getConnectedPeripheral` — overwritten `private` over our
+   `protected`, a visibility narrowing Mixin rejects). CCTweaks does not currently
+   apply. This is why nothing here can be tested until it is repaired.
 
-Also verified while checking these:
-
-- `TileTurtle.hasMoved()` is already public (`TileTurtle.java:62`) and
-  `TileTurtle_Accessor.getMoved()` has no caller — only `setMoved` is used.
-- `TileTurtle.transferStateFrom(TileTurtle)` is already public; only the
-  `TileComputerBase` overload (`TileComputerBase.java:379`) is `protected`.
-- `TileComputerBase.createServerComputer()` is already public — the widening is only
-  needed for `ItemPocketComputer`'s `private createServerComputer` (`:413`).
-- `BlockCable.isCable` and `ItemCable.onItemUse` are public and non-final, so both
-  current `@Overwrite`s can become cancellable `@Inject`s.
-- `TileCable_Mixin` has **6 dead `@Overwrite`s** against our `TileCable`, which is why
-  CCTweaks does not currently apply:
-  `attachPeripheral` and `detachPeripheral` (no such method), `getTypeRemote`,
-  `getMethodNamesRemote`, `callMethodRemote` (exist only on the inner
-  `TileCable$Peripheral`, not the outer class), and `getConnectedPeripheral`
-  (overwritten `private`, ours is `protected` — a visibility narrowing Mixin rejects).
+The earlier revision treated "keep the mixin" as a normal outcome. That was wrong for
+this objective: M7 exists only as an interim for a mechanism with a named endgame.
 
 ---
 
-## 3. CCTweaks-Legacy
+## 3. CCTweaks-Legacy — all 15 removed
 
-### 3.1 Accessors and invokers — all nine go
+### 3.1 Accessors and invokers (9) — all deleted
 
-| Mechanism | Verdict | Action |
+| Mechanism | Rung | Removal |
 |---|---|---|
-| `TileCable_Accessor.getAttachedPeripheralID` | **T1** | add `public int getAttachedPeripheralID()` |
-| `TileCable_Accessor.s_cableIcons` | **T0** | `PartCable` only indexes `[0]`/`[1]`; `TileCable.getCableItemTexture(int)` is already public and maps to exactly those two icons |
-| `TileCable_Accessor.s_modemIcons` | **T0 + T1 split** | `BlockNetworked.getModemIcon` builds `s_modemIcons[i*2]` for `i<4` — that *is* the existing public `TileCable.getModemFaceTexture(int)`. `PartModem` uses the odd indices too (`texture+1`), which nothing public exposes → add `public static IIcon getModemSideTexture(int anim)` |
-| `TileTurtle_Accessor.getMoved` | **T0** | unused; `hasMoved()` is already public |
-| `TileTurtle_Accessor.setMoved` | **T1** | CC has no setter today (`m_moved` is written directly at `TileTurtle.java:485`), so add `public void setMoved(boolean)`; `hasMoved()` already exists as the read side |
-| `TileComputerBase_Invoker` | **T1** | widen `TileComputerBase#transferStateFrom(TileComputerBase)` to public |
-| `ItemPocketComputer_Invoker` | **T1 or T0** | widen `ItemPocketComputer#createServerComputer` to public, *or* drop CCTweaks' `PocketAccess` P++ integration (it is `private` and only used by `getModemLight`/`getUpgrades`) — decide before the merge, since the merged mod owns both sides |
-| `Computer_Accessor`, `ServerComputer_Accessor`, `CobaltMachine_Accessor` | **T1, debugger-only** | three getters, existing only so `ItemDebugger` can reach the Lua state. Zero-risk, but note the alternative is **T0**: drop `ItemDebugger` and skip all three |
-| `PeripheralAPI_Accessor`, `PeripheralWrapper_Accessor` | **T0** | delete; use `getAvailablePeripherals()` (see §2.3) |
+| `TileCable_Accessor.getAttachedPeripheralID` | M3 | add `public int getAttachedPeripheralID()` |
+| `TileCable_Accessor.s_cableIcons` | **M2** | `PartCable` only indexes `[0]`/`[1]`; `TileCable.getCableItemTexture(int)` is public and maps to exactly those two icons |
+| `TileCable_Accessor.s_modemIcons` | **M2 + M3** | `BlockNetworked` builds `s_modemIcons[i*2]` for `i<4` — that is the existing public `getModemFaceTexture(int)`. `PartModem` also uses the odd indices (`texture+1`) → add `getModemSideTexture(int anim)` |
+| `TileTurtle_Accessor.getMoved` | **M1** | unused; `hasMoved()` is public |
+| `TileTurtle_Accessor.setMoved` | M3 | add `public void setMoved(boolean)` |
+| `TileComputerBase_Invoker` | M3 | widen `transferStateFrom(TileComputerBase)` to public |
+| `ItemPocketComputer_Invoker` | M3 (or M1) | widen `createServerComputer(...)` to public — or delete CCTweaks' `PocketAccess` P++ integration, whose only use is `getModemLight`/`getUpgrades` |
+| `Computer_Accessor`, `ServerComputer_Accessor`, `CobaltMachine_Accessor` | M3 | three getters, used only by `ItemDebugger`. Either add them, or **M1**: drop `ItemDebugger` |
+| `PeripheralAPI_Accessor`, `PeripheralWrapper_Accessor` | **M1** | `getAvailablePeripherals()` (§2.3) |
 
-Two small notes on the icon work: exposing an `IIcon[]` (what the old draft proposed)
-is worse than exposing indexed getters — the arrays are mutable statics, and a
-getter per anim state needs no defensive copy.
+Exposing an `IIcon[]` (the earlier proposal) is worse than indexed getters: the arrays
+are mutable statics, and one getter per anim state needs no defensive copy.
 
-### 3.2 Behaviour mixins — all six stay, four reshaped
+### 3.2 Behaviour mixins (6) — one M5, four M4, one decision
 
-| Mixin | Verdict | CC change | Rationale / reshape |
-|---|---|---|---|
-| `TurtleRefuelCommand_Mixin` | **T5** | **none** | The current `@Overwrite` is *lossy*: it drops `turtleDisabledActions`, container items, the `m_limit == 0` test-only branch, and `InventoryUtil` slot handling. Reshape to a cancellable `@Inject(HEAD)`: if a `ITurtleFuelProvider` claims the stack, run the provider path and cancel; otherwise return and let **CC's own `execute`** run. Result: no fuel registry in CC, and CCTweaks gets *closer* to CC behaviour, not further. |
-| `BlockCable_Mixin` | **T5** | **none** | `isCable` is a public static; a cancellable `@Inject` that returns `true` when `NetworkAPI.registry().isNode(...)` and falls through otherwise reproduces today's intent without an `ICableNode` interface in CC. |
-| `ItemCable_Mixin` | **T5** | **none** | Cancellable `@Inject(HEAD)` on `onItemUse`: attempt multipart placement, fall through to CC's placement. This also lets CCTweaks delete its `cCTweaks_Legacy$nativePlace` copy of CC code — the copy is the main maintenance burden in this file. |
-| `PeripheralAPI_Mixin` | **T5** | **none** | The two `attach`/`detach` `@Inject`s are genuinely addon-side (network attach notification). After the T0 fix above, the mixin needs no accessors at all. |
-| `CableBlockRenderingHandler_Mixin` | **T5** | **none** | This is the addon's own renderer; it has to overwrite. Nothing in CC can or should absorb it. |
-| `TileCable_Mixin` | **T5** | **none** | See 3.3. |
-
-### 3.3 `TileCable_Mixin` — keep it in CCTweaks, contract it
-
-This is the one genuinely invasive mechanism (network/cable/modem behaviour). Under
-the T4 rule it can never move into CC: it *is* the behaviour divergence.
-
-Interim repair while PR #28 lands, so CCTweaks applies at all:
-
-1. Delete the 6 dead/failing `@Overwrite`s listed in §2 (or the mixin aborts).
-2. Rebase the surviving overwrites onto our `TileCable` (PR #28 added
-   `TileWiredModemFull`, which must not be dragged into the cable network).
-3. The overwrites of methods our `TileCable` no longer drives end-to-end
-   (`dispatchPacket`, `receivePacket`, `findPeripherals`, `getConnectedPeripheral` —
-   a mix of no-ops and pure redirects) can become `@Inject`s or be dropped outright,
-   which shrinks the mixin from 27 hooks to the handful that actually redirect
-   modem/cable state.
-4. Only then decide whether the extended network still earns its keep — that decision
-   belongs to the merged mod, not to CC.
-
----
-
-## 4. PeripheralsPlusPlus
-
-| Mechanism | Verdict | Action |
+| Mixin | Rung | Removal |
 |---|---|---|
-| `CCTurtleProxyCommonAccessor` | **T2** | add `CCTurtleProxyCommon#getTurtleUpgrades()` returning an unmodifiable view. `getTurtleUpgrade(int)` already exists but ids are arbitrary (P++ uses ≥ 7), so a bounded loop is not a substitute. 1-line accessor for the NEI handler. |
-| `PocketAPIMixin` | **T4, unreachable without a third party** | `PocketAPI.java:147` refuses only when `PocketUpgrades.isUpgrade(id)` is true, i.e. `1 ≤ id ≤ NPC_INTERFACE` (`PocketUpgrades.java:75`). Nothing in CC can write an `upgrade` tag outside that range — every writer is `PocketUpgrades`-driven. So widening the guard to "any `upgrade` key present" changes **no reachable CC-only state**, and deletes the mixin. Document it in `NOTICE`/parity notes as a deliberate, unreachable-only fix. |
-| `ItemPocketComputerMixin` | **T5** | **Keep.** A pocket-upgrade seam in CC would mean new call sites in `ItemPocketComputer` (create, update, name) and `PocketAPI` — i.e. **T3** — to remove three hooks from one addon. Not justified by the hierarchy; revisit after the merge, where the seam can be internal. |
-| 4 × early accessors | n/a | vanilla targets, nothing to do |
+| `PeripheralAPI_Mixin` | **M5** | No CC change. `IPeripheral.attach(IComputerAccess)`/`detach` are already called by CC's wrapper, and the network view CCTweaks needs (`getPeripheralsOnNetwork`, `transmitPacket`) is addon code. Move the network registration into the addon's own `attach()`/`detach()` — the only in-tree `INetworkedPeripheral` implementors are CCTweaks' own (`TileDebugNetworkedPeripheral`, and the two OpenPeripheral mixin classes). `Point` already drives attach/detach for network nodes, so this is consolidation, not new logic. Functional check: attach a peripheral to a computer side and confirm the network view matches `getAvailablePeripherals()`. |
+| `TurtleRefuelCommand_Mixin` | **M4** | CC-side turtle fuel-provider registry, consulted from `TurtleRefuelCommand` with `TileEntityFurnace.getBurnTime` as the fallback. Retires the mixin *and* the current `@Overwrite`'s four behavioural regressions (it drops `turtleDisabledActions`, container items, the `m_limit == 0` test-only branch and `InventoryUtil` slot handling). |
+| `BlockCable_Mixin` | **M4** | Cable-connectivity seam consulted by `BlockCable.isCable` (§3.3). |
+| `ItemCable_Mixin` | **M4** | Same seam, consulted at the placement points in `ItemCable.onItemUse`. Also deletes the mixin's copy of CC's placement code (`cCTweaks_Legacy$nativePlace`). |
+| `CableBlockRenderingHandler_Mixin` | **M4** | Same seam, consulted by `ComputerCraftProxyClient$CableBlockRenderingHandler.renderWorldBlock` (and `TileCable.getCableBounds`). |
+| `TileCable_Mixin` | **M4 or M5** | §8 — the one real design decision. |
 
-Consistency note: if the `doEquipBack` guard is widened, decide explicitly whether
-`doIsEquipped` (`PocketAPI.java:271`) should also report third-party upgrades. P++
-does not read it, so the minimal change leaves it alone — but the asymmetry should be
-a recorded decision, not an oversight.
+### 3.3 The cable-connectivity seam (one seam, three mixins)
+
+CC's cable knows only about itself: `BlockCable.isCable` checks
+`ComputerCraft.Blocks.cable`, and the renderer/bounds follow from it. Every one of
+`BlockCable_Mixin`, `ItemCable_Mixin` and `CableBlockRenderingHandler_Mixin` exists
+because CCTweaks' multipart parts must count as cable neighbours.
+
+One seam retires all three: a neighbour-ask interface (e.g. `ICableNode`, or a
+`NetworkAPI`-style connectivity provider registered through `ComputerCraftAPI`) that
+the following consult **before** their existing check, falling through untouched when
+nothing is registered:
+
+1. `BlockCable.isCable` — neighbour is a cable node?
+2. `TileCable.getCableBounds` / the render handler — render an arm toward it?
+3. `ItemCable.onItemUse` — is the block being clicked a connectable cable?
+
+Design rules for it: no CodeChicken dependency in CC (a marker interface plus a
+registration list is enough); `false`-by-default, so a CC-only install compiles to
+today's behaviour; and a test that asserts an unregistered world renders and connects
+identically.
 
 ---
 
-## 5. OpenPeripheralAddons
+## 4. PeripheralsPlusPlus — 3 removed
 
-| Mechanism | Verdict | Action |
+| Mechanism | Rung | Removal |
 |---|---|---|
-| `FieldAccess.create(cableClass, "m_peripheralAccessAllowed")` in `TileEntityPeripheralProxy` | **T1** | add `TileCable#isPeripheralAccessAllowed()`. `togglePeripheralAccess` is already public (`TileCable.java:578`), so the `MethodAccess` for it can become a direct call in the same edit. |
+| `CCTurtleProxyCommonAccessor` | M3 | add `CCTurtleProxyCommon#getTurtleUpgrades()`, an unmodifiable view. `getTurtleUpgrade(int)` exists but ids are arbitrary (P++ uses ≥ 7), so a bounded loop is not a substitute. |
+| `PocketAPIMixin` | **M4, unreachable-only** | `PocketAPI.java:147` refuses only when `PocketUpgrades.isUpgrade(id)` holds, i.e. `1 ≤ id ≤ NPC_INTERFACE` (`PocketUpgrades.java:75`); every writer of the `upgrade` tag in CC is `PocketUpgrades`-driven. Widening the guard to "any `upgrade` key present" therefore changes **no reachable CC-only state** — it is M6 in letter, M4 in effect, and it deletes the mixin. Record it in `NOTICE` as a deliberate unreachable-only fix, with a test pinning ids 1–6 and the absent-tag case. |
+| `ItemPocketComputerMixin` | **M4** | A pocket-upgrade seam: `IPocketComputerUpgrade` + registration, consulted at CC's three points (`createServerComputer` return, the `onUpdate` refresh, `getItemStackDisplayName`). This is additive surface CC:T does not have, and it is the honest price of removing the mixin. Fallback must be "upgrade id unknown → today's path", asserted by the same test set. |
+| 4 × early accessors | — | vanilla targets; not CC, not in scope. |
 
-That is OPA's only CC-privates touchpoint. Everything else uses `dan200.computercraft.api.*`.
-
----
-
-## 6. OpenPeripheralCore and OpenPeripheralIntegrations
-
-Nothing to change in CC, nothing to delete in the addons beyond dead indirection.
-
-- **Core** — `LuaReflectionHelper`, `IndexedMethodMap`, `NamedMethodMap`,
-  `PropertyListBuilder`, `AdapterWrapper`, `CommonMethodsBuilder` reflect adapter
-  targets and their own classes. `PeripheralProvider` uses the public
-  `IPeripheralProvider` contract. No CC privates anywhere.
-- **Integrations** — the four CC meta providers resolve **already-public** members
-  (`IComputerItem#getComputerID/getLabel/getFamily`, `ComputerCraft.getMedia`,
-  `ItemPrintout#getTitle/getPageCount/getText`, `ITurtleItem#getFuelLevel/getUpgrade`)
-  by string. Nothing becomes public; the only requirement is a standing rule:
-  **do not narrow these members' visibility in future CC refactors**, or the string
-  lookups break silently at runtime. A future typed API enum for `ComputerFamily`
-  (currently returned as `Object`) would let `ComputerMetaProvider` stop guessing.
+Consistency note: if `doEquipBack` is widened, decide explicitly whether
+`doIsEquipped` (`PocketAPI.java:271`) should also report third-party upgrades. P++ does
+not read it; the minimal change leaves it alone, and that asymmetry should be a
+recorded decision rather than an oversight.
 
 ---
 
-## 7. The complete CC change set
+## 5. OpenPeripheralAddons — 1 removed
 
-Nine classes, seven changes — all T0/T1/T2 plus one unreachable-only T4 fix.
+`TileEntityPeripheralProxy` reflects `TileCable.m_peripheralAccessAllowed` with
+`openmods.reflection.FieldAccess`, and builds a `MethodAccess` for
+`togglePeripheralAccess` although that method is already public (`TileCable.java:578`).
 
-| # | Class | Change | Tier | Retires |
-|---|---|---|---|---|
-| 1 | `TileCable` | `getAttachedPeripheralID()`, `getModemSideTexture(int)`, `isPeripheralAccessAllowed()` | T1 | `TileCable_Accessor` (+ OPA reflection) |
-| 2 | `TileTurtle` | add `setMoved(boolean)` (no setter exists today) | T1 | `TileTurtle_Accessor` |
-| 3 | `TileComputerBase` | `transferStateFrom(TileComputerBase)` → public | T1 | `TileComputerBase_Invoker` |
-| 4 | `ItemPocketComputer` | `createServerComputer(...)` → public | T1 | `ItemPocketComputer_Invoker` |
-| 5 | `Computer`, `ServerComputer`, `CobaltMachine` | `getLuaMachine()`, `getComputer()`, `getLuaState()` | T1 | `Computer_Accessor`, `ServerComputer_Accessor`, `CobaltMachine_Accessor` |
-| 6 | `CCTurtleProxyCommon` | `getTurtleUpgrades()` unmodifiable view | T2 | `CCTurtleProxyCommonAccessor` |
-| 7 | `PocketAPI` | `doEquipBack` guard: refuse *any* installed upgrade | T4 (unreachable) | `PocketAPIMixin` |
+**M3:** add `TileCable#isPeripheralAccessAllowed()`; the `MethodAccess` becomes a direct
+call in the same edit. OPA's only CC-privates touchpoint.
 
-No new interfaces, no new events, no new registries, no call-site changes anywhere in
-CC.
+---
+
+## 6. OpenPeripheralCore and OpenPeripheralIntegrations — 4 removed, M2
+
+Core: nothing to do — `LuaReflectionHelper`, `IndexedMethodMap`, `NamedMethodMap`,
+`PropertyListBuilder`, `AdapterWrapper`, `CommonMethodsBuilder` reflect adapter targets
+and their own classes; `PeripheralProvider` uses the public `IPeripheralProvider`.
+
+Integrations: `dependencies.gradle:39` already declares
+`api("com.github.MrFuzzihead:Computercraft-Legacy:3.2.0:dev")`, so the four CC meta
+providers can call their targets directly and delete `MethodAccess` outright:
+
+| Provider | Direct call | Visibility |
+|---|---|---|
+| `ComputerMetaProvider` | `IComputerItem#getComputerID/getLabel/getFamily` | interface methods; `ComputerFamily` is a **public enum** (`:3`), so `getFamily` no longer needs to return `Object` |
+| `MediaMetaProvider` | `ComputerCraft.getMedia` | `public static` (`:604`) |
+| `PrintoutMetaProvider` | `ItemPrintout.getTitle/getPageCount/getText` | `public static` (`:138`/`:143`/`:148`) |
+| `TurtleMetaProvider` | `ITurtleItem#getFuelLevel/getUpgrade` | interface methods |
+
+The string lookups only existed to avoid a compile-time dependency, and the fork no
+longer needs to avoid it. Standing guard: **do not narrow these members' visibility**
+in future CC refactors.
+
+---
+
+## 7. The CC change set, by pass
+
+**Pass 1 — M1 + M3 (zero behavioural risk).** Removes 9 CCTweaks accessors/invokers,
+OPA's reflection, and P++'s accessor.
+
+| Class | Change |
+|---|---|
+| `TileCable` | `getAttachedPeripheralID()`, `getModemSideTexture(int)`, `isPeripheralAccessAllowed()` |
+| `TileTurtle` | `setMoved(boolean)` |
+| `TileComputerBase` | `transferStateFrom(TileComputerBase)` → public |
+| `ItemPocketComputer` | `createServerComputer(...)` → public |
+| `Computer` / `ServerComputer` / `CobaltMachine` | `getLuaMachine()` / `getComputer()` / `getLuaState()` (debugger; or drop the debugger) |
+| `CCTurtleProxyCommon` | `getTurtleUpgrades()` unmodifiable view |
+
+**Pass 2 — M4 (new call sites, fallback asserted).** Removes 4 CCTweaks mixins and
+P++'s 2.
+
+| Seam | Consulted by | Retires |
+|---|---|---|
+| Cable connectivity (§3.3) | `BlockCable.isCable`, `TileCable.getCableBounds`, cable render handler, `ItemCable.onItemUse` | `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `ItemCable_Mixin` |
+| Turtle fuel provider | `TurtleRefuelCommand` | `TurtleRefuelCommand_Mixin` |
+| Pocket upgrade registry | `ItemPocketComputer` (create/update/name) | `ItemPocketComputerMixin`, and (with the guard widening) `PocketAPIMixin` |
+
+**Pass 3 — M5.** `PeripheralAPI_Mixin` (addon-side; no CC change) and the `TileCable`
+decision (§8).
 
 ### Net effect
 
-| Fork | CC mechanisms before | after | Notes |
-|---|---|---|---|
-| CCTweaks | 15 (7 accessors + 2 invokers + 6 mixins) | **6 mixins** | accessors/invokers: 9 → 0 |
-| Peripherals++ | 3 late | **1 late** | 2 early vanilla accessors untouched |
-| OpenPeripheralAddons | 1 reflective site | **0** | direct call |
-| OpenPeripheralCore | 0 | 0 | — |
-| OpenPeripheralIntegrations | 4 string lookups | 4 string lookups | already-public targets |
-
-Twelve mechanisms deleted against seven public members added and one unreachable
-behaviour fix.
+| Fork | Mechanisms now | After pass 1 | After pass 2 | After pass 3 |
+|---|---|---|---|---|
+| CCTweaks | 15 | 6 | 2 | **0–1** (see §8) |
+| Peripherals++ | 3 late | 2 | **0** | 0 |
+| OpenPeripheralAddons | 1 | **0** | 0 | 0 |
+| OpenPeripheralIntegrations | 4 | **0** | 0 | 0 |
+| OpenPeripheralCore | 0 | 0 | 0 | 0 |
 
 ---
 
-## 8. What we deliberately do **not** add
+## 8. The one genuine holdout: `TileCable_Mixin`
 
-Each of these was in the previous revision; each is now cancelled because the addon
-can solve it itself (T5) or never needed it (T0).
+`TileCable_Mixin` is ~25 `@Overwrite`s of modem/cable/network behaviour. It cannot be
+removed by M1–M3, and M6 (merge the extended network into CC) is rejected outright —
+that network *is* the divergence.
 
-| Withdrawn CC work | Why |
-|---|---|
-| Pocket-upgrade registry / upgrade event in `ItemPocketComputer` | T3; removes 3 hooks from one addon at the cost of new call sites in CC. P++ keeps `ItemPocketComputerMixin`. |
-| `ICableNode` marker interface + `isCable` hook | T3; a cancellable `@Inject` in CCTweaks reproduces it exactly. |
-| Fuel-provider registry + `TurtleRefuelCommand` consult | T3; the reshaped `@Inject` is *more* faithful to CC than the current overwrite. |
-| Cable placement hook in `ItemCable` | T3; cancellable `@Inject` on `onItemUse`, and it deletes the duplicated `nativePlace`. |
-| Peripheral lifecycle seam in `PeripheralAPI` | T3; the two `@Inject`s are addon-side and need no accessors after T0. |
-| `TileCable#setAttachedPeripheralID` | never used. |
-| `TileCable#getCableIcons()` / `getModemIcons()` array exposure | `getCableItemTexture` covers the cable; `getModemFaceTexture` covers `BlockNetworked`; only the odd modem indices need a getter (§3.1). |
-| `PeripheralAPI#getEnvironment()` | `getAvailablePeripherals()` already implemented (`PeripheralAPI.java:501`). |
-| Merging CCTweaks' extended `TileCable` network into CC | T4 — that *is* the divergence. |
+Two viable endgames:
+
+- **M4 — a CC-side cable-node seam.** Retires `TileCable_Mixin` only partially: the
+  tile's network behaviour (`transmit`, `addReceiver`, `networkChanged`,
+  `togglePeripheralAccess`, NBT, TTL) still has to live somewhere. A seam can route
+  the *connectivity* questions into CCTweaks, but not replace the tile.
+- **M5 — CCTweaks owns its cable.** Ship CCTweaks' own cable/modem tile
+  (`BlockNetworked` already exists as its block) and stop patching CC's `TileCable`.
+  This is the only route to genuinely 0, and it is a bounded refactor of
+  `blocks/network/*` plus `integration/multipart/*`. Cost: CC's wired modem/cable stops
+  bridging into CCTweaks' network unless CCTweaks registers a *separate* node for the
+  CC tile — which is a feature decision, not a porting detail.
+
+Interim, so the fork can build at all: delete the 6 dead/failing `@Overwrite`s (§2.7),
+rebase the survivors onto our `TileCable`, and exclude `TileWiredModemFull` (PR #28)
+from the network. Contract the mixin while it survives (drop the overwrites of methods
+our tile no longer drives). That is M7 with M5 as the named endgame.
 
 ---
 
-## 9. Sequencing
+## 9. Sequence
 
-1. **Publish the T1/T2 set** (items 1–7 above) as one additive CC branch on top of
-   PR #28, then tag. Nothing in it changes an existing code path.
-2. **CCTweaks**: delete the 9 accessors/invokers, apply the `TileCable_Mixin` interim
-   repair (§3.3), and reshape the four behaviour mixins to inject-and-fall-through.
-   This is the bulk of the work and it now touches **no** CC internals.
-3. **P++**: delete `CCTurtleProxyCommonAccessor` (use the new view) and `PocketAPIMixin`
-   (after the guard fix). Keep `ItemPocketComputerMixin`.
-4. **OPA**: replace field reflection with the getter; OPI/Core need no change.
-5. **Harmonisation pass**: all four mods against the tag, in one instance, with the
-   ingame test checklist.
-6. **Clean-room merge.** Only the merged mod may decide that a T3 seam is worth
-   having — by then it can ship the accessor itself and CC stays at 1:1.
+1. **Repair CCTweaks' `TileCable_Mixin`** so the fork applies at all — nothing else is
+   testable until then.
+2. **Pass 1** (M1/M3) in CC on top of PR #28 → tag. Nothing here changes an existing
+   code path.
+3. **Delete** the 9 CCTweaks accessors/invokers, P++'s accessor, OPA's reflection, and
+   OPI's four `MethodAccess` sites against that tag.
+4. **Pass 2** (M4 seams), one seam per branch: fuel → cable connectivity → pocket
+   upgrades. Each lands with its fallback test.
+5. **Pass 3**: `PeripheralAPI_Mixin`'s move into the addon, then the `TileCable`
+   decision (§8).
+6. **Clean-room merge** — after which the seams that were only bought to satisfy an
+   addon boundary can be re-evaluated, with CC still at 1:1.
 
 ---
 
 ## 10. Residual risks
 
-- **`TileCable_Mixin` is the permanent outlier.** Six overwrites + the network classes
-  will need a rebase at every CC change that touches `TileCable`. Contracting it (§3.3)
-  is the mitigation; deleting it is the escape hatch, at the cost of CCTweaks'
-  extended network.
-- **Icon statics are client-only.** `getModemSideTexture` (like the existing
-  `getModemFaceTexture`) returns `null` until `registerIcons` runs; callers already
-  treat icons that way.
-- **String-based `MethodAccess` in OPI** breaks silently. Adding a
-  `ComputerFamily`-typed API value and keeping the listed members public is the
-  standing guard.
-- **`PocketAPI` guard** is the only behaviour change. Gate it on a test asserting
-  CC-only stacks (ids 1–6, absent tag) behave exactly as before.
-- **CCTweaks is not currently applying** (6 dead overwrites); until §3.3 step 1 lands,
-  the "20 mixins" state is broken rather than merely divergent.
+- **M4 seams are the parity surface to watch.** Each one is new code in a CC execution
+  path; each needs an "unregistered ⇒ today's behaviour" test, not just a review.
+- **`TileCable_Mixin` is the standing exception.** Section §8 must end in a decision
+  (own the tile, or keep the mixin), not drift.
+- **Icon statics are client-only.** `getModemSideTexture`, like the existing
+  `getModemFaceTexture`, returns `null` until `registerIcons` runs.
+- **OPI direct calls trade runtime safety for compile-time safety.** That is the right
+  trade now that CC is an `api` dependency; the guard is "keep those members public".
+- **CCTweaks does not currently apply** (6 dead overwrites); the "20 mixins" state is
+  broken, not merely divergent.
 
 ---
 
@@ -334,5 +349,5 @@ can solve it itself (T5) or never needed it (T0).
 - CC-side sources cited by line: `TileCable.java`, `TileTurtle.java`,
   `TileComputerBase.java`, `TileModemBase.java`, `ItemPocketComputer.java`,
   `PeripheralAPI.java`, `PocketAPI.java`, `PocketUpgrades.java`,
-  `CCTurtleProxyCommon.java`, `BlockCable.java`, `ItemCable.java`,
+  `CCTurtleProxyCommon.java`, `ComputerFamily.java`, `BlockCable.java`, `ItemCable.java`,
   `TurtleRefuelCommand.java` (all under `src/main/java/dan200/computercraft/`)
