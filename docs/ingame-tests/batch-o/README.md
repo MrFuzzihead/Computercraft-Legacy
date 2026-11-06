@@ -17,7 +17,9 @@ installed.
 | CoFH RF | not supported by ComputerCraft | a charged `IEnergyContainerItem` is drained; 100 RF per fuel unit by default (`turtleRfRefuelAmount`) |
 | `refuel(0)` | probe, returned success/failure | probe delegated to handlers, which must report recognition but consume nothing |
 | electric items | not supported | a charged item is **drained, not consumed**: it stays in the slot with less charge, and the item count does not change |
-| partial units | n/a | only **whole** fuel units are paid for: a battery with less charge than one unit costs is left alone rather than drained for nothing |
+| partial units | n/a | only **whole** fuel units are paid for: a battery holding less charge than one unit costs is left alone rather than drained for nothing |
+| `refuel all` | one `refuel` call per slot, so a battery was worth one unit | keeps working a slot until it stops yielding: a battery is drained, burnt items are consumed, and nothing is taken past the tank |
+| `refuel <n>` | `n` was clamped to the slot's item count | `n` counts items for burnt fuel and fuel units for a drained item; values above 64 are split across calls |
 | nearly-full tank | items were consumed and the excess fuel was clamped away | only the items that fit are consumed |
 | `turtleDisabledActions` | respected | still respected — and now also on the electric paths |
 | handler bugs | n/a | a negative yield, or consumption during the `refuel(0)` probe, throws immediately |
@@ -26,6 +28,10 @@ The registry, the handler interface and the furnace handler follow CC: Tweaked 1
 `TurtleRefuelHandlers`, `FurnaceRefuelHandler`). The electric handlers are this project's own: upstream has the
 registry but no built-in IC2/RF integration. Their conversion ratios match CCTweaks' `ITurtleFuelProvider`
 implementations so a pack migrating off CCTweaks keeps the same economy.
+
+The `refuel` ROM program is also our own revision: it now works a slot until it stops yielding, which 1.75's version
+could not need (every fuel item was consumed) and CC: Tweaked's does not do either — its program spends at most one
+`refuel` call per slot, which for a battery is one call's worth of charge.
 
 ## Run
 
@@ -55,10 +61,12 @@ Everything else is staged at the end of the run, because a turtle program cannot
    charge. That is the whole point of the electric path: drained, not eaten.
 
    Note the scale: `refuel(1)` means *one fuel unit*, so it costs 25 EU — a quarter of a percent of a 10,000 EU RE
-   battery. To spend a whole battery, ask for more units: `turtle.refuel(400)` for 10,000 EU at the default ratio, or
-   the `refuel all` program. A battery also reports `true` to `turtle.refuel(0)` while empty, because the probe answers
-   "is this item fuel?", not "will this call gain anything?" — the second half of the check above expects no gain
-   then.
+   battery. To spend a whole battery use `refuel all`: the program keeps working a slot until it stops yielding fuel.
+   `turtle.refuel(n)` itself takes a count of at most **64** (a larger argument raises `Item count N out of range`),
+   so `refuel(400)` is not a thing — with the program, `refuel all`; from Lua, loop `refuel(64)`.
+
+   A battery also reports `true` to `turtle.refuel(0)` while empty, because the probe answers "is this item fuel?",
+   not "will this call gain anything?" — the second half of the check above expects no gain then.
 5. **IC2 ratio** — 25 EU per fuel by default, so a 10000 EU battery is 400 fuel. Change `turtleEuRefuelAmount` and the
    yield should scale; set it to 0 and batteries must stop being accepted.
 6. **CoFH energy cell** — same as (4)/(5) with `turtleRfRefuelAmount` (100 RF per fuel by default).
@@ -85,6 +93,10 @@ Everything else is staged at the end of the run, because a turtle program cannot
   registers nothing, so a JVM without IC2 or CoFH never resolves their API classes.
 * `ComputerCraftAPIRefuelHandlerTest` (3) — the reflective bridge reaches the registry, and the method it reflects into
   still exists with the expected signature. Without this, a rename would silently stop accepting addon handlers.
+* `TurtleRefuelProgramTest` (10) — the ROM program driven against a fake turtle: `refuel all` drains a whole battery
+  rather than charging it once, keeps working the slot, consumes the coal too, stops at the tank limit, and never asks
+  `turtle.refuel` for more than it accepts (64). This is the regression test for "refuel all only takes a tiny portion
+  of the battery".
 
 ## What cannot be tested headless
 

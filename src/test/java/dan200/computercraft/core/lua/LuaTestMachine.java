@@ -26,7 +26,7 @@ import dan200.computercraft.core.terminal.Terminal;
  * pool itself are responsible for stopping it.
  * </p>
  */
-final class LuaTestMachine {
+public final class LuaTestMachine {
 
     private LuaTestMachine() {}
 
@@ -36,7 +36,7 @@ final class LuaTestMachine {
      *
      * @return a new machine, not turned on
      */
-    static CobaltMachine create() {
+    public static CobaltMachine create() {
         return create("");
     }
 
@@ -46,7 +46,7 @@ final class LuaTestMachine {
      * @param hostString value to expose as the {@code _HOST} global
      * @return a new machine, not turned on
      */
-    static CobaltMachine create(String hostString) {
+    public static CobaltMachine create(String hostString) {
         return new CobaltMachine(newComputer(hostString));
     }
 

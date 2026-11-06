@@ -1,27 +1,46 @@
-
 local tArgs = { ... }
+local bAll = #tArgs > 0 and tArgs[1] == "all"
 local nLimit = 1
 if #tArgs > 1 then
 	print( "Usage: refuel [number]" )
 	return
-elseif #tArgs > 0 then
-	if tArgs[1] == "all" then
-		nLimit = 64 * 16
-	else
-		nLimit = tonumber( tArgs[1] )
+elseif #tArgs > 0 and not bAll then
+	nLimit = tonumber( tArgs[1] )
+	if not nLimit then
+		print( "Invalid limit, expected a number or \"all\"" )
+		return
 	end
 end
 
 if turtle.getFuelLevel() ~= "unlimited" then
 	for n=1,16 do
-		local nCount = turtle.getItemCount(n)
-		if nLimit > 0 and nCount > 0 and turtle.getFuelLevel() < turtle.getFuelLimit() then
-		    local nBurn = math.min( nLimit, nCount )
+		-- One pass per slot is enough for fuel that is consumed, such as coal. A charged item is
+		-- drained instead, so it stays in its slot: keep going until it stops giving fuel.
+		while true do
+			if turtle.getFuelLevel() >= turtle.getFuelLimit() then break end
+			if not bAll and nLimit <= 0 then break end
+
+			local nCount = turtle.getItemCount( n )
+			if nCount == 0 then break end
+
+			-- turtle.refuel takes a count of at most 64. Ask for the whole remaining limit and let the
+			-- fuel source cap itself: by what the slot holds, and by what the tank can take.
 			turtle.select( n )
-			if turtle.refuel( nBurn ) then
-			    local nNewCount = turtle.getItemCount(n)
-    			nLimit = nLimit - (nCount - nNewCount)
-    		end
+			local nBefore = turtle.getFuelLevel()
+			if not turtle.refuel( bAll and 64 or math.min( nLimit, 64 ) ) then break end
+
+			local nNewCount = turtle.getItemCount( n )
+			local nGained = turtle.getFuelLevel() - nBefore
+			-- Nothing gained means a full tank or a flat battery; either way this slot is done.
+			if nGained <= 0 then break end
+
+			if bAll then
+				if nNewCount == 0 then break end
+			else
+				-- An explicit limit counts items for fuel that is consumed, and fuel units for an item
+				-- that is drained. Whichever is larger is what actually happened.
+				nLimit = nLimit - math.max( nCount - nNewCount, nGained )
+			end
 		end
 	end
     print( "Fuel level is "..turtle.getFuelLevel() )
