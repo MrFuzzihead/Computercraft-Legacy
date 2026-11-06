@@ -165,8 +165,6 @@ See `TWEAKEDCC_COVERAGE.md` for test coverage and `COBALT_UPGRADE_PLAN.md` for L
 | cc.tweaked:cobalt:0.9.9 | Lua 5.1/5.2 runtime (shadowed, MIT; published as org.squiddev:Cobalt before the rename) |
 | org.java-websocket:Java-WebSocket:1.5.6 | WebSocket client (shadowed, MIT) |
 | org.slf4j:slf4j-api:2.0.6 | Transitive of Java-WebSocket; present in the shipped jar but **undeclared** in `dependencies.gradle` (MIT) |
-| com.github.GTNewHorizons:ForgeMultipart | Multipart peripheral support |
-| com.github.GTNewHorizons:CodeChickenCore | Required by ForgeMultipart |
 | com.github.GTNewHorizons:NotEnoughItems | Dev-only runtime for testing |
 | org.lwjgl:lwjgl-sdl:3.4.2 | SDL3 event API for file drag-and-drop (**compileOnly**: provided at runtime by lwjgl3ify, never shipped; BSD-3-Clause) |
 | xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api | JDK API stubs, added by the convention as `compileOnly` + `testRuntimeOnly`; the ~3 reachable stubs are shaded under `dan200.computercraft.shadow` (**LGPL-2.1**, `LICENSE-jvmdowngrader`) |

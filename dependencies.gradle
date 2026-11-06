@@ -58,8 +58,6 @@ dependencies {
     testImplementation(cnpc)
 
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.9.1-GTNH:dev")
-    implementation("com.github.GTNewHorizons:ForgeMultipart:1.8.0:dev")
-    implementation("com.github.GTNewHorizons:CodeChickenCore:1.5.0:dev")
 
     // Unit testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")

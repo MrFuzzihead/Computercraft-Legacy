@@ -82,23 +82,24 @@ reached in a unit test are called out in the test javadoc — `world.isRemote` a
 
 ### Not in this release
 
-- **All addon-side changes** (M1/M2/M5 and the `TileCable_Mixin` repair). Deferred.
+- **All addon-side changes** (M1/M2/M5). Deferred.
 - **The M4 seams** — the fuel seam landed (§4.1) and the pocket upgrade registry landed
-  (§4.2); cable connectivity is still deferred (§4).
+  (§4.2). The third seam, cable connectivity, is **withdrawn** (§4.3): its only consumer
+  retires the feature instead of needing a hook.
 - **Nothing that adds a new call site** to any CC execution path, unless you take §4.
 
 ### Staging decision
 
 | | What ships | Addon outcome | Cost |
 |---|---|---|---|
-| **A (recommended)** | the 11 items above | addons delete 11 of 23 mechanisms (all accessors, invokers, OPA reflection, P++'s accessor + guard mixin, OPI's four lookups); their behaviour mixins stay | zero behavioural risk; second CC release later for the seams |
-| **B** | the 11 items **+ the 3 M4 seams** | addons can reach everything except `TileCable_Mixin` in one round | 3 new call sites inside CC paths must be designed and fallback-tested before the tag |
+| **A (recommended)** | the 11 items above | addons delete 11 of 23 mechanisms (all accessors, invokers, OPA reflection, P++'s accessor + guard mixin, OPI's four lookups); their behaviour mixins stay | zero behavioural risk; any further seam gets its own release |
+| **B** | the 11 items **+ the 2 landed M4 seams** | addons can reach everything except the cable mixins in one round | 2 new call sites inside CC paths, both designed and fallback-tested with an "unregistered ⇒ today" test |
 
-A is recommended because M3 content is provably risk-free (every existing code path
-emits the same code) while each M4 seam is new code inside a CC execution path. Ship A,
-let the addons prove the surface is sufficient in practice, then design the seams
-against that experience. If you would rather not cut two tags, B is defensible — the
-seams are small — but they are the only thing in this plan that needs a spec.
+**The choice has since collapsed.** Both rows now describe this branch: the 11 items shipped, the
+fuel and pocket seams landed, and the third seam was withdrawn (§4.3) because its only consumer
+deletes the feature. What remains true is the reasoning — M3 content is provably risk-free (every
+existing code path emits the same code) while a seam is new code inside a CC execution path and
+needs a spec plus an "unregistered ⇒ today's behaviour" test. Nothing here needs a further seam.
 
 ### Two members worth a second look (both resolved: kept)
 
@@ -192,18 +193,19 @@ themselves. They are recorded so the surface stays justified; none of them is wo
 8. **CCTweaks' `TileCable_Mixin` has 6 dead `@Overwrite`s** against our `TileCable`
    (`attachPeripheral`, `detachPeripheral` — no such method; `getTypeRemote`,
    `getMethodNamesRemote`, `callMethodRemote` — only on the inner `TileCable$Peripheral`;
-   `getConnectedPeripheral` — `private` over our `protected`). Addon-side repair (§5).
+   `getConnectedPeripheral` — `private` over our `protected`). No repair needed: the
+   whole mixin is deleted with the rest of the cable set (§4.3, §5).
 
 ---
 
 ## 4. The M4 seams
 
-The fuel and pocket seams landed (§4.1, §4.2); cable connectivity is still deferred. Each seam adds a
-call site, so each ships with an "unregistered ⇒ today's behaviour" test.
+The fuel and pocket seams landed (§4.1, §4.2); cable connectivity is **withdrawn** (§4.3). Each seam
+adds a call site, so each ships with an "unregistered ⇒ today's behaviour" test.
 
 | Seam | Consulted by | Retires (addon-side) | Status |
 |---|---|---|---|
-| Cable connectivity (neighbour-ask interface + `ComputerCraftAPI` registration) | `BlockCable.isCable`, `TileCable.getCableBounds`, cable render handler, `ItemCable.onItemUse` | CCTweaks `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `ItemCable_Mixin` | deferred |
+| Cable connectivity (neighbour-ask interface + `ComputerCraftAPI` registration) | `BlockCable.isCable`, `TileCable.getCableBounds`, cable render handler, `ItemCable.onItemUse` | CCTweaks `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `ItemCable_Mixin` | **withdrawn (§4.3)** |
 | Pocket upgrade registry (`IPocketUpgrade` + `ComputerCraftAPI.registerPocketUpgrade`) | `ItemPocketComputer` create / update / display name, `PocketAPI` equip / unequip | P++ `ItemPocketComputerMixin` | **landed (§4.2)** |
 
 Design rules when/if they land: no CodeChicken dependency in CC (a marker interface
@@ -296,6 +298,50 @@ model holds.
 
 ---
 
+### 4.3 Cable connectivity — withdrawn
+
+The seam was specified but never written. It is now cancelled rather than deferred, because the addon
+that wanted it is deleting the feature instead of needing a hook.
+
+**What it would have been.** `BlockCable.isCable` is a *static* that recognises only CC's own cable and
+wired-modem blocks, and three CCTweaks mixins exist because it cannot be reached from outside:
+
+| Mixin | Held back by |
+|---|---|
+| `BlockCable_Mixin` | `isCable` is `static` on the block, so it cannot be overridden |
+| `CableBlockRenderingHandler_Mixin` | the client renderer's six arms consult that same static, so the whole method was overwritten |
+| `ItemCable_Mixin` | `ItemCable.onItemUse` must place a ForgeMultipart part instead of a block |
+
+The proposed fix was two hooks: an `isCable` provider list — which retires the first two, since a
+network node at a neighbouring position is all that arms, `TileCable.getCableBounds` and the tile scan
+consult — and a placement interceptor for the third.
+
+**Why it is cancelled.** All three mixins serve one feature: CC's cable and wired modem available as
+ForgeMultipart parts, so they can share a block space with other parts. Those parts (`PartCable`,
+`PartModem`, `PartModemWithCableIntermediate`) live on CCTweaks' own network layer, and that layer is
+itself being retired — its `BlockNetworked` cable is superseded by CC's full wired modem, its wireless
+bridge by the ender modem, and the turtle wireless-bridge upgrade, the network visualiser and the
+debug network hooks go with it. Once those are gone no maintained addon consults `isCable` or
+`onItemUse`, so both hooks would ship with **no consumer**: an unexercised code path frozen into public
+API, carrying tests forever so it can be trusted with nothing.
+
+**What CC does instead: nothing.** There is no cable seam, and CC's wired network has no interop
+story for third-party cables — a network is `TileCable` and its subclasses (the full wired modem) plus
+the wireless receivers. That is a decision, recorded here, not an oversight. If an addon ever needs it,
+the two hooks above are still the design; build them against a real consumer.
+
+**Knock-on: ForgeMultipart leaves the build.** CC never referenced `codechicken.*` in main source;
+`ForgeMultipart` and its `CodeChickenCore` dependency were declared and unused, described in AGENTS.md
+as "multipart peripheral support" that did not exist. Both are removed from `dependencies.gradle`, so
+no seam in this plan may assume multipart classes.
+
+**For the addon (deferred, §5).** The five CCTweaks mechanisms go in one release because they are
+co-dependent: `BlockCable_Mixin#isCable` returns `NetworkAPI.registry().isNode(...)`, which is true for
+CC's own `TileCable` **only** because `TileCable_Mixin` declares `implements IWorldNetworkNodeHost`.
+Remove `TileCable_Mixin` alone and plain CC cables stop connecting to each other and stop drawing arms.
+
+---
+
 ## 5. Deferred: the addon backlog
 
 Recorded so each addon's work is known, not scheduled. All of it happens in
@@ -304,11 +350,13 @@ produced by §1.
 
 **CCTweaks** — after the release: delete 9 accessors/invokers (M1/M2/M3), rewrite
 `PeripheralAPI_Mixin` to use `IPeripheral.attach()` + `getAvailablePeripherals()`
-(M5), repair `TileCable_Mixin` (delete the 6 dead overwrites) before anything is
-testable, and **delete `TurtleRefuelCommand_Mixin` outright** — §4.1's registry replaces
+(M5), and **delete `TurtleRefuelCommand_Mixin` outright** — §4.1's registry replaces
 it, so `TurtleFuelRegistry`, `ITurtleFuelRegistry`, `ITurtleFuelProvider` and the fuel half
-of `DefaultTurtleProviders` go with it. Three behaviour mixins remain (`BlockCable`,
-`ItemCable`, `CableBlockRenderingHandler`), needing the cable seam and a later CC tag.
+of `DefaultTurtleProviders` go with it. The remaining *cable* mechanisms (`TileCable_Mixin`,
+`BlockCable_Mixin`, `ItemCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `TileCable_Accessor`)
+are deleted together with the multipart parts and the whole network layer they serve (§4.3).
+No CC change is involved; it is a breaking feature removal that needs its own save-migration
+story before that release ships.
 
 **Peripherals++** — delete `CCTurtleProxyCommonAccessor` and `PocketAPIMixin`; delete
 `ItemPocketComputerMixin` outright once §4.2 is tagged — re-register their two upgrades
@@ -323,12 +371,13 @@ handler stays: §4.2 deliberately has no `onRightClick` hook.
 **OPI** — replace four `MethodAccess` sites with direct calls; no CC dependency added,
 it already has one.
 
-**The one genuine holdout** remains `TileCable_Mixin` (~25 overwrites of modem/cable
-network behaviour). It cannot be removed by M1–M3, and M6 (merging that network into
-CC) is rejected. Its endgame is M5 — CCTweaks ships its own cable tile instead of
-patching CC's — with the feature consequence that CC's wired modem stops bridging into
-CCTweaks' network. That decision belongs to the addon work and the eventual merge, not
-to this release.
+**The one genuine holdout, now resolved by deletion.** `TileCable_Mixin` (~25 overwrites of
+modem/cable network behaviour) could not be removed by M1–M3, and M6 (merging that network into CC)
+is rejected. It is no longer replaced by a seam either (§4.3): CCTweaks' network layer, and the
+multipart parts it exists for, are retired, so the mixin is deleted along with `BlockCable_Mixin`,
+`ItemCable_Mixin`, `CableBlockRenderingHandler_Mixin` and `TileCable_Accessor` — in one release, with
+a save-migration decision for worlds that already contain `cctweaks:networkCable` parts or
+`BlockNetworked` blocks. That decision belongs to the addon work, not to this release.
 
 ---
 
