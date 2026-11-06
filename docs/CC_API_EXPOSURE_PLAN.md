@@ -82,15 +82,17 @@ wireless-bridge usefulness). Decision deferred until Phase 2 lands.
 
 ### Depth / deprecation total (CCTweaks)
 
-| Phase | CC work | CCTweaks deletions | CCTweaks mixin count |
-|---|---|---|---|
-| PR #28 + tag | — (already authored) | — | 20 (currently *broken*) |
-| 1 | 9 additive getters + 2 widenings | 9 accessor/invoker files | 20 → 11 |
-| 2a | `ICableNode` + `isCable` hook | `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin` | 11 → 9 |
-| 2b | fuel registry + `execute` consult | `TurtleRefuelCommand_Mixin` | 9 → 8 |
-| 2c | placement handler hook | `ItemCable_Mixin` | 8 → 7 |
-| 2d | lifecycle seam | `PeripheralAPI_Mixin` | 7 → 6 |
-| 3 | network merge (large) *or* interim repair | `TileCable_Mixin` | 6 → 5 (OP only) |
+See §8 for parity staging — Bucket labels added for traceability.
+
+| Phase | CC work | CCTweaks deletions | CCTweaks mixin count | Bucket |
+|---|---|---|---|---|
+| PR #28 + tag | — (already authored) | — | 20 (currently *broken*) | — |
+| 1 | 9 additive getters + 2 widenings | 9 accessor/invoker files | 20 → 11 | 1 (do now) |
+| 2a | `ICableNode` + `isCable` hook | `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin` | 11 → 9 | 2 (CC-optional, small) |
+| 2b | fuel registry + `execute` consult | `TurtleRefuelCommand_Mixin` | 9 → 8 | 2 (keep internal) |
+| 2c | placement handler hook | `ItemCable_Mixin` | 8 → 7 | 2 (CC-optional, small) |
+| 2d | lifecycle seam | `PeripheralAPI_Mixin` | 7 → 6 | 2 (keep internal) |
+| 3 | network merge (large) *or* interim repair | `TileCable_Mixin` | 6 → 5 (OP only) | 3 (never in CC) |
 
 After Phase 1 every remaining CC mixin has a defined CC-side replacement; after
 Phases 2a–2d, **14 of the 15 CC mixins are gone**, with `TileCable_Mixin` as the
@@ -260,7 +262,7 @@ deprecable by CC work.
 
 ---
 
-## 7. Suggested order of work
+## 7. Suggested order of work (additive API work; parity staging in §8)
 
 1. PR #28 → tag (prerequisite for everything downstream).
 2. Phase 1 getters/setters/widenings + `TileCable#isPeripheralAccessAllowed()`
@@ -270,7 +272,65 @@ deprecable by CC work.
    getTurtleUpgrades()` (P++-1/2/3) — small surface, retires all 3 P++ late mixins.
 5. Fuel registry (2b), placement hook (2c), lifecycle seam (2d) per CCTweaks appetite.
 6. `TileCable_Mixin` merge-vs-interim decision (Phase 3) — only if CCTweaks still
-   wants the extended network after 2a–2d land.
+   wants the extended network after 2a–2d land. **Do not merge Phase 3 into CC (§8).**
+
+Items 2–5 are the additive-API candidates; which land in `Computercraft-Legacy`
+depends on the parity buckets in §8. Under the harmonious-first staging, only
+Bucket 1 (+ the `PocketAPI` fix) goes into the next CC tag; Bucket 2 stays
+internal to CCTweaks/P++ until the clean-room merge, and Bucket 3 never goes in.
+
+---
+
+## 8. Parity order of operations (harmonious-first, then clean-room merge)
+
+**Ultimate goal:** clean-room merge P++, CCTweaks, and OpenPeripheral (Core +
+Addons + Integrations) into one new mod. With that end-state in mind, CC-side
+work should be staged so `Computercraft-Legacy`'s 1:1 CC:T parity is not
+traded for API surface the merged mod would internalise anyway. Once the four
+mods are one codebase, it can ship its own accessors/mixins internally and
+needs no CC seam for its own convenience.
+
+### Bucket 1 — zero parity impact. Do in CC now.
+
+- All Phase-1 getters/setters + widenings (`TileCable` getters, `Computer#getLuaMachine`,
+  `ServerComputer#getComputer`, `CobaltMachine#getLuaState`, `PeripheralAPI#getEnvironment`,
+  `setMoved`/`transferStateFrom`/`createServerComputer` widenings).
+- `TileCable#isPeripheralAccessAllowed()`, `CCTurtleProxyCommon#getTurtleUpgrades()` read view.
+- `PocketAPI#doEquipBack` any-upgrade fix — restores the check's documented intent
+  ("Any supported id counts"); a parity bug-fix, not a divergence.
+- OPA body (no CC work), OPI body (keep public statics public), Core body (no CC work).
+
+### Bucket 2 — functionally neutral if designed carefully. Low parity risk.
+
+Default path bit-for-bit identical to upstream — new interface/event/registry
+consulted, falls back when no consumer is present. Observable gameplay with no
+addon installed remains 1:1; divergence is source-tree API surface only.
+
+- `ICableNode` check in `BlockCable.isCable` (2a), cable-placement hook (2c) —
+  small, high-value for multipart; reasonable to do in CC.
+- Pocket-upgrade event (P++-1), fuel-provider registry (2b), lifecycle seam (2d) —
+  keep CCTweaks/P++-internal until the merge unless harmony testing demands
+  them. 2b inserts a branch into the `TurtleRefuelCommand` execution path, so
+  fallback must be proven to be today's logic exactly.
+
+### Bucket 3 — direct parity threat. Do *not* put in CC.
+
+- Phase 3: merge the extended `TileCable` network into CC — real behavioural
+  divergence (new networking / tile behaviour, non-upstream by definition).
+  Keep it in the merged mod.
+- Any unconditional change to vanilla block/item/peripheral behaviour.
+
+### Recommended sequencing
+
+1. **CC gets Bucket 1 + the `PocketAPI` fix only** (one small additive branch).
+2. **Harmonise the four mods against that tag** — CCTweaks drops its 9 accessors,
+   OPA drops field reflection, P++ drops `CCTurtleProxyCommonAccessor`. Keep
+   remaining behaviour mixins alive and tested.
+3. **Then clean-room merge.** In the merged mod, decide per-hook whether to
+   adopt Bucket 2 seams or keep internal accessors — by then the seams have
+   proven their value.
+4. **Bucket 2/3 CC additions only if the merged mod proves it needs them.**
+   At that point they are optional upstream proposals, not parity work.
 
 ---
 
