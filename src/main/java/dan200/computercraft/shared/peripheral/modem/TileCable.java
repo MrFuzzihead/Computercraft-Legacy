@@ -85,7 +85,36 @@ public class TileCable extends TileModemBase implements INetwork {
      * callers rendering on a server get {@code null}, as with any other block icon.
      */
     public static IIcon getModemFaceTexture(int anim) {
-        return s_modemIcons[(Math.max(0, Math.min(3, anim))) * 2];
+        return s_modemIcons[clampAnim(anim) * 2];
+    }
+
+    /**
+     * Returns the modem <em>side</em> icon for an animation state. This is the odd-indexed half of the icon table that
+     * {@link #getModemFaceTexture(int)} does not expose; renderers that draw a modem's edge (rather than its plug face)
+     * need it. Icons are only populated on the client; callers rendering on a server get {@code null}.
+     */
+    public static IIcon getModemSideTexture(int anim) {
+        return s_modemIcons[clampAnim(anim) * 2 + 1];
+    }
+
+    private static int clampAnim(int anim) {
+        return Math.max(0, Math.min(3, anim));
+    }
+
+    /**
+     * The id assigned to the peripheral this modem is attached to, or {@code -1} if it has never been assigned one
+     * (which is also what an unattached modem reports). Persisted as {@code peripheralID}.
+     */
+    public int getAttachedPeripheralID() {
+        return this.m_attachedPeripheralID;
+    }
+
+    /**
+     * Whether this modem exposes its attached peripheral on the network. Persisted as {@code peripheralAccess} and
+     * toggled by {@link #togglePeripheralAccess()}.
+     */
+    public boolean isPeripheralAccessAllowed() {
+        return this.m_peripheralAccessAllowed;
     }
 
     /**

@@ -283,6 +283,23 @@ public class CobaltMachine implements ILuaMachine, ILuaContext {
         }
     }
 
+    /**
+     * The Cobalt Lua state this machine owns. Exposed so debugging tools can inspect the live VM (globals, call
+     * stack, GC) without reaching into the machine's private fields. The state is created in the constructor and never
+     * replaced, so it is stable for the machine's lifetime; it must only be touched from the computer thread.
+     *
+     * <p>
+     * Note that Cobalt is a shadowed dependency, so the declared return type is the <em>relocated</em>
+     * {@code dan200.computercraft.shadow.org.squiddev.cobalt.LuaState} embedded in the shipped jar - this signature is
+     * not a reference to an addon's own {@code org.squiddev.cobalt} copy. Addon tooling compiles against the relocated
+     * name, so {@code relocateShadowedDependencies} and the {@code dan200.computercraft.shadow} prefix are effectively
+     * frozen: renaming either, or a Cobalt upgrade that moves these classes, breaks that tooling at compile time.
+     * </p>
+     */
+    public LuaState getLuaState() {
+        return this.state;
+    }
+
     @Override
     public void softAbort(String message) {
         softAbort = message;

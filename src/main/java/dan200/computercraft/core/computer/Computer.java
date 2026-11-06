@@ -122,6 +122,14 @@ public class Computer {
         }
     }
 
+    /**
+     * The Lua machine currently hosting this computer's runtime, or {@code null} when the computer is off or between
+     * reboots. The machine is replaced on every boot, so callers must not cache the result across one.
+     */
+    public ILuaMachine getLuaMachine() {
+        return this.m_machine;
+    }
+
     public int getID() {
         return this.m_id;
     }

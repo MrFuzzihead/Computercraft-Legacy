@@ -9,8 +9,10 @@ import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.media.IMediaProvider;
 import dan200.computercraft.api.peripheral.IPeripheralProvider;
 import dan200.computercraft.api.permissions.ITurtlePermissionProvider;
+import dan200.computercraft.api.pocket.IPocketUpgrade;
 import dan200.computercraft.api.redstone.IBundledRedstoneProvider;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
+import dan200.computercraft.api.turtle.TurtleRefuelHandler;
 
 public final class ComputerCraftAPI {
 
@@ -26,6 +28,8 @@ public final class ComputerCraftAPI {
     private static Method computerCraft_getDefaultBundledRedstoneOutput = null;
     private static Method computerCraft_registerMediaProvider = null;
     private static Method computerCraft_registerPermissionProvider = null;
+    private static Method computerCraft_registerRefuelHandler = null;
+    private static Method computerCraft_registerPocketUpgrade = null;
 
     public static boolean isInstalled() {
         findCC();
@@ -138,6 +142,47 @@ public final class ComputerCraftAPI {
         }
     }
 
+    /**
+     * Register a source of turtle fuel other than an item's furnace burn time, such as a charged battery. Handlers are
+     * consulted in registration order by {@code turtle.refuel()}, and the first to accept an item supplies its fuel.
+     *
+     * @param handler the handler to add
+     * @see TurtleRefuelHandler#refuel(dan200.computercraft.api.turtle.ITurtleAccess, net.minecraft.item.ItemStack, int,
+     *      int)
+     */
+    public static void registerRefuelHandler(TurtleRefuelHandler handler) {
+        if (handler != null) {
+            findCC();
+            if (computerCraft_registerRefuelHandler != null) {
+                try {
+                    computerCraft_registerRefuelHandler.invoke(null, handler);
+                } catch (Exception var2) {}
+            }
+        }
+    }
+
+    /**
+     * Register a peripheral that can be fitted to the back of a pocket computer.
+     *
+     * <p>
+     * The upgrade's id must be at least {@link IPocketUpgrade#FIRST_MOD_UPGRADE_ID}; ids below that belong to
+     * ComputerCraft and are stored in saved items. Registering a duplicate id is an error.
+     * </p>
+     *
+     * @param upgrade the upgrade to add
+     * @see IPocketUpgrade
+     */
+    public static void registerPocketUpgrade(IPocketUpgrade upgrade) {
+        if (upgrade != null) {
+            findCC();
+            if (computerCraft_registerPocketUpgrade != null) {
+                try {
+                    computerCraft_registerPocketUpgrade.invoke(null, upgrade);
+                } catch (Exception var2) {}
+            }
+        }
+    }
+
     private static void findCC() {
         if (!ccSearched) {
             try {
@@ -170,6 +215,12 @@ public final class ComputerCraftAPI {
                 computerCraft_registerPermissionProvider = findCCMethod(
                     "registerPermissionProvider",
                     new Class[] { ITurtlePermissionProvider.class });
+                computerCraft_registerRefuelHandler = findCCMethod(
+                    "registerRefuelHandler",
+                    new Class[] { TurtleRefuelHandler.class });
+                computerCraft_registerPocketUpgrade = findCCMethod(
+                    "registerPocketUpgrade",
+                    new Class[] { IPocketUpgrade.class });
             } catch (Exception var4) {
                 // Do not reference ComputerCraft.logger here: this lookup also runs when the mod is absent.
                 org.apache.logging.log4j.LogManager.getLogger("ComputerCraftAPI")

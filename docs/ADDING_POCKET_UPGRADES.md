@@ -14,10 +14,28 @@ This guide covers adding a new pocket computer upgrade (like the wireless modem 
 | 2  | Ender Modem    | `PocketEnderModemPeripheral` |
 | 3  | Speaker        | `PocketSpeakerPeripheral`    |
 | 4  | Chat Box       | `PocketChatBoxPeripheral`    |
+| 5  | NPC Detector   | `PocketNpcDetectorPeripheral` |
+| 6  | NPC Interface  | `PocketNpcInterfacePeripheral` |
 
-**Next available ID: 5.**
+**Next available ID: 7.** The id → item → peripheral mapping lives in one place,
+`dan200.computercraft.shared.pocket.PocketUpgrades`; add a row there rather than in the several
+places this guide describes.
 
 The upgrade peripheral is always attached to **side 2** (`"back"`), which is the only supported slot for pocket upgrades. Lua programs access it as `peripheral.wrap("back")`.
+
+### Third-party upgrade ids
+
+Nothing stops an addon from writing its own id (7 and up) into the same `upgrade` key and attaching
+its peripheral to side 2 itself. Two consequences:
+
+* `pocket.equipBack()` refuses to equip whenever the `upgrade` key is **present**, whatever its value.
+  Do not expect to overwrite an installed upgrade by calling it; clear the key (and detach the
+  peripheral) yourself first. See `PocketAPI#hasInstalledUpgrade` and `PocketAPIEquipGuardTest`.
+* `pocket.unequipBack()` only knows ComputerCraft's own ids, so it reports `false, "Nothing equipped"`
+  for a foreign id rather than returning an item ComputerCraft cannot name. Return your own item the
+  same way `PocketAPI#doUnequipBack` does.
+* `pocket.isEquipped()` likewise reports `false` for a foreign id — it answers "is one of ComputerCraft's
+  upgrades installed", not "is any upgrade installed".
 
 ---
 
@@ -253,7 +271,9 @@ Reference: the `"modemLight"` pattern in `ItemPocketComputer.onUpdate` and `getA
 
 ## Checklist for Adding a New Pocket Upgrade
 
-1. **Pick an ID** — must be unique; IDs 1–3 are taken. Use the next free ID (currently 4).
+1. **Pick an ID** — must be unique; 1–6 are taken (see the table above). Use the next free ID
+   (currently 7). Ids 7 and up are outside ComputerCraft's own table, so `pocket.equipBack()` and
+   `pocket.unequipBack()` will not manage yours — see "Third-party upgrade ids".
 2. **Create `PocketMyThingPeripheral`** in `dan200.computercraft.shared.pocket.peripherals` with `setLocation` and optionally `tick`.
 3. **Add `getHasMyThing(ItemStack)`** to `ItemPocketComputer`.
 4. **Add `createWithMyThing(id, label, family)`** to `ItemPocketComputer` and delegate from `PocketComputerItemFactory`.

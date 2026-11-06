@@ -64,6 +64,14 @@ public class ServerComputer extends ServerTerminal implements IComputer, IComput
         return this.m_computer.getAPIEnvironment();
     }
 
+    /**
+     * The core computer behind this server-side wrapper. Exposed so tooling that inspects a running computer (the
+     * Lua-state debugger, in-tree and in addons) does not need access widening of its own.
+     */
+    public Computer getComputer() {
+        return this.m_computer;
+    }
+
     @Override
     public void update() {
         super.update();

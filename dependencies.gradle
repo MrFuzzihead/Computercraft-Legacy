@@ -43,22 +43,34 @@ dependencies {
     // mod bytecode to org/lwjglx/ (so legacy LWJGL2 calls hit its shims), which would send our LWJGL3
     // classes into a namespace that has no SDL. The annotation opts a class out of that. Version is
     // irrelevant beyond "has the annotation"; bump together with the runtime.
-    compileOnly("com.github.GTNewHorizons:lwjgl3ify:3.0.25:api")
+    compileOnly("com.github.GTNewHorizons:lwjgl3ify:3.1.0:api")
     // Present at test runtime so the drop watcher can be loaded at all. There are no natives here,
     // so the watcher's failure path is what gets exercised - which is the point.
     testRuntimeOnly("org.lwjgl:lwjgl-sdl:3.4.2")
 
     shadowImplementation("cc.tweaked:cobalt:0.9.9")
     shadowImplementation("org.java-websocket:Java-WebSocket:1.5.6")
+    // Java-WebSocket's logging backend, declared rather than left as its transitive. It is bundled into the
+    // jar and relocated under dan200.computercraft.shadow like the other shadowed deps, and
+    // minimizeShadowedDependencies decides which of its classes survive - so the version we ship should be
+    // pinned here instead of following a Java-WebSocket bump silently. It must stay 2.x: FML supplies slf4j
+    // 1.7.x, whose Logger lacks the fluent calls Java-WebSocket 1.5 uses. Keep in step with that requirement.
+    shadowImplementation("org.slf4j:slf4j-api:2.0.6")
 
+    // CoFH Core's RF item API (cofh.api.energy), for the RF energy peripheral adapter and RF turtle refuelling.
+    // compileOnly on purpose, not devOnlyNonPublishable like IC2 below: CoFH Core on its own ships no RF items
+    // (the batteries live in Thermal Foundation/Dynamics), so a dev runtime would prove the class-load shim
+    // resolves but leave nothing to test charging a turtle with. Add Thermal alongside it if that ever matters.
     compileOnly("curse.maven:cofh-core-69162:2388751")
+    devOnlyNonPublishable("net.industrial-craft:industrialcraft-2:2.2.828-experimental:dev")
+    // CustomNPCs: compileOnly for the optional compat package, testImplementation because eight unit tests
+    // cover those peripherals. Deliberately not in the dev runtime - the NPC integration is exercised by
+    // tests rather than by runClient25.
     def cnpc = rfg.deobf("curse.maven:customnpc-480951:7074823")
     compileOnly(cnpc)
     testImplementation(cnpc)
 
-    runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.4-GTNH:dev")
-    implementation("com.github.GTNewHorizons:ForgeMultipart:1.7.2:dev")
-    implementation("com.github.GTNewHorizons:CodeChickenCore:1.4.10:dev")
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.9.1-GTNH:dev")
 
     // Unit testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")

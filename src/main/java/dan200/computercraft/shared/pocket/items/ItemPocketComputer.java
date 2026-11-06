@@ -7,7 +7,6 @@ import java.util.Map;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
@@ -25,17 +24,14 @@ import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.media.IMedia;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.pocket.IPocketUpgrade;
 import dan200.computercraft.shared.computer.core.ClientComputer;
 import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.items.IComputerItem;
+import dan200.computercraft.shared.pocket.PocketAccess;
 import dan200.computercraft.shared.pocket.PocketUpgrades;
 import dan200.computercraft.shared.pocket.apis.PocketAPI;
-import dan200.computercraft.shared.pocket.peripherals.PocketChatBoxPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketModemPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketNpcDetectorPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketNpcInterfacePeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketSpeakerPeripheral;
 
 public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
 
@@ -253,56 +249,9 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                 }
 
                 IPeripheral peripheral = computer.getPeripheral(2);
-                if (peripheral != null && peripheral instanceof PocketModemPeripheral) {
-                    PocketModemPeripheral modem = (PocketModemPeripheral) peripheral;
-                    if (entity instanceof EntityLivingBase) {
-                        EntityLivingBase player = (EntityLivingBase) entity;
-                        modem.setLocation(world, player.posX, player.posY + player.getEyeHeight(), player.posZ);
-                    } else {
-                        modem.setLocation(world, entity.posX, entity.posY, entity.posZ);
-                    }
-
-                    boolean modemLight = modem.isActive();
-                    NBTTagCompound modemNBT = computer.getUserData();
-                    if (modemNBT.getBoolean("modemLight") != modemLight) {
-                        modemNBT.setBoolean("modemLight", modemLight);
-                        computer.updateUserData();
-                    }
-                } else if (peripheral instanceof PocketSpeakerPeripheral) {
-                    PocketSpeakerPeripheral speaker = (PocketSpeakerPeripheral) peripheral;
-                    if (entity instanceof EntityLivingBase) {
-                        EntityLivingBase living = (EntityLivingBase) entity;
-                        speaker.setLocation(world, living.posX, living.posY + living.getEyeHeight(), living.posZ);
-                    } else {
-                        speaker.setLocation(world, entity.posX, entity.posY, entity.posZ);
-                    }
-                    speaker.tick();
-                } else if (peripheral instanceof PocketChatBoxPeripheral) {
-                    PocketChatBoxPeripheral chatBox = (PocketChatBoxPeripheral) peripheral;
-                    int dimId = world.provider.dimensionId;
-                    if (entity instanceof EntityLivingBase) {
-                        EntityLivingBase living = (EntityLivingBase) entity;
-                        chatBox.setLocation(dimId, living.posX, living.posY + living.getEyeHeight(), living.posZ);
-                    } else {
-                        chatBox.setLocation(dimId, entity.posX, entity.posY, entity.posZ);
-                    }
-                } else if (peripheral instanceof PocketNpcDetectorPeripheral) {
-                    PocketNpcDetectorPeripheral detector = (PocketNpcDetectorPeripheral) peripheral;
-                    if (entity instanceof EntityLivingBase) {
-                        EntityLivingBase living = (EntityLivingBase) entity;
-                        detector.setLocation(world, living.posX, living.posY + living.getEyeHeight(), living.posZ);
-                    } else {
-                        detector.setLocation(world, entity.posX, entity.posY, entity.posZ);
-                    }
-                } else if (peripheral instanceof PocketNpcInterfacePeripheral) {
-                    PocketNpcInterfacePeripheral npcInterface = (PocketNpcInterfacePeripheral) peripheral;
-                    npcInterface.setStack(stack);
-                    if (entity instanceof EntityLivingBase) {
-                        EntityLivingBase living = (EntityLivingBase) entity;
-                        npcInterface.setLocation(living.posX, living.posY + living.getEyeHeight(), living.posZ);
-                    } else {
-                        npcInterface.setLocation(entity.posX, entity.posY, entity.posZ);
-                    }
+                IPocketUpgrade upgrade = PocketUpgrades.getUpgrade(this.getUpgrade(stack));
+                if (upgrade != null) {
+                    upgrade.update(new PocketAccess(computer, inventory, stack, entity), peripheral);
                 }
             }
         } else {
@@ -336,34 +285,14 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
 
     public String getItemStackDisplayName(ItemStack stack) {
         String baseString = this.getUnlocalizedName(stack);
-        if (this.getHasEnderModem(stack)) {
-            return StatCollector.translateToLocalFormatted(
-                baseString + ".upgraded.name",
-                new Object[] {
-                    StatCollector.translateToLocal("upgrade.computercraft:advanced_wireless_modem.adjective") });
-        } else if (this.getHasModem(stack)) {
-            return StatCollector.translateToLocalFormatted(
-                baseString + ".upgraded.name",
-                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:wireless_modem.adjective") });
-        } else if (this.getHasSpeaker(stack)) {
-            return StatCollector.translateToLocalFormatted(
-                baseString + ".upgraded.name",
-                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:speaker.adjective") });
-        } else if (this.getHasChatBox(stack)) {
-            return StatCollector.translateToLocalFormatted(
-                baseString + ".upgraded.name",
-                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:chatbox.adjective") });
-        } else if (this.getHasNpcDetector(stack)) {
-            return StatCollector.translateToLocalFormatted(
-                baseString + ".upgraded.name",
-                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:npc_detector.adjective") });
-        } else if (this.getHasNpcInterface(stack)) {
-            return StatCollector.translateToLocalFormatted(
-                baseString + ".upgraded.name",
-                new Object[] { StatCollector.translateToLocal("upgrade.computercraft:npc_interface.adjective") });
-        } else {
+        IPocketUpgrade upgrade = PocketUpgrades.getUpgrade(this.getUpgrade(stack));
+        if (upgrade == null) {
             return StatCollector.translateToLocal(baseString + ".name");
         }
+
+        return StatCollector.translateToLocalFormatted(
+            baseString + ".upgraded.name",
+            new Object[] { StatCollector.translateToLocal(upgrade.getUnlocalisedAdjective()) });
     }
 
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean debug) {
@@ -410,7 +339,20 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
         s_icons[9] = iconRegister.registerIcon("computercraft:pocketComputerBlinkAdvancedModemOn");
     }
 
-    private ServerComputer createServerComputer(World world, IInventory inventory, ItemStack stack) {
+    /**
+     * Builds (or fetches from the registry) the server computer backing a pocket computer stack.
+     *
+     * <p>
+     * Exposed so addons that keep their own pocket-computer items can drive the same instance bookkeeping instead of
+     * reimplementing it. Returns {@code null} on the client and when the stack has no usable instance id.
+     * </p>
+     *
+     * @param world     the world the pocket computer is in
+     * @param inventory the inventory a "computer is in inventory" session belongs to, or {@code null}
+     * @param stack     the pocket computer stack
+     * @return the server computer, or {@code null}
+     */
+    public ServerComputer createServerComputer(World world, IInventory inventory, ItemStack stack) {
         if (world.isRemote) {
             return null;
         } else {
@@ -450,11 +392,12 @@ public class ItemPocketComputer extends Item implements IComputerItem, IMedia {
                 PocketAPI pocketAPI = new PocketAPI(computer);
                 computer.addAPI(pocketAPI);
                 s_pocketAPIs.put(instanceID, pocketAPI);
-                // One table decides which upgrade attaches which peripheral, shared with
-                // pocket.equipBack so the two paths cannot drift.
-                int upgrade = this.getUpgrade(stack);
-                if (upgrade >= 0) {
-                    IPeripheral peripheral = PocketUpgrades.createPeripheral(upgrade, stack);
+                // One registry decides which upgrade attaches which peripheral, shared with pocket.equipBack and
+                // with mods through ComputerCraftAPI.registerPocketUpgrade, so the paths cannot drift.
+                IPocketUpgrade upgrade = PocketUpgrades.getUpgrade(this.getUpgrade(stack));
+                if (upgrade != null) {
+                    IPeripheral peripheral = upgrade
+                        .createPeripheral(new PocketAccess(computer, inventory, stack, null));
                     if (peripheral != null) computer.setPeripheral(2, peripheral);
                 }
 

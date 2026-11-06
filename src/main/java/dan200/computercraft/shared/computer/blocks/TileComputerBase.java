@@ -376,7 +376,13 @@ public abstract class TileComputerBase extends TileGeneric implements IComputerT
         this.m_instanceID = nbttagcompound.getInteger("instanceID");
     }
 
-    protected void transferStateFrom(TileComputerBase copy) {
+    /**
+     * Copies the identifying state of another computer tile onto this one. Called when a block is replaced in place so
+     * the running computer survives the swap; the source tile is invalidated.
+     *
+     * @param copy the tile to take the state from
+     */
+    public void transferStateFrom(TileComputerBase copy) {
         if (copy.m_computerID != this.m_computerID || copy.m_instanceID != this.m_instanceID) {
             this.unload();
             this.m_instanceID = copy.m_instanceID;
