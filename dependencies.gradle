@@ -43,7 +43,7 @@ dependencies {
     // mod bytecode to org/lwjglx/ (so legacy LWJGL2 calls hit its shims), which would send our LWJGL3
     // classes into a namespace that has no SDL. The annotation opts a class out of that. Version is
     // irrelevant beyond "has the annotation"; bump together with the runtime.
-    compileOnly("com.github.GTNewHorizons:lwjgl3ify:3.0.25:api")
+    compileOnly("com.github.GTNewHorizons:lwjgl3ify:3.1.0:api")
     // Present at test runtime so the drop watcher can be loaded at all. There are no natives here,
     // so the watcher's failure path is what gets exercised - which is the point.
     testRuntimeOnly("org.lwjgl:lwjgl-sdl:3.4.2")
@@ -56,9 +56,9 @@ dependencies {
     compileOnly(cnpc)
     testImplementation(cnpc)
 
-    runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.4-GTNH:dev")
-    implementation("com.github.GTNewHorizons:ForgeMultipart:1.7.2:dev")
-    implementation("com.github.GTNewHorizons:CodeChickenCore:1.4.10:dev")
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.9.1-GTNH:dev")
+    implementation("com.github.GTNewHorizons:ForgeMultipart:1.8.0:dev")
+    implementation("com.github.GTNewHorizons:CodeChickenCore:1.5.0:dev")
 
     // Unit testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")
