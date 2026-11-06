@@ -39,7 +39,9 @@
 | `disk` | `rom/apis/disk` | `isPresent`, `getLabel`, `setLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `eject`, `getID` |
 | `multishell` | `rom/programs/advanced/multishell` | `launch`, `getFocus`, `setFocus`, `getTitle`, `setTitle`, `getCurrent`, `getCount` |
 | `shell` | `rom/programs/shell` | `execute`, `run`, `exit`, `dir`, `setDir`, `path`, `setPath`, `resolve`, `resolveProgram` (with `.lua` extension fallback), `getRunningProgram`, `setAlias`, `clearAlias`, `aliases`, `programs`, `complete`, `getCompletionInfo`, `setCompletionInfo`; per-program env isolation; `arg` table injection |
-| Modem peripheral | `ModemPeripheral.java` | `open`, `isOpen`, `close`, `closeAll`, `transmit`, `isWireless` + cable remote methods (`getNamesRemote`, `isPresentRemote`, `getTypeRemote`, `getMethodsRemote`, `callRemote`) |
+| Modem peripheral | `ModemPeripheral.java` | `open`, `isOpen`, `close`, `closeAll`, `transmit`, `isWireless` + cable remote methods (`getNamesRemote`, `isPresentRemote`, `getTypeRemote`, `getMethodsRemote`, `callRemote`, `hasTypeRemote`, `getNameLocal`) |
+| Full wired modem | `BlockWiredModemFull.java` + `TileWiredModemFull.java` | Full-cube six-face modem/hub: per-face `modem` peripheral, shared channels, `peripheral_hub` type, per-side local peripheral names, right-click attach/detach, shapeless conversion to/from the wall modem |
+| Computer peripheral | `ComputerPeripheral.java` | `turnOn`, `shutdown`, `reboot`, `getID`, `isOn`, `getLabel` |
 | Monitor peripheral | `MonitorPeripheral.java` | Full term-compatible surface + `setTextScale` |
 | Printer peripheral | `PrinterPeripheral.java` | `write`, `setCursorPos`, `getCursorPos`, `getPageSize`, `newPage`, `endPage`, `getInkLevel`, `setPageTitle`, `getPaperLevel` |
 | Drive peripheral | `DiskDrivePeripheral.java` | `isDiskPresent`, `getDiskLabel`, `setDiskLabel`, `hasData`, `getMountPath`, `hasAudio`, `getAudioTitle`, `playAudio`, `stopAudio`, `ejectDisk`, `getDiskID` |

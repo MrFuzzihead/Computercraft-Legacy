@@ -72,11 +72,19 @@ class WiredModemTypesTest {
         assertTrue(found, "expected a Peripheral inner class on TileCable");
     }
 
+    private static Class<?> peripheralClass() {
+        for (Class<?> clazz : TileCable.class.getDeclaredClasses()) {
+            if (clazz.getSimpleName()
+                .equals("Peripheral")) return clazz;
+        }
+        throw new AssertionError("expected a Peripheral inner class on TileCable");
+    }
+
     @Test
     void theRemoteTypeMethodFeedsHasTypeRemote() throws Exception {
         // hasTypeRemote must ask for every type, not just the primary one: a remote wired modem
         // should satisfy hasTypeRemote(name, "peripheral_hub").
-        Method getTypes = TileCable.class.getDeclaredMethod("getTypesRemote", String.class);
+        Method getTypes = peripheralClass().getDeclaredMethod("getTypesRemote", String.class);
         assertNotNull(getTypes, "getTypesRemote must exist for the remote multi-type path");
         assertEquals(String[].class, getTypes.getReturnType());
     }
@@ -85,7 +93,7 @@ class WiredModemTypesTest {
     void theStringFormJoinsEveryType() throws Exception {
         // getTypeRemote keeps returning a string (callers expect one) and now carries all the types,
         // which is how a remote peripheral's extra types survive the string form.
-        Method getType = TileCable.class.getDeclaredMethod("getTypeRemote", String.class);
+        Method getType = peripheralClass().getDeclaredMethod("getTypeRemote", String.class);
         assertEquals(String.class, getType.getReturnType());
         assertEquals("modem;peripheral_hub", String.join(";", TileCable.PERIPHERAL_TYPES));
     }

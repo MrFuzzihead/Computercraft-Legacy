@@ -14,29 +14,43 @@ import dan200.computercraft.api.peripheral.IPeripheral;
 public abstract class ModemPeripheral implements IPeripheral {
 
     private INetwork m_network = null;
-    private IComputerAccess m_computer = null;
-    private Map<Integer, IReceiver> m_channels = new HashMap<>();
-    private boolean m_open = false;
-    private boolean m_changed = true;
+    private volatile IComputerAccess m_computer = null;
+    private final Map<Integer, IReceiver> m_receivers = new HashMap<>();
+    private final ModemState m_state;
 
-    private synchronized void setNetwork(INetwork network) {
-        if (this.m_network != network) {
-            if (this.m_network != null) {
-                Iterator<IReceiver> it = this.m_channels.values()
-                    .iterator();
+    protected ModemPeripheral() {
+        this(new ModemState());
+    }
 
-                while (it.hasNext()) {
-                    this.m_network.removeReceiver(it.next());
+    protected ModemPeripheral(ModemState state) {
+        this.m_state = state;
+        state.addModem(this);
+    }
+
+    public ModemState getModemState() {
+        return this.m_state;
+    }
+
+    private void setNetwork(INetwork network) {
+        synchronized (this.m_receivers) {
+            if (this.m_network != network) {
+                if (this.m_network != null) {
+                    Iterator<IReceiver> it = this.m_receivers.values()
+                        .iterator();
+
+                    while (it.hasNext()) {
+                        this.m_network.removeReceiver(it.next());
+                    }
                 }
-            }
 
-            this.m_network = network;
-            if (this.m_network != null) {
-                Iterator<IReceiver> it = this.m_channels.values()
-                    .iterator();
+                this.m_network = network;
+                if (this.m_network != null) {
+                    Iterator<IReceiver> it = this.m_receivers.values()
+                        .iterator();
 
-                while (it.hasNext()) {
-                    this.m_network.addReceiver(it.next());
+                    while (it.hasNext()) {
+                        this.m_network.addReceiver(it.next());
+                    }
                 }
             }
         }
@@ -48,25 +62,44 @@ public abstract class ModemPeripheral implements IPeripheral {
 
     protected abstract Vec3 getPosition();
 
-    public synchronized void destroy() {
-        this.setNetwork(null);
-        this.m_channels.clear();
-        this.m_open = false;
+    void addReceiver(int channel) {
+        synchronized (this.m_receivers) {
+            if (!this.m_receivers.containsKey(channel)) {
+                IReceiver receiver = new ModemPeripheral.SingleChannelReceiver(this, channel);
+                this.m_receivers.put(channel, receiver);
+                if (this.m_network != null) {
+                    this.m_network.addReceiver(receiver);
+                }
+            }
+        }
     }
 
-    public synchronized boolean pollChanged() {
-        if (this.m_changed) {
-            this.m_changed = false;
-            return true;
-        } else {
-            return false;
+    void removeReceiver(int channel) {
+        synchronized (this.m_receivers) {
+            IReceiver receiver = this.m_receivers.remove(channel);
+            if (receiver != null && this.m_network != null) {
+                this.m_network.removeReceiver(receiver);
+            }
         }
+    }
+
+    public void destroy() {
+        this.m_state.removeModem(this);
+        synchronized (this.m_receivers) {
+            this.m_network = null;
+            this.m_receivers.clear();
+        }
+        this.m_computer = null;
+    }
+
+    public boolean pollChanged() {
+        return this.m_state.pollChanged();
     }
 
     protected abstract double getTransmitRange();
 
-    public synchronized boolean isActive() {
-        return this.m_computer != null && this.m_open;
+    public boolean isActive() {
+        return this.m_computer != null && this.m_state.isOpen();
     }
 
     public synchronized Vec3 getWorldPosition() {
@@ -78,12 +111,15 @@ public abstract class ModemPeripheral implements IPeripheral {
     }
 
     public void receive(int channel, int replyChannel, Object payload, double distance) {
-        synchronized (this.m_channels) {
-            if (this.m_computer != null && this.m_channels.containsKey(channel)) {
-                this.m_computer.queueEvent(
-                    "modem_message",
-                    new Object[] { this.m_computer.getAttachmentName(), channel, replyChannel, payload, distance });
-            }
+        // The receiver itself only exists while this channel is registered on the network, so there is no need to
+        // consult ModemState here. Doing so would take the state lock while the network holds its receiver lock,
+        // which is the opposite order to ModemState.open(). A concurrent close may deliver one final message; that is
+        // preferable to a deadlock.
+        IComputerAccess computer = this.m_computer;
+        if (computer != null) {
+            computer.queueEvent(
+                "modem_message",
+                new Object[] { computer.getAttachmentName(), channel, replyChannel, payload, distance });
         }
     }
 
@@ -117,97 +153,44 @@ public abstract class ModemPeripheral implements IPeripheral {
         throws LuaException, InterruptedException {
         switch (method) {
             case 0:
-                int channel = parseChannel(arguments, 0);
-                synchronized (this) {
-                    if (!this.m_channels.containsKey(channel)) {
-                        if (this.m_channels.size() >= 128) {
-                            throw new LuaException("Too many open channels");
-                        }
-
-                        IReceiver receiverx = new ModemPeripheral.SingleChannelReceiver(this, channel);
-                        this.m_channels.put(channel, receiverx);
-                        if (this.m_network != null) {
-                            this.m_network.addReceiver(receiverx);
-                        }
-
-                        if (!this.m_open) {
-                            this.m_open = true;
-                            this.m_changed = true;
-                        }
-                    }
-
-                    return null;
-                }
+                this.m_state.open(parseChannel(arguments, 0));
+                return null;
             case 1:
-                int channel1 = parseChannel(arguments, 0);
-                synchronized (this) {
-                    boolean open = this.m_channels.containsKey(channel1);
-                    return new Object[] { open };
-                }
+                return new Object[] { this.m_state.isOpen(parseChannel(arguments, 0)) };
             case 2:
-                int channel2 = parseChannel(arguments, 0);
-                synchronized (this) {
-                    if (this.m_channels.containsKey(channel2)) {
-                        IReceiver receiver = this.m_channels.get(channel2);
-                        if (this.m_network != null) {
-                            this.m_network.removeReceiver(receiver);
-                        }
-
-                        this.m_channels.remove(channel2);
-                        if (this.m_channels.size() == 0) {
-                            this.m_open = false;
-                            this.m_changed = true;
-                        }
-                    }
-
-                    return null;
-                }
+                this.m_state.close(parseChannel(arguments, 0));
+                return null;
             case 3:
-                synchronized (this) {
-                    if (this.m_channels.size() > 0) {
-                        if (this.m_network != null) {
-                            Iterator<IReceiver> it = this.m_channels.values()
-                                .iterator();
-
-                            while (it.hasNext()) {
-                                this.m_network.removeReceiver(it.next());
-                            }
-                        }
-
-                        this.m_channels.clear();
-                        if (this.m_open) {
-                            this.m_open = false;
-                            this.m_changed = true;
-                        }
-                    }
-
-                    return null;
-                }
+                this.m_state.closeAll();
+                return null;
             case 4:
                 int channel4 = parseChannel(arguments, 0);
                 int replyChannel = parseChannel(arguments, 1);
                 Object payload = arguments.length >= 3 ? arguments[2] : null;
-                synchronized (this) {
-                    Vec3 position = this.getPosition();
-                    if (position != null && this.m_network != null) {
-                        this.m_network.transmit(
-                            channel4,
-                            replyChannel,
-                            payload,
-                            this.getTransmitRange(),
-                            position.xCoord,
-                            position.yCoord,
-                            position.zCoord,
-                            this);
-                    }
-
-                    return null;
+                Vec3 position = this.getPosition();
+                INetwork network;
+                synchronized (this.m_receivers) {
+                    network = this.m_network;
                 }
+                if (position != null && network != null) {
+                    network.transmit(
+                        channel4,
+                        replyChannel,
+                        payload,
+                        this.getTransmitRange(),
+                        position.xCoord,
+                        position.yCoord,
+                        position.zCoord,
+                        this);
+                }
+                return null;
             case 5:
-                synchronized (this) {
-                    if (this.m_network != null) {
-                        return new Object[] { this.m_network.isWireless() };
-                    }
+                INetwork current;
+                synchronized (this.m_receivers) {
+                    current = this.m_network;
+                }
+                if (current != null) {
+                    return new Object[] { current.isWireless() };
                 }
 
                 return new Object[] { false };
@@ -217,31 +200,15 @@ public abstract class ModemPeripheral implements IPeripheral {
     }
 
     @Override
-    public synchronized void attach(IComputerAccess computer) {
+    public void attach(IComputerAccess computer) {
         this.m_computer = computer;
         this.setNetwork(this.getNetwork());
-        this.m_open = !this.m_channels.isEmpty();
     }
 
     @Override
-    public synchronized void detach(IComputerAccess computer) {
-        if (this.m_network != null) {
-            Iterator<IReceiver> it = this.m_channels.values()
-                .iterator();
-
-            while (it.hasNext()) {
-                this.m_network.removeReceiver(it.next());
-            }
-
-            this.m_channels.clear();
-            this.m_network = null;
-        }
-
+    public void detach(IComputerAccess computer) {
+        this.setNetwork(null);
         this.m_computer = null;
-        if (this.m_open) {
-            this.m_open = false;
-            this.m_changed = true;
-        }
     }
 
     @Override

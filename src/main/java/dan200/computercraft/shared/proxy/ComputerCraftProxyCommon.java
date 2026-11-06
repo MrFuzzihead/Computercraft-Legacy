@@ -83,9 +83,12 @@ import dan200.computercraft.shared.peripheral.diskdrive.ContainerDiskDrive;
 import dan200.computercraft.shared.peripheral.diskdrive.TileDiskDrive;
 import dan200.computercraft.shared.peripheral.generic.energy.rf.RFIntegration;
 import dan200.computercraft.shared.peripheral.modem.BlockAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.BlockWiredModemFull;
 import dan200.computercraft.shared.peripheral.modem.ItemAdvancedWirelessModem;
+import dan200.computercraft.shared.peripheral.modem.ItemWiredModemFull;
 import dan200.computercraft.shared.peripheral.modem.TileAdvancedWirelessModem;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
+import dan200.computercraft.shared.peripheral.modem.TileWiredModemFull;
 import dan200.computercraft.shared.peripheral.modem.TileWirelessModem;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.peripheral.printer.ContainerPrinter;
@@ -369,6 +372,11 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.addRecipe(cable, " X ", "XYX", " X ", 'X', Blocks.stone, 'Y', Items.redstone);
         ItemStack wiredModem = PeripheralItemFactory.create(PeripheralType.WiredModem, null, 1);
         GameRegistry.addRecipe(wiredModem, "XXX", "XYX", "XXX", 'X', Blocks.stone, 'Y', Items.redstone);
+        ComputerCraft.Blocks.wiredModemFull = new BlockWiredModemFull();
+        GameRegistry.registerBlock(ComputerCraft.Blocks.wiredModemFull, ItemWiredModemFull.class, "CC-WiredModemFull");
+        ItemStack wiredModemFull = new ItemStack(ComputerCraft.Blocks.wiredModemFull, 1, 0);
+        GameRegistry.addShapelessRecipe(wiredModemFull, wiredModem);
+        GameRegistry.addShapelessRecipe(wiredModem, wiredModemFull);
         ItemStack commandComputer = ComputerItemFactory.create(-1, null, ComputerFamily.Command);
         GameRegistry.addRecipe(
             commandComputer,
@@ -644,6 +652,7 @@ public abstract class ComputerCraftProxyCommon implements IComputerCraftProxy {
         GameRegistry.registerTileEntity(TileMonitor.class, "monitor");
         GameRegistry.registerTileEntity(TilePrinter.class, "ccprinter");
         GameRegistry.registerTileEntity(TileCable.class, "wiredmodem");
+        GameRegistry.registerTileEntity(TileWiredModemFull.class, "wiredmodemfull");
         GameRegistry.registerTileEntity(TileCommandComputer.class, "command_computer");
         GameRegistry.registerTileEntity(TileRedstoneRelay.class, "redstone_relay");
         GameRegistry.registerTileEntity(TileSpeaker.class, "ccspeaker");

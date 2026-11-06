@@ -58,7 +58,7 @@ public abstract class TilePeripheralBase extends TileGeneric implements IPeriphe
     }
 
     @Override
-    public final PeripheralType getPeripheralType() {
+    public PeripheralType getPeripheralType() {
         return this.getBlock()
             .getPeripheralType(this.getMetadata());
     }

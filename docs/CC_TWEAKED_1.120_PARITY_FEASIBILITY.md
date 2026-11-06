@@ -801,16 +801,38 @@ registry name.
 | `disk_drive` | `peripheral` metadata 2–5 | facing in metadata |
 | `printer` | `peripheral` metadata 11 | |
 | `wireless_modem_normal`, `wireless_modem_advanced` | `peripheral` metadata 0/1, `CC-AdvancedWirelessModem` | |
-| `wired_modem`, `wired_modem_full`, `cable` | `CC-Cable` (WiredModem / WiredModemWithCable / Cable) | |
+| `wired_modem`, `cable` | `CC-Cable` (WiredModem / WiredModemWithCable / Cable) | |
+| `wired_modem_full` | `CC-WiredModemFull` + `TileWiredModemFull` | full cube, six-face modem/hub |
 | `speaker`, `redstone_relay` | `speaker`, `CC-RedstoneRelay` | |
+| `lectern` | — | N/A: upstream extends the vanilla 1.14+ lectern |
 | `pocket_computer_normal`, `pocket_computer_advanced` | `pocketComputer` (damage 0/1) | upgrades are NBT, as upstream |
 | `disk`, `treasure_disk` | `disk`, `treasureDisk` | |
 | `printed_page`, `printed_pages`, `printed_book` | `printout` (damage 0/1/2) | |
 | — | `diskExpanded`, `chat_box`, `npc_detector`, `npc_interface`, `npc_trader` | ours-only: custom disk size, the chat box (removed upstream in 1.99), CustomNPCs compat |
 
-No upstream block or item is missing. `pocket_computer_no_term`, `pocket_computer_lectern`,
-`computer_upgrade` and `pocket_computer_upgrade` are menu types and recipe serialisers in
-1.120, not items, so they have no counterpart to check.
+No upstream block or item is missing now that `wired_modem_full` is ported. The only upstream
+block with no 1.7.10 counterpart is `lectern`: CC:Tweaked's `CustomLecternBlock` extends the
+vanilla 1.14+ lectern, which this platform does not have. Porting it would mean adding a new
+lectern block, not restoring parity; the pocket-computer-on-a-lectern behaviour is a separate
+feature, not a missing block.
+
+#### Full wired modem
+
+`CC-WiredModemFull` is a full cube with no facing. Its tile entity is a `TileCable` subtype that
+owns one `ModemState`, six per-face `TileCable.Peripheral` modems and six
+`WiredModemLocalPeripheral`s, mirroring CC:Tweaked's `WiredModemFullBlockEntity`. Right-clicking
+toggles all six local peripherals; the names are `type_id` and persist as `PeripheralIdN` /
+`PeripheralTypeN` NBT, with the enabled state in `PeripheralEnabled`. The block reports
+`WiredModemWithCable` as its peripheral type, participates in the cable BFS through
+`BlockCable.isCable`, and uses the four existing `wiredModemFace*` textures for the
+modem-off/modem-on/peripheral states. The wall modem and full modem convert shapelessly in both
+directions.
+
+Block-peripheral surface: the wired modem's peripheral now implements `IPeripheralTargeted`
+(`getTarget()`), matching upstream's `getTarget`, and `ComputerPeripheral` gained `getLabel()`.
+`pocket_computer_no_term`, `pocket_computer_lectern`, `computer_upgrade` and
+`pocket_computer_upgrade` are menu types and recipe serialisers in 1.120, not items, so they have
+no counterpart to check.
 
 ### 12.4 Lua API contracts
 
@@ -863,7 +885,8 @@ For the record, since a parity audit that only lists gaps is misleading:
 
 - No missing terminal API method, window method, monitor method or palette feature.
 - No missing `modem`, wired-modem or `rednet` function.
-- No missing block or item.
+- No missing block or item after the `wired_modem_full` port; `lectern` is excluded as N/A because
+  it extends a vanilla block this platform does not have.
 - No missing Lua API function in any ROM API.
 - Keyboard key *names* differ only because of the platform (`F17`–`F25`, `leftSuper`,
   `rightSuper`, `menu`, `printScreen`, `world1`, `world2` are GLFW/LWJGL3 codes that 1.7.10

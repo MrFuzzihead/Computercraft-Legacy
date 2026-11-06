@@ -36,7 +36,7 @@ public class ComputerPeripheral implements IPeripheralTargeted {
 
     @Override
     public String[] getMethodNames() {
-        return new String[] { "turnOn", "shutdown", "reboot", "getID", "isOn" };
+        return new String[] { "turnOn", "shutdown", "reboot", "getID", "isOn", "getLabel" };
     }
 
     @Override
@@ -56,6 +56,8 @@ public class ComputerPeripheral implements IPeripheralTargeted {
                 return new Object[] { this.m_computer.assignID() };
             case 4:
                 return new Object[] { this.m_computer.isOn() };
+            case 5:
+                return new Object[] { this.m_computer.getLabel() };
             default:
                 return null;
         }

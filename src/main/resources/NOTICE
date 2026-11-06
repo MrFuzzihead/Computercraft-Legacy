@@ -97,6 +97,19 @@ That backport is substantial, and predates the Minecraft
       * the file_transfer branch of assets/computercraft/lua/rom/programs/shell
     The rest of that feature - the SDL3 drop watcher, the size/authorisation
     checks, IContainerComputer and IComputerGui - is this project's own code.
+  - the full wired modem (Batch N), ported from CC: Tweaked 1.120.2's
+    WiredModemFullBlock, WiredModemFullBlockEntity, WiredModemLocalPeripheral,
+    WiredModemPeripheral and ModemState:
+      * dan200.computercraft.shared.peripheral.modem.BlockWiredModemFull,
+        ItemWiredModemFull, TileWiredModemFull, WiredModemLocalPeripheral and
+        ModemState
+      * the per-peripheral remote-wrapper split in TileCable.Peripheral, which
+        gives each attached face its own wrapper set and its own computer
+      * the shared ModemState behaviour in ModemPeripheral, so all six faces of
+        the full modem see the same open channels
+    The 1.7.10 implementation is a new port against TileCable/INetwork rather
+    than a copy of the 1.20 code, but the feature and its name/ID/NBT semantics
+    are derived from the upstream classes listed above.
 
 LWJGL 3 (including lwjgl-sdl) is a compile-time dependency only. It is not
 bundled or shaded: lwjgl3ify provides it at runtime, and the mod declares
