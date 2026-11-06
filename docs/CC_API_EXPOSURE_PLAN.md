@@ -83,8 +83,8 @@ reached in a unit test are called out in the test javadoc — `world.isRemote` a
 ### Not in this release
 
 - **All addon-side changes** (M1/M2/M5 and the `TileCable_Mixin` repair). Deferred.
-- **The M4 seams** — turtle fuel provider, cable connectivity, pocket upgrade registry
-  (§4). Optional; see the staging decision below.
+- **The M4 seams** — the fuel seam landed (§4.1); cable connectivity and the pocket upgrade
+  registry are still deferred (§4).
 - **Nothing that adds a new call site** to any CC execution path, unless you take §4.
 
 ### Staging decision
@@ -196,20 +196,50 @@ themselves. They are recorded so the surface stays justified; none of them is wo
 
 ---
 
-## 4. Deferred: the M4 seams (not in this release)
+## 4. The M4 seams
 
-If you later choose staging B, these are the only CC changes that add call sites. Each
+Two seams are still deferred; the fuel one landed (below). Deferred: each adds a call site, so each
 must ship with an "unregistered ⇒ today's behaviour" test.
 
 | Seam | Consulted by | Retires (addon-side) |
 |---|---|---|
-| Turtle fuel provider registry, fallback `TileEntityFurnace.getBurnTime` | `TurtleRefuelCommand` | CCTweaks `TurtleRefuelCommand_Mixin` — also removes that overwrite's four behavioural regressions (it drops `turtleDisabledActions`, container items, the `m_limit == 0` test-only branch and `InventoryUtil` slot handling) |
 | Cable connectivity (neighbour-ask interface + `ComputerCraftAPI` registration) | `BlockCable.isCable`, `TileCable.getCableBounds`, cable render handler, `ItemCable.onItemUse` | CCTweaks `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `ItemCable_Mixin` |
 | Pocket upgrade registry (`IPocketComputerUpgrade` + registration) | `ItemPocketComputer` create / update / display name | P++ `ItemPocketComputerMixin` |
 
 Design rules when/if they land: no CodeChicken dependency in CC (a marker interface
 plus a registration list suffices); `false`-by-default; and a test asserting an
-unregistered world connects, renders and refuels identically.
+unregistered world connects and renders identically.
+
+### 4.1 Turtle fuel handlers — landed
+
+This seam is a **port of upstream**, not an invention: CC: Tweaked 1.120.2 ships `TurtleRefuelHandler`,
+`impl.TurtleRefuelHandlers` and `FurnaceRefuelHandler` today. It landed here because CCTweaks'
+`TurtleRefuelCommand_Mixin` is load-bearing functionality, not a bug patch — it is the only thing that makes
+a battery refuel a turtle — and the mixin's `@Overwrite` costs four behaviours that CC's command owns:
+
+* `turtleDisabledActions` (`refuel` can be disabled by an admin) — the mixin drops the check;
+* the `refuel(0)` probe — the mixin answers "a provider matched" rather than "this would yield fuel", so an
+  empty battery reports `true`;
+* selected-slot discipline — the mixin's default provider consumes from the whole inventory;
+* the tank cap — neither the old code nor the mixin limited *items consumed* to the remaining space, so a
+  nearly-full turtle burned a full stack for the fuel of one item.
+
+| Piece | Notes |
+|---|---|
+| `api/turtle/TurtleRefuelHandler` | `OptionalInt refuel(turtle, stack, slot, limit)`; `empty()` = not my fuel, `of(0)` = mine but the limit was zero. Ported from CC: Tweaked (MPL-2.0, `NOTICE`). |
+| `impl/TurtleRefuelHandlers` | First present result wins; throws on a negative yield and on consumption during the zero-limit probe. |
+| `ComputerCraftAPI.registerRefuelHandler` | Added to the **reflective** 1.75 API (a `findCCMethod` lookup plus a static `ComputerCraft` target), not as an upstream-style service call. `ComputerCraftAPIRefuelHandlerTest` pins the name/signature pair so it cannot silently stop working. |
+| `shared/turtle/core/FurnaceRefuelHandler` | `getBurnTime * 5 / 100`, plus the tank-cap and container-item rules. Registered at `init`. |
+| `TurtleRefuelCommand` | Keeps the disabled check and both failure messages; delegates fuel to the registry. |
+| `shared/turtle/refuel/*` | **Addition, not parity:** IC2 (`IElectricItem.discharge`) and CoFH (`IEnergyContainerItem.extractEnergy`) handlers, 25 EU and 100 RF per fuel by default, both configurable and both an off switch at 0. Guarded by a class-load shim, so a game without those mods never resolves their API classes. |
+
+Coverage: `TurtleRefuelHandlersTest`, `FurnaceRefuelHandlerTest`, `TurtleRefuelCommandTest`,
+`EnergyRefuelTest`, `ElectricRefuelIntegrationTest`, `ComputerCraftAPIRefuelHandlerTest`, and the in-game
+batch O (`docs/ingame-tests/batch-o`).
+
+What CCTweaks then deletes: `TurtleRefuelCommand_Mixin`, `TurtleFuelRegistry`, `ITurtleFuelRegistry`,
+`ITurtleFuelProvider` and the fuel half of `DefaultTurtleProviders` — re-registering their two integrations
+as `TurtleRefuelHandler`s (`canRefuel` → `OptionalInt.empty()`).
 
 ---
 
@@ -221,9 +251,11 @@ produced by §1.
 
 **CCTweaks** — after the release: delete 9 accessors/invokers (M1/M2/M3), rewrite
 `PeripheralAPI_Mixin` to use `IPeripheral.attach()` + `getAvailablePeripherals()`
-(M5), and repair `TileCable_Mixin` (delete the 6 dead overwrites) before anything is
-testable. Its four remaining behaviour mixins (`TurtleRefuelCommand`, `BlockCable`,
-`ItemCable`, `CableBlockRenderingHandler`) need the M4 seams, i.e. a later CC tag.
+(M5), repair `TileCable_Mixin` (delete the 6 dead overwrites) before anything is
+testable, and **delete `TurtleRefuelCommand_Mixin` outright** — §4.1's registry replaces
+it, so `TurtleFuelRegistry`, `ITurtleFuelRegistry`, `ITurtleFuelProvider` and the fuel half
+of `DefaultTurtleProviders` go with it. Three behaviour mixins remain (`BlockCable`,
+`ItemCable`, `CableBlockRenderingHandler`), needing the cable seam and a later CC tag.
 
 **Peripherals++** — delete `CCTurtleProxyCommonAccessor` and `PocketAPIMixin`; keep
 `ItemPocketComputerMixin` until the pocket seam exists.
@@ -264,9 +296,11 @@ to this release.
 2. ~~Decide the two open items~~ — both kept (§1).
 3. ~~Land items 1–11~~ — done, with a unit test per member, a reflective contract test,
    the `NOTICE` line and the `TWEAKEDCC_COVERAGE.md` note.
-4. `./gradlew build test` green. A `runServer25` smoke boot is still worth doing before
-   the tag; no behaviour change is expected outside the `pocket.equipBack` guard.
-5. Tag. Hand the addons the member list in §1 as their contract.
+4. ~~Land the turtle fuel seam~~ — done (§4.1), with the IC2/RF handlers behind it.
+5. `./gradlew build test` green. A `runServer25` smoke boot plus one `runClient25` pass
+   over batches M, N and O is still worth doing before the tag: they are the three
+   behaviour surfaces this branch touches (pocket upgrade guard, wired modem, refuelling).
+6. Tag. Hand the addons the member list in §1 as their contract.
 
 ---
 

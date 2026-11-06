@@ -1,21 +1,33 @@
 package dan200.computercraft.shared.turtle.core;
 
 import java.util.Arrays;
+import java.util.OptionalInt;
 
 import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntityFurnace;
 
 import dan200.computercraft.ComputerCraft;
 import dan200.computercraft.api.turtle.ITurtleAccess;
 import dan200.computercraft.api.turtle.ITurtleCommand;
 import dan200.computercraft.api.turtle.TurtleAnimation;
 import dan200.computercraft.api.turtle.TurtleCommandResult;
-import dan200.computercraft.shared.util.InventoryUtil;
+import dan200.computercraft.impl.TurtleRefuelHandlers;
 
+/**
+ * {@code turtle.refuel([count])}. Consumes items from the turtle's selected slot and converts them to fuel through the
+ * registered {@link dan200.computercraft.api.turtle.TurtleRefuelHandler}s.
+ *
+ * <p>
+ * The command owns the rules that are about the <em>turtle</em> rather than about the item: whether the action is
+ * disabled by config, whether there is anything in the selected slot, the "no fuel gained means no animation" rule, and
+ * the fuel added. A handler only answers "what is this item worth, and how do I take it".
+ * </p>
+ */
 public class TurtleRefuelCommand implements ITurtleCommand {
 
+    /** The name this command is matched against in {@code ComputerCraft.turtleDisabledActions}. */
+    private static final String COMMANDNAME = "refuel";
+
     private final int m_limit;
-    private final String COMMANDNAME = "refuel";
 
     public TurtleRefuelCommand(int limit) {
         this.m_limit = limit;
@@ -28,62 +40,24 @@ public class TurtleRefuelCommand implements ITurtleCommand {
             return TurtleCommandResult.failure("Turtle action \"" + COMMANDNAME + "\" is disabled");
         }
 
-        if (this.m_limit == 0) {
-            ItemStack dummyStack = turtle.getInventory()
-                .getStackInSlot(turtle.getSelectedSlot());
-            if (dummyStack != null) {
-                return this.refuel(turtle, dummyStack, true);
-            }
-        } else {
-            ItemStack stack = InventoryUtil
-                .takeItems(this.m_limit, turtle.getInventory(), turtle.getSelectedSlot(), 1, turtle.getSelectedSlot());
-            if (stack != null) {
-                TurtleCommandResult result = this.refuel(turtle, stack, false);
-                if (!result.isSuccess()) {
-                    InventoryUtil.storeItems(
-                        stack,
-                        turtle.getInventory(),
-                        0,
-                        turtle.getInventory()
-                            .getSizeInventory(),
-                        turtle.getSelectedSlot());
-                }
-
-                return result;
-            }
+        int slot = turtle.getSelectedSlot();
+        ItemStack stack = turtle.getInventory()
+            .getStackInSlot(slot);
+        if (stack == null) {
+            return TurtleCommandResult.failure("No items to combust");
         }
 
-        return TurtleCommandResult.failure("No items to combust");
-    }
-
-    private int getFuelPerItem(ItemStack stack) {
-        return TileEntityFurnace.getItemBurnTime(stack) * 5 / 100;
-    }
-
-    private TurtleCommandResult refuel(ITurtleAccess turtle, ItemStack stack, boolean testOnly) {
-        int fuelPerItem = this.getFuelPerItem(stack);
-        if (fuelPerItem <= 0) {
+        OptionalInt refuelled = TurtleRefuelHandlers.refuel(turtle, stack, slot, this.m_limit);
+        if (!refuelled.isPresent()) {
             return TurtleCommandResult.failure("Items not combustible");
-        } else {
-            if (!testOnly) {
-                int fuelToGive = fuelPerItem * stack.stackSize;
-                ItemStack replacementStack = stack.getItem()
-                    .getContainerItem(stack);
-                turtle.addFuel(fuelToGive);
-                if (replacementStack != null) {
-                    InventoryUtil.storeItems(
-                        replacementStack,
-                        turtle.getInventory(),
-                        0,
-                        turtle.getInventory()
-                            .getSizeInventory(),
-                        turtle.getSelectedSlot());
-                }
-
-                turtle.playAnimation(TurtleAnimation.Wait);
-            }
-
-            return TurtleCommandResult.success();
         }
+
+        int fuel = refuelled.getAsInt();
+        if (fuel != 0) {
+            turtle.addFuel(fuel);
+            turtle.playAnimation(TurtleAnimation.Wait);
+        }
+
+        return TurtleCommandResult.success();
     }
 }

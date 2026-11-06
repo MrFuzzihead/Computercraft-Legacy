@@ -1,5 +1,12 @@
 refuel is a program for Turtles. Refuel will consume items from the inventory as fuel for turtle.
 
+Any item a furnace would burn works, and items that store energy work too: a charged
+battery from IC2 or an RF energy cell is drained rather than consumed, so it stays in the
+inventory with less charge.
+
+From Lua, turtle.refuel( 0 ) reports whether the item in the selected slot can be used as
+fuel at all, without consuming or draining it.
+
 ex:
 "refuel" will refuel with at most one fuel item
 "refuel 10" will refuel with at most 10 fuel items

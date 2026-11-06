@@ -45,9 +45,11 @@ import dan200.computercraft.api.peripheral.IPeripheralProvider;
 import dan200.computercraft.api.permissions.ITurtlePermissionProvider;
 import dan200.computercraft.api.redstone.IBundledRedstoneProvider;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
+import dan200.computercraft.api.turtle.TurtleRefuelHandler;
 import dan200.computercraft.core.filesystem.ComboMount;
 import dan200.computercraft.core.filesystem.FileMount;
 import dan200.computercraft.core.filesystem.JarMount;
+import dan200.computercraft.impl.TurtleRefuelHandlers;
 import dan200.computercraft.shared.common.DefaultBundledRedstoneProvider;
 import dan200.computercraft.shared.computer.blocks.BlockCommandComputer;
 import dan200.computercraft.shared.computer.blocks.BlockComputer;
@@ -76,6 +78,8 @@ import dan200.computercraft.shared.proxy.ICCTurtleProxy;
 import dan200.computercraft.shared.proxy.IComputerCraftProxy;
 import dan200.computercraft.shared.turtle.blocks.BlockTurtle;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
+import dan200.computercraft.shared.turtle.core.FurnaceRefuelHandler;
+import dan200.computercraft.shared.turtle.refuel.ElectricRefuelIntegration;
 import dan200.computercraft.shared.turtle.upgrades.TurtleAxe;
 import dan200.computercraft.shared.turtle.upgrades.TurtleChatBox;
 import dan200.computercraft.shared.turtle.upgrades.TurtleCraftingTable;
@@ -132,6 +136,16 @@ public class ComputerCraft {
     public static int advancedMonitorLightLevel = 10;
     public static boolean funNames = true;
     public static String[] turtleDisabledActions = new String[0];
+    /**
+     * EU a turtle pays for one unit of fuel when refuelling from an IC2 electric item, e.g. 25 means a 10000 EU
+     * battery is worth 400 fuel. Zero or less disables IC2 refuelling.
+     */
+    public static int turtleEuRefuelAmount = 25;
+    /**
+     * RF a turtle pays for one unit of fuel when refuelling from a CoFH energy item, e.g. 100 means a 1,000,000 RF
+     * capacitor is worth 10,000 fuel (capped by the turtle's own tank). Zero or less disables RF refuelling.
+     */
+    public static int turtleRfRefuelAmount = 100;
     public static int computerThreadTimeout = 7000;
     public static int computerThreads = 4;
     public static String biosPath = "/assets/computercraft/lua/bios.lua";
@@ -281,6 +295,12 @@ public class ComputerCraft {
         prop = config.get("general", "turtleDisabledActions", turtleDisabledActions);
         prop.comment = "Disabled turtle actions: (compare, compareTo, craft, detect, dig, drop, equip, inspect, move, place, refuel, select, suck, tool, turn).";
         turtleDisabledActions = prop.getStringList();
+        prop = config.get("general", "turtleEuRefuelAmount", turtleEuRefuelAmount);
+        prop.comment = "EU required for one unit of turtle fuel when refuelling from an IC2 electric item. 0 disables IC2 refuelling.";
+        turtleEuRefuelAmount = prop.getInt(turtleEuRefuelAmount);
+        prop = config.get("general", "turtleRfRefuelAmount", turtleRfRefuelAmount);
+        prop.comment = "RF required for one unit of turtle fuel when refuelling from a CoFH energy item. 0 disables RF refuelling.";
+        turtleRfRefuelAmount = prop.getInt(turtleRfRefuelAmount);
         prop = config.get("general", "computerThreadTimeout", computerThreadTimeout);
         prop.comment = "The maximum time (in milliseconds) a computer thread is allowed to run before being considered crashed";
         computerThreadTimeout = prop.getInt();
@@ -328,6 +348,10 @@ public class ComputerCraft {
 
     @EventHandler
     public void init(FMLInitializationEvent event) {
+        // Fuel handlers before anything can refuel a turtle. The furnace handler is ComputerCraft's own; the electric
+        // ones are added when IC2 or CoFH Core is present, and keep themselves out of the classpath otherwise.
+        registerRefuelHandler(new FurnaceRefuelHandler());
+        ElectricRefuelIntegration.register();
         proxy.init();
         turtleProxy.init();
     }
@@ -721,6 +745,19 @@ public class ComputerCraft {
 
     public static void registerTurtleUpgrade(ITurtleUpgrade upgrade) {
         turtleProxy.registerTurtleUpgrade(upgrade);
+    }
+
+    /**
+     * Registers a source of turtle fuel other than the item's furnace burn time. Reached from
+     * {@code ComputerCraftAPI.registerRefuelHandler} on behalf of other mods, and used by this mod's own electric
+     * integrations.
+     *
+     * @param handler the handler to add; ignored if {@code null}
+     */
+    public static void registerRefuelHandler(TurtleRefuelHandler handler) {
+        if (handler != null) {
+            TurtleRefuelHandlers.register(handler);
+        }
     }
 
     public static ITurtleUpgrade getTurtleUpgrade(int id) {

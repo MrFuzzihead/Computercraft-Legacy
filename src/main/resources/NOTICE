@@ -122,6 +122,22 @@ That backport is substantial, and predates the Minecraft
     ComputerCraft-only world is affected, since every writer of that key in
     this mod goes through PocketUpgrades. No upstream code is involved.
 
+  - the turtle refuel handler registry, ported from CC: Tweaked 1.120.2:
+      * dan200.computercraft.api.turtle.TurtleRefuelHandler
+      * dan200.computercraft.impl.TurtleRefuelHandlers
+      * dan200.computercraft.shared.turtle.core.FurnaceRefuelHandler
+      * the delegation in TurtleRefuelCommand, which now asks those handlers
+        instead of testing furnace burn time itself
+    The 1.7.10 port keeps the upstream contract -- an OptionalInt where empty
+    means "not my fuel" and of(0) means "mine, but the limit was zero" -- and
+    its guards against handlers that consume during the zero-limit probe or
+    return a negative yield. The IC2 and CoFH energy handlers in
+    dan200.computercraft.shared.turtle.refuel are this project's own code, using
+    the same EU/RF-per-fuel ratios as CCTweaks' ITurtleFuelProvider
+    integrations so a pack migrating off CCTweaks keeps its economy. IC2 and
+    CoFH Core remain compile-only dependencies; nothing from them is copied or
+    shipped, and their API classes are only resolved when those mods are loaded.
+
 LWJGL 3 (including lwjgl-sdl) is a compile-time dependency only. It is not
 bundled or shaded: lwjgl3ify provides it at runtime, and the mod declares
 lwjgl3ify as a required dependency. LWJGL is BSD-3-Clause.
