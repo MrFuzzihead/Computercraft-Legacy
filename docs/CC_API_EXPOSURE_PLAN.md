@@ -46,7 +46,7 @@ Consequences worth stating plainly:
 
 ## 1. The deliverable
 
-**Status: landed on this branch (phase 1).** Ten public members + one guard fix, all additive, no
+**Status: landed on this branch (phase 1, plus the §4.1 fuel seam and the §4.2 pocket seam).** Ten public members + one guard fix, all additive, no
 existing code path changes. The test map is at the end of this section.
 
 | # | Public member | Consumer (addon) | What it retires on their side | Test |
@@ -83,8 +83,8 @@ reached in a unit test are called out in the test javadoc — `world.isRemote` a
 ### Not in this release
 
 - **All addon-side changes** (M1/M2/M5 and the `TileCable_Mixin` repair). Deferred.
-- **The M4 seams** — the fuel seam landed (§4.1); cable connectivity and the pocket upgrade
-  registry are still deferred (§4).
+- **The M4 seams** — the fuel seam landed (§4.1) and the pocket upgrade registry landed
+  (§4.2); cable connectivity is still deferred (§4).
 - **Nothing that adds a new call site** to any CC execution path, unless you take §4.
 
 ### Staging decision
@@ -198,13 +198,13 @@ themselves. They are recorded so the surface stays justified; none of them is wo
 
 ## 4. The M4 seams
 
-Two seams are still deferred; the fuel one landed (below). Deferred: each adds a call site, so each
-must ship with an "unregistered ⇒ today's behaviour" test.
+The fuel and pocket seams landed (§4.1, §4.2); cable connectivity is still deferred. Each seam adds a
+call site, so each ships with an "unregistered ⇒ today's behaviour" test.
 
-| Seam | Consulted by | Retires (addon-side) |
-|---|---|---|
-| Cable connectivity (neighbour-ask interface + `ComputerCraftAPI` registration) | `BlockCable.isCable`, `TileCable.getCableBounds`, cable render handler, `ItemCable.onItemUse` | CCTweaks `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `ItemCable_Mixin` |
-| Pocket upgrade registry (`IPocketComputerUpgrade` + registration) | `ItemPocketComputer` create / update / display name | P++ `ItemPocketComputerMixin` |
+| Seam | Consulted by | Retires (addon-side) | Status |
+|---|---|---|---|
+| Cable connectivity (neighbour-ask interface + `ComputerCraftAPI` registration) | `BlockCable.isCable`, `TileCable.getCableBounds`, cable render handler, `ItemCable.onItemUse` | CCTweaks `BlockCable_Mixin`, `CableBlockRenderingHandler_Mixin`, `ItemCable_Mixin` | deferred |
+| Pocket upgrade registry (`IPocketUpgrade` + `ComputerCraftAPI.registerPocketUpgrade`) | `ItemPocketComputer` create / update / display name, `PocketAPI` equip / unequip | P++ `ItemPocketComputerMixin` | **landed (§4.2)** |
 
 Design rules when/if they land: no CodeChicken dependency in CC (a marker interface
 plus a registration list suffices); `false`-by-default; and a test asserting an
@@ -241,6 +241,59 @@ What CCTweaks then deletes: `TurtleRefuelCommand_Mixin`, `TurtleFuelRegistry`, `
 `ITurtleFuelProvider` and the fuel half of `DefaultTurtleProviders` — re-registering their two integrations
 as `TurtleRefuelHandler`s (`canRefuel` → `OptionalInt.empty()`).
 
+
+### 4.2 Pocket upgrade registry — landed
+
+**What was impossible.** `dan200.computercraft.api` had no `pocket` package and `ComputerCraftAPI` had no
+`registerPocketUpgrade`. The upgrade set was a closed six-id enum: `PocketUpgrades` mapped id → `PeripheralType` →
+`switch` → peripheral, `ItemPocketComputer.getUpgrade` clamped anything outside 1–6 to `-1`, and the display name was a
+six-branch `if` chain. Attaching a peripheral was never the problem — `ServerComputer#setPeripheral(int, IPeripheral)`
+is public and `getPeripheral(2)` is what CC itself uses. **Being called was the problem**: the three moments an upgrade
+needs code at (peripheral creation inside `createServerComputer`, the per-tick chain in `onUpdate`, and
+`getItemStackDisplayName`) all live in `ItemPocketComputer`, and the upgrade was an `int` in ComputerCraft's own NBT.
+That is exactly the set of things Peripherals++ `@Inject`s into.
+
+**What shipped.** A port of upstream's API (CC: Tweaked 1.120.2 `api/pocket/IPocketUpgrade`,
+`api/pocket/IPocketAccess`, `api/upgrades/UpgradeBase`), adapted to 1.7.10:
+
+| Piece | Notes |
+|---|---|
+| `api/pocket/IPocketUpgrade` | `getUpgradeID`, `getUnlocalisedAdjective`, `getCraftingItem`, `createPeripheral(IPocketAccess)`; defaults `getUpgradeData(ItemStack)`, `getUpgradeItem(NBTTagCompound)`, `update(IPocketAccess, IPeripheral)`. |
+| `api/pocket/IPocketAccess` | `getWorld`, `getEntity`, `getStack`, `getUpgradeNBTData`, `updateUpgradeNBTData`, `invalidatePeripheral`. |
+| `ComputerCraftAPI.registerPocketUpgrade` | Reflective 1.75 hook (a `findCCMethod` lookup plus a static `ComputerCraft` target), like `registerRefuelHandler`; `PocketUpgrades.register` refuses reserved ids (< 7) and duplicates the way `CCTurtleProxyCommon#registerTurtleUpgrade` does. |
+| `shared/pocket/PocketUpgrades` | The registry. Ids 1–6 are pre-registered with the six built-ins, so saved items, names and peripherals are unchanged; mods add ids ≥ 7, so Peripherals++'s 7 and 8 keep working with no migration. |
+| `shared/pocket/upgrades/*` | The six built-ins as upgrades. The `instanceof` chain in `onUpdate` is now their `update(...)` methods — the modem's position and light flag, the speaker's tick, the chat box's dimension, the NPC interface's stack hand-off all moved with it, unchanged. |
+| `PocketAccess` | The access object: the stack, the holder, and upgrade NBT stored on the item stack (`upgradeData`) so it survives the computer being recreated. |
+
+Call sites replaced: `createServerComputer` (peripheral), `onUpdate` (tick), `getItemStackDisplayName` (adjective),
+`getUpgrade` (registry lookup instead of the 1–6 range check), `PocketAPI#doEquipBack` and `#doUnequipBack`.
+
+**Two behaviour changes, both parity fixes, both recorded in `NOTICE` section 2.** The old `equipBack` scan required
+an `IPeripheralItem`, which none of the speaker, chat box or NPC *block* items are, so in practice only the wireless
+modem could ever be equipped; and `unequipBack` refused everything but id 1 while `isEquipped` reported 1–6 as
+equipped. Both now accept any registered upgrade, which is upstream's behaviour. An id with no registered upgrade still
+refuses, so a save from an uninstalled mod keeps its upgrade instead of losing it.
+
+**Deliberate divergences from upstream, all documented in `NOTICE`:** `int` ids (like `ITurtleUpgrade`, and like the
+values already in saves) rather than `ResourceLocation`; code-driven registration (1.7.10 has no data-pack registry for
+`PocketUpgradeSerialiser`); no colour or light on `IPocketAccess` (a 1.7.10 pocket computer has no colour, and its only
+light is the modem's boolean flag); and no `onRightClick` hook — upstream's exists to suppress the pocket GUI, which
+this version opens on both sides without a packet of its own, so a half-working version would be worse than none.
+
+**Coverage:** `PocketUpgradeRegistryTest` (built-ins intact, reserved and duplicate ids refused, unknown id inert),
+`PocketUpgradeDispatchTest` (a mod upgrade is visible in the stack, gets its peripheral attached on side 2, is ticked
+with the holder, and installs/removes through `equipBack`/`unequipBack`; an unregistered id does none of it),
+`PocketUpgradesTest` (unchanged built-ins) and `AddonApiSurfaceTest` (the interface members and the registration hook are
+pinned reflectively so they cannot be narrowed back). The one thing unit tests cannot reach is the *default*
+`getUpgradeData` matching rule: headless, `ItemStack#getItem()` is `null` for every stack because Forge fills
+`Item#delegate` from the FML registry, so the stack-identity stand-in is used in the test double and the real rule is
+covered in game.
+
+**What Peripherals++ deletes:** `ItemPocketComputerMixin`, `ComputerCraftHooks.onPocketComputerCreate` / `.update` /
+`.getPocketComputerName`, and the two `cachedPeripherals` maps keyed by computer id. Their nested-upgrade container
+needs nothing from CC: the nested upgrades are its own `createPeripheral`/`update` business, so the one-upgrade-per-pocket
+model holds.
+
 ---
 
 ## 5. Deferred: the addon backlog
@@ -257,8 +310,12 @@ it, so `TurtleFuelRegistry`, `ITurtleFuelRegistry`, `ITurtleFuelProvider` and th
 of `DefaultTurtleProviders` go with it. Three behaviour mixins remain (`BlockCable`,
 `ItemCable`, `CableBlockRenderingHandler`), needing the cable seam and a later CC tag.
 
-**Peripherals++** — delete `CCTurtleProxyCommonAccessor` and `PocketAPIMixin`; keep
-`ItemPocketComputerMixin` until the pocket seam exists.
+**Peripherals++** — delete `CCTurtleProxyCommonAccessor` and `PocketAPIMixin`; delete
+`ItemPocketComputerMixin` outright once §4.2 is tagged — re-register their two upgrades
+(`PocketMotionDetector`, `PocketPeripheralContainer`) as `IPocketUpgrade`s keeping ids 7 and 8,
+and drop `ComputerCraftHooks.onPocketComputerCreate` / `.update` / `.getPocketComputerName`
+and the two `cachedPeripherals` maps with them. Their `PlayerInteractEvent` right-click
+handler stays: §4.2 deliberately has no `onRightClick` hook.
 
 **OPA** — replace field reflection with item 3's getter and turn
 `togglePeripheralAccess`'s `MethodAccess` into a direct call.

@@ -5,16 +5,16 @@ import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraftforge.common.util.Constants;
 
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.ILuaTask;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.pocket.IPocketUpgrade;
 import dan200.computercraft.core.apis.ILuaAPI;
 import dan200.computercraft.shared.computer.core.ServerComputer;
-import dan200.computercraft.shared.peripheral.PeripheralType;
-import dan200.computercraft.shared.peripheral.common.IPeripheralItem;
-import dan200.computercraft.shared.peripheral.common.PeripheralItemFactory;
+import dan200.computercraft.shared.pocket.PocketAccess;
 import dan200.computercraft.shared.pocket.PocketUpgrades;
 
 /**
@@ -150,42 +150,49 @@ public class PocketAPI implements ILuaAPI {
             return new Object[] { false, "Upgrade already equipped" };
         }
 
-        // Search the player's main inventory for anything this pocket computer can use. The upgrade
-        // table decides what counts, so this covers the speaker, the ender modem and the rest --
-        // it used to accept only a plain wireless modem.
+        // Search the player's main inventory for anything this pocket computer can use, asking the registry rather than
+        // a type table: an upgrade says itself whether a stack installs it, so mods get equipBack for free. This also
+        // fixes an old blind spot -- the scan used to require an IPeripheralItem, which none of the speaker, chat box
+        // or NPC block items are, so in practice only the wireless modem could ever be equipped.
         InventoryPlayer inv = player.inventory;
         for (int i = 0; i < inv.getSizeInventory(); i++) {
             ItemStack slot = inv.getStackInSlot(i);
             if (slot == null) continue;
-            if (!(slot.getItem() instanceof IPeripheralItem)) continue;
 
-            IPeripheralItem pi = (IPeripheralItem) slot.getItem();
-            int upgrade = PocketUpgrades.upgradeFor(pi.getPeripheralType(slot));
-            if (upgrade < 0) continue;
+            for (IPocketUpgrade upgrade : PocketUpgrades.getRegisteredUpgrades()) {
+                NBTTagCompound data = upgrade.getUpgradeData(slot);
+                if (data == null) continue;
 
-            IPeripheral peripheral = PocketUpgrades.createPeripheral(upgrade, stack);
-            if (peripheral == null) continue;
+                IPeripheral peripheral = upgrade
+                    .createPeripheral(new PocketAccess(m_computer, inventory, stack, player));
+                if (peripheral == null) continue;
 
-            // Consume one item from this slot.
-            slot.stackSize--;
-            if (slot.stackSize <= 0) {
-                inv.setInventorySlotContents(i, null);
+                // Consume one item from this slot.
+                slot.stackSize--;
+                if (slot.stackSize <= 0) {
+                    inv.setInventorySlotContents(i, null);
+                }
+
+                // Set the upgrade flag on the pocket computer stack.
+                if (tag == null) {
+                    tag = new NBTTagCompound();
+                    stack.setTagCompound(tag);
+                }
+                tag.setInteger("upgrade", upgrade.getUpgradeID());
+                if (data.hasNoTags()) {
+                    tag.removeTag("upgradeData");
+                } else {
+                    tag.setTag("upgradeData", data);
+                }
+
+                // Attach the peripheral (location set on the next onUpdate tick).
+                m_computer.setPeripheral(2, peripheral);
+
+                if (inventory != null) {
+                    inventory.markDirty();
+                }
+                return new Object[] { true };
             }
-
-            // Set the upgrade flag on the pocket computer stack.
-            if (tag == null) {
-                tag = new NBTTagCompound();
-                stack.setTagCompound(tag);
-            }
-            tag.setInteger("upgrade", upgrade);
-
-            // Attach the peripheral (location set on the next onUpdate tick).
-            m_computer.setPeripheral(2, peripheral);
-
-            if (inventory != null) {
-                inventory.markDirty();
-            }
-            return new Object[] { true };
         }
 
         return new Object[] { false, "No upgrade to equip" };
@@ -221,26 +228,32 @@ public class PocketAPI implements ILuaAPI {
         }
 
         NBTTagCompound tag = stack.getTagCompound();
-        if (tag == null || !tag.hasKey("upgrade") || tag.getInteger("upgrade") != 1) {
+        if (tag == null || !tag.hasKey("upgrade")) {
             return new Object[] { false, "Nothing equipped" };
         }
 
         // Return the item for the upgrade that is actually installed, not always a modem.
         // Guard first: if the item cannot be created, abort without mutating state so the player
         // does not lose the upgrade silently.
+        //
+        // This used to refuse anything but the wireless modem (id 1), while isEquipped() accepted 1-6 and crafting a
+        // speaker pocket computer produced an upgrade that could never be removed. Any *registered* upgrade unequips;
+        // an unrecognised id still refuses, which keeps the old behaviour for a save from a mod that is no longer
+        // installed.
         int upgrade = tag.getInteger("upgrade");
-        PeripheralType type = peripheralTypeFor(upgrade);
-        ItemStack upgradeStack = type != null ? PeripheralItemFactory.create(type, null, 1) : null;
+        IPocketUpgrade registered = PocketUpgrades.getUpgrade(upgrade);
+        ItemStack upgradeStack = registered == null ? null : registered.getUpgradeItem(upgradeData(tag));
         if (upgradeStack == null) {
-            return new Object[] { false, "Cannot create upgrade item" };
+            return new Object[] { false, registered == null ? "Nothing equipped" : "Cannot create upgrade item" };
         }
         if (!player.inventory.addItemStackToInventory(upgradeStack)) {
             // Inventory full: drop the item at the player's feet.
             player.dropPlayerItemWithRandomChoice(upgradeStack, false);
         }
 
-        // Clear the upgrade flag.
+        // Clear the upgrade flag, and the data that went with it.
         tag.removeTag("upgrade");
+        tag.removeTag("upgradeData");
 
         // Detach the peripheral.
         m_computer.setPeripheral(2, null);
@@ -253,28 +266,14 @@ public class PocketAPI implements ILuaAPI {
     }
 
     /**
-     * The item type that installs an upgrade, for returning it on unequip.
+     * The data an upgrade was installed with.
      *
-     * @param upgrade the NBT upgrade id
-     * @return the peripheral type of the item, or {@code null} if the id is unknown
+     * @param tag the pocket computer's NBT
+     * @return the stored data, or an empty compound if there is none
      */
-    private static PeripheralType peripheralTypeFor(int upgrade) {
-        switch (upgrade) {
-            case PocketUpgrades.WIRELESS_MODEM:
-                return PeripheralType.WirelessModem;
-            case PocketUpgrades.ENDER_MODEM:
-                return PeripheralType.AdvancedWirelessModem;
-            case PocketUpgrades.SPEAKER:
-                return PeripheralType.Speaker;
-            case PocketUpgrades.CHAT_BOX:
-                return PeripheralType.ChatBox;
-            case PocketUpgrades.NPC_DETECTOR:
-                return PeripheralType.NpcDetector;
-            case PocketUpgrades.NPC_INTERFACE:
-                return PeripheralType.NpcInterface;
-            default:
-                return null;
-        }
+    private static NBTTagCompound upgradeData(NBTTagCompound tag) {
+        return tag.hasKey("upgradeData", Constants.NBT.TAG_COMPOUND) ? tag.getCompoundTag("upgradeData")
+            : new NBTTagCompound();
     }
 
     /**

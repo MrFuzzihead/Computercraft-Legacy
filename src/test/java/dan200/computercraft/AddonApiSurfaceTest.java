@@ -5,16 +5,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Collection;
 import java.util.Map;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.IIcon;
 import net.minecraft.world.World;
 
 import org.junit.jupiter.api.Test;
 import org.squiddev.cobalt.LuaState;
 
+import dan200.computercraft.api.ComputerCraftAPI;
+import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.pocket.IPocketAccess;
+import dan200.computercraft.api.pocket.IPocketUpgrade;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.lua.ILuaMachine;
@@ -22,6 +29,7 @@ import dan200.computercraft.core.lua.lib.cobalt.CobaltMachine;
 import dan200.computercraft.shared.computer.blocks.TileComputerBase;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.peripheral.modem.TileCable;
+import dan200.computercraft.shared.pocket.PocketUpgrades;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.proxy.CCTurtleProxyCommon;
 import dan200.computercraft.shared.turtle.blocks.TileTurtle;
@@ -136,5 +144,75 @@ class AddonApiSurfaceTest {
         assertPublicReturning(CCTurtleProxyCommon.class, "getTurtleUpgrades", Map.class);
         assertPublicReturning(CCTurtleProxyCommon.class, "getTurtleUpgrade", ITurtleUpgrade.class, int.class);
         assertPublicReturning(CCTurtleProxyCommon.class, "getTurtleUpgrade", ITurtleUpgrade.class, ItemStack.class);
+    }
+
+    // =========================================================================
+    // Pocket upgrade seam
+    // =========================================================================
+
+    @Test
+    void pocketUpgradesCanBeRegistered() {
+        assertPublicReturning(ComputerCraftAPI.class, "registerPocketUpgrade", void.class, IPocketUpgrade.class);
+    }
+
+    @Test
+    void thePocketUpgradeInterfaceIsImplementable() {
+        // Implemented by addons, so every member must be public and the two optional ones must have defaults — an
+        // abstract addition later would break their compile without any warning on our side.
+        assertInterfaceMethod(IPocketUpgrade.class, "getUpgradeID", int.class);
+        assertInterfaceMethod(IPocketUpgrade.class, "getUnlocalisedAdjective", String.class);
+        assertInterfaceMethod(IPocketUpgrade.class, "getCraftingItem", ItemStack.class);
+        assertInterfaceMethod(IPocketUpgrade.class, "createPeripheral", IPeripheral.class, IPocketAccess.class);
+        assertDefaultInterfaceMethod(IPocketUpgrade.class, "getUpgradeData", NBTTagCompound.class, ItemStack.class);
+        assertDefaultInterfaceMethod(IPocketUpgrade.class, "getUpgradeItem", ItemStack.class, NBTTagCompound.class);
+        assertDefaultInterfaceMethod(
+            IPocketUpgrade.class,
+            "update",
+            void.class,
+            IPocketAccess.class,
+            IPeripheral.class);
+    }
+
+    @Test
+    void thePocketAccessInterfaceCoversWhatAnUpgradeNeeds() {
+        assertInterfaceMethod(IPocketAccess.class, "getWorld", World.class);
+        assertInterfaceMethod(IPocketAccess.class, "getEntity", Entity.class);
+        assertInterfaceMethod(IPocketAccess.class, "getStack", ItemStack.class);
+        assertInterfaceMethod(IPocketAccess.class, "getUpgradeNBTData", NBTTagCompound.class);
+        assertInterfaceMethod(IPocketAccess.class, "updateUpgradeNBTData", void.class);
+        assertInterfaceMethod(IPocketAccess.class, "invalidatePeripheral", void.class);
+    }
+
+    @Test
+    void thePocketUpgradeRegistryIsReadable() {
+        assertPublicReturning(PocketUpgrades.class, "getUpgrade", IPocketUpgrade.class, int.class);
+        assertPublicReturning(PocketUpgrades.class, "getRegisteredUpgrades", Collection.class);
+        assertPublicReturning(PocketUpgrades.class, "isUpgrade", boolean.class, int.class);
+    }
+
+    private static void assertInterfaceMethod(Class<?> owner, String name, Class<?> returnType, Class<?>... params) {
+        Method method;
+        try {
+            method = owner.getDeclaredMethod(name, params);
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(owner.getSimpleName() + " must declare " + name, e);
+        }
+
+        assertTrue(Modifier.isPublic(method.getModifiers()), owner.getSimpleName() + "#" + name + " must be public");
+        assertEquals(returnType, method.getReturnType(), owner.getSimpleName() + "#" + name + " return type");
+    }
+
+    private static void assertDefaultInterfaceMethod(Class<?> owner, String name, Class<?> returnType,
+        Class<?>... params) {
+        Method method;
+        try {
+            method = owner.getDeclaredMethod(name, params);
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(owner.getSimpleName() + " must declare " + name, e);
+        }
+
+        assertTrue(Modifier.isPublic(method.getModifiers()), owner.getSimpleName() + "#" + name + " must be public");
+        assertTrue(method.isDefault(), owner.getSimpleName() + "#" + name + " must have a default implementation");
+        assertEquals(returnType, method.getReturnType(), owner.getSimpleName() + "#" + name + " return type");
     }
 }

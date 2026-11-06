@@ -11,6 +11,7 @@ import net.minecraft.nbt.NBTTagCompound;
 
 import org.junit.jupiter.api.Test;
 
+import dan200.computercraft.api.pocket.IPocketAccess;
 import dan200.computercraft.shared.peripheral.PeripheralType;
 import dan200.computercraft.shared.pocket.peripherals.PocketChatBoxPeripheral;
 import dan200.computercraft.shared.pocket.peripherals.PocketEnderModemPeripheral;
@@ -29,6 +30,11 @@ import dan200.computercraft.shared.pocket.peripherals.PocketSpeakerPeripheral;
  * </p>
  */
 class PocketUpgradesTest {
+
+    @org.junit.jupiter.api.BeforeEach
+    void onlyBuiltInsAreRegistered() {
+        PocketUpgrades.resetModUpgradesForTesting();
+    }
 
     // -------------------------------------------------------------------------
     // Peripheral type -> upgrade id
@@ -81,48 +87,50 @@ class PocketUpgradesTest {
 
     @Test
     void eachUpgradeBuildsItsOwnPeripheral() {
-        ItemStack stack = new ItemStack(net.minecraft.init.Blocks.stone);
+        IPocketAccess access = access();
 
         assertTrue(
-            PocketUpgrades.createPeripheral(PocketUpgrades.WIRELESS_MODEM, stack) instanceof PocketModemPeripheral);
+            PocketUpgrades.createPeripheral(PocketUpgrades.WIRELESS_MODEM, access) instanceof PocketModemPeripheral);
         assertTrue(
-            PocketUpgrades.createPeripheral(PocketUpgrades.ENDER_MODEM, stack) instanceof PocketEnderModemPeripheral);
-        assertTrue(PocketUpgrades.createPeripheral(PocketUpgrades.SPEAKER, stack) instanceof PocketSpeakerPeripheral);
-        assertTrue(PocketUpgrades.createPeripheral(PocketUpgrades.CHAT_BOX, stack) instanceof PocketChatBoxPeripheral);
-        assertTrue(
-            PocketUpgrades.createPeripheral(PocketUpgrades.NPC_DETECTOR, stack) instanceof PocketNpcDetectorPeripheral);
+            PocketUpgrades.createPeripheral(PocketUpgrades.ENDER_MODEM, access) instanceof PocketEnderModemPeripheral);
+        assertTrue(PocketUpgrades.createPeripheral(PocketUpgrades.SPEAKER, access) instanceof PocketSpeakerPeripheral);
+        assertTrue(PocketUpgrades.createPeripheral(PocketUpgrades.CHAT_BOX, access) instanceof PocketChatBoxPeripheral);
         assertTrue(
             PocketUpgrades
-                .createPeripheral(PocketUpgrades.NPC_INTERFACE, stack) instanceof PocketNpcInterfacePeripheral);
+                .createPeripheral(PocketUpgrades.NPC_DETECTOR, access) instanceof PocketNpcDetectorPeripheral);
+        assertTrue(
+            PocketUpgrades
+                .createPeripheral(PocketUpgrades.NPC_INTERFACE, access) instanceof PocketNpcInterfacePeripheral);
     }
 
     @Test
     void anUnsupportedIdBuildsNothing() {
-        ItemStack stack = new ItemStack(net.minecraft.init.Blocks.stone);
-        assertNull(PocketUpgrades.createPeripheral(0, stack));
-        assertNull(PocketUpgrades.createPeripheral(7, stack));
-        assertNull(PocketUpgrades.createPeripheral(-5, stack));
+        IPocketAccess access = access();
+        assertNull(PocketUpgrades.createPeripheral(0, access));
+        assertNull(PocketUpgrades.createPeripheral(7, access));
+        assertNull(PocketUpgrades.createPeripheral(-5, access));
     }
 
     @Test
     void theEnderModemIsStillAModem() {
         // Existing code does `instanceof PocketModemPeripheral` to find the modem, so the ender
         // modem must remain a subclass. This is the invariant that keeps that check valid.
-        ItemStack stack = new ItemStack(net.minecraft.init.Blocks.stone);
-        assertTrue(PocketUpgrades.createPeripheral(PocketUpgrades.ENDER_MODEM, stack) instanceof PocketModemPeripheral);
+        IPocketAccess access = access();
+        assertTrue(
+            PocketUpgrades.createPeripheral(PocketUpgrades.ENDER_MODEM, access) instanceof PocketModemPeripheral);
     }
 
     @Test
     void everyPeripheralReportsATypeThatMapsBackToItsUpgrade() {
         // Round-trip: the peripheral a given upgrade installs must answer with the type that would
         // pick that same upgrade, or equipBack and the rebuild path would disagree.
-        ItemStack stack = new ItemStack(net.minecraft.init.Blocks.stone);
+        IPocketAccess access = access();
 
         int[] upgrades = { PocketUpgrades.WIRELESS_MODEM, PocketUpgrades.ENDER_MODEM, PocketUpgrades.SPEAKER,
             PocketUpgrades.CHAT_BOX, PocketUpgrades.NPC_DETECTOR, PocketUpgrades.NPC_INTERFACE };
 
         for (int upgrade : upgrades) {
-            var peripheral = PocketUpgrades.createPeripheral(upgrade, stack);
+            var peripheral = PocketUpgrades.createPeripheral(upgrade, access);
             assertNotNull(peripheral, "no peripheral for upgrade " + upgrade);
             String type = peripheral.getType();
             assertNotNull(type, "upgrade " + upgrade + " has no type");
@@ -190,5 +198,13 @@ class PocketUpgradesTest {
         for (int id : new int[] { 0, 7, 42, -3 }) {
             assertFalse(PocketUpgrades.isUpgrade(id), "id " + id + " should not be an upgrade");
         }
+    }
+
+    /** An access whose stack is a placeholder item; the built-in upgrades only read it for the NPC interface. */
+    private static IPocketAccess access() {
+        IPocketAccess access = org.mockito.Mockito.mock(IPocketAccess.class);
+        org.mockito.Mockito.when(access.getStack())
+            .thenReturn(new ItemStack(net.minecraft.init.Blocks.stone));
+        return access;
     }
 }

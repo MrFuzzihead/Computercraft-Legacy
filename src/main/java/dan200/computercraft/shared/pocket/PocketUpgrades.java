@@ -1,31 +1,35 @@
 package dan200.computercraft.shared.pocket;
 
-import net.minecraft.item.ItemStack;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.pocket.IPocketAccess;
+import dan200.computercraft.api.pocket.IPocketUpgrade;
 import dan200.computercraft.shared.peripheral.PeripheralType;
-import dan200.computercraft.shared.pocket.peripherals.PocketChatBoxPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketEnderModemPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketModemPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketNpcDetectorPeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketNpcInterfacePeripheral;
-import dan200.computercraft.shared.pocket.peripherals.PocketSpeakerPeripheral;
+import dan200.computercraft.shared.pocket.upgrades.PocketChatBoxUpgrade;
+import dan200.computercraft.shared.pocket.upgrades.PocketEnderModemUpgrade;
+import dan200.computercraft.shared.pocket.upgrades.PocketModemUpgrade;
+import dan200.computercraft.shared.pocket.upgrades.PocketNpcDetectorUpgrade;
+import dan200.computercraft.shared.pocket.upgrades.PocketNpcInterfaceUpgrade;
+import dan200.computercraft.shared.pocket.upgrades.PocketSpeakerUpgrade;
 
 /**
- * The pocket computer upgrade table: which NBT {@code upgrade} id means what, which item installs it,
- * and which peripheral it attaches.
+ * The pocket computer upgrade registry.
  *
  * <p>
- * Before this existed the mapping lived in two places — the chain in
- * {@code ItemPocketComputer} that builds a computer from its NBT, and a lone wireless-modem case in
- * {@code PocketAPI.equipBack}. Keeping one table means {@code pocket.equipBack} can install anything
- * the pocket computer already supports, and the two paths cannot drift.
+ * This used to be a closed table: six hard-coded ids, a {@code switch} from id to peripheral, and an
+ * {@code isUpgrade} range check that turned every other id into "no upgrade". Addons had no way in — their only option
+ * was to mixin {@code ItemPocketComputer} to attach a peripheral behind ComputerCraft's back. It is now the registry
+ * behind {@link dan200.computercraft.api.ComputerCraftAPI#registerPocketUpgrade(IPocketUpgrade)}, and the six built-in
+ * upgrades are registered into it like anybody else's.
  * </p>
  *
  * <p>
- * The ids are on-disk NBT values: {@code 1} wireless modem, {@code 2} ender modem, {@code 3}
- * speaker, {@code 4} chat box, {@code 5} NPC detector, {@code 6} NPC interface. They must not be
- * renumbered.
+ * The ids are on-disk NBT values: {@code 1} wireless modem, {@code 2} ender modem, {@code 3} speaker, {@code 4} chat
+ * box, {@code 5} NPC detector, {@code 6} NPC interface. They must not be renumbered, and
+ * {@link IPocketUpgrade#FIRST_MOD_UPGRADE_ID} keeps new registrations clear of them.
  * </p>
  */
 public final class PocketUpgrades {
@@ -37,13 +41,97 @@ public final class PocketUpgrades {
     public static final int NPC_DETECTOR = 5;
     public static final int NPC_INTERFACE = 6;
 
+    /** Registration order, so {@code equipBack}'s scan and the error messages are deterministic. */
+    private static final Map<Integer, IPocketUpgrade> s_upgrades = new LinkedHashMap<>();
+
+    static {
+        registerBuiltin(new PocketModemUpgrade());
+        registerBuiltin(new PocketEnderModemUpgrade());
+        registerBuiltin(new PocketSpeakerUpgrade());
+        registerBuiltin(new PocketChatBoxUpgrade());
+        registerBuiltin(new PocketNpcDetectorUpgrade());
+        registerBuiltin(new PocketNpcInterfaceUpgrade());
+    }
+
     private PocketUpgrades() {}
+
+    /**
+     * Registers a mod's upgrade.
+     *
+     * <p>
+     * Mirrors {@code CCTurtleProxyCommon#registerTurtleUpgrade}: ids below {@link IPocketUpgrade#FIRST_MOD_UPGRADE_ID}
+     * are refused outright rather than quietly renamed, because reusing one would reinterpret every saved pocket
+     * computer carrying it.
+     * </p>
+     *
+     * @param upgrade the upgrade to add
+     * @throws IllegalArgumentException if the upgrade is {@code null}, its id is reserved, or its id is already taken
+     */
+    public static void register(IPocketUpgrade upgrade) {
+        if (upgrade == null) {
+            throw new IllegalArgumentException("Cannot register a null pocket upgrade");
+        }
+
+        int id = upgrade.getUpgradeID();
+        if (id < IPocketUpgrade.FIRST_MOD_UPGRADE_ID) {
+            throw new IllegalArgumentException(
+                "Error registering '" + upgrade.getUnlocalisedAdjective()
+                    + "' Pocket Upgrade. UpgradeID '"
+                    + id
+                    + "' is reserved by ComputerCraft");
+        }
+
+        registerInternal(upgrade);
+    }
+
+    private static void registerBuiltin(IPocketUpgrade upgrade) {
+        registerInternal(upgrade);
+    }
+
+    private static void registerInternal(IPocketUpgrade upgrade) {
+        int id = upgrade.getUpgradeID();
+        if (s_upgrades.containsKey(id)) {
+            throw new IllegalArgumentException(
+                "Error registering '" + upgrade.getUnlocalisedAdjective()
+                    + "' Pocket Upgrade. UpgradeID '"
+                    + id
+                    + "' is already registered");
+        }
+
+        s_upgrades.put(id, upgrade);
+    }
+
+    /**
+     * The upgrade registered under an id.
+     *
+     * @param upgrade the NBT upgrade id
+     * @return the upgrade, or {@code null} if no mod registered that id
+     */
+    public static IPocketUpgrade getUpgrade(int upgrade) {
+        return s_upgrades.get(upgrade);
+    }
+
+    /**
+     * Every registered upgrade, in registration order.
+     *
+     * @return an unmodifiable view of the registry
+     */
+    public static Collection<IPocketUpgrade> getRegisteredUpgrades() {
+        return java.util.Collections.unmodifiableCollection(s_upgrades.values());
+    }
 
     /**
      * The upgrade id an item installs.
      *
+     * <p>
+     * Kept for the built-in item mapping: {@code ItemPeripheralBase} knows a stack is a wireless modem, and this says
+     * which id that is. It is not the general path —
+     * {@link IPocketUpgrade#getUpgradeData(net.minecraft.item.ItemStack)}
+     * is, and it also covers mods.
+     * </p>
+     *
      * @param type the item's peripheral type
-     * @return the upgrade id, or {@code -1} if this item is not a pocket upgrade
+     * @return the upgrade id, or {@code -1} if this item is not a built-in pocket upgrade
      */
     public static int upgradeFor(PeripheralType type) {
         if (type == null) return -1;
@@ -67,44 +155,25 @@ public final class PocketUpgrades {
     }
 
     /**
-     * Whether an upgrade id is one this mod understands.
+     * Whether an upgrade id is registered.
      *
      * @param upgrade the NBT upgrade id
-     * @return whether it names a supported upgrade
+     * @return whether an upgrade is registered under it
      */
     public static boolean isUpgrade(int upgrade) {
-        return upgrade >= WIRELESS_MODEM && upgrade <= NPC_INTERFACE;
+        return s_upgrades.containsKey(upgrade);
     }
 
     /**
      * Builds the peripheral for an installed upgrade.
      *
-     * <p>
-     * The NPC interface reads its settings from the pocket computer's stack, so the stack is passed
-     * in even though most upgrades ignore it.
-     * </p>
-     *
      * @param upgrade the NBT upgrade id
-     * @param stack   the pocket computer's item stack
-     * @return the peripheral, or {@code null} if the id is not a supported upgrade
+     * @param access  the pocket computer
+     * @return the peripheral, or {@code null} if the id is unknown or the upgrade attaches nothing
      */
-    public static IPeripheral createPeripheral(int upgrade, ItemStack stack) {
-        switch (upgrade) {
-            case WIRELESS_MODEM:
-                return new PocketModemPeripheral();
-            case ENDER_MODEM:
-                return new PocketEnderModemPeripheral();
-            case SPEAKER:
-                return new PocketSpeakerPeripheral();
-            case CHAT_BOX:
-                return new PocketChatBoxPeripheral();
-            case NPC_DETECTOR:
-                return new PocketNpcDetectorPeripheral();
-            case NPC_INTERFACE:
-                return new PocketNpcInterfacePeripheral(stack);
-            default:
-                return null;
-        }
+    public static IPeripheral createPeripheral(int upgrade, IPocketAccess access) {
+        IPocketUpgrade handler = s_upgrades.get(upgrade);
+        return handler == null ? null : handler.createPeripheral(access);
     }
 
     /**
@@ -130,5 +199,18 @@ public final class PocketUpgrades {
             default:
                 return "unknown";
         }
+    }
+
+    /**
+     * Forgets every mod-registered upgrade, leaving the six built-ins.
+     *
+     * <p>
+     * Package-private and only for tests: the registry is process-wide, so a test that registers an upgrade would
+     * otherwise leak it into every test that runs afterwards.
+     * </p>
+     */
+    static void resetModUpgradesForTesting() {
+        s_upgrades.keySet()
+            .removeIf(id -> id >= IPocketUpgrade.FIRST_MOD_UPGRADE_ID);
     }
 }

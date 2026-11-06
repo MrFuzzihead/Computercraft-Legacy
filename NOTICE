@@ -122,6 +122,39 @@ That backport is substantial, and predates the Minecraft
     ComputerCraft-only world is affected, since every writer of that key in
     this mod goes through PocketUpgrades. No upstream code is involved.
 
+  - two behaviour fixes in this project's own pocket code, both consequences of
+    the pocket upgrade registry below: `pocket.equipBack()` now installs any
+    *registered* upgrade's item, where the scan used to require an
+    IPeripheralItem and so in practice could only ever install the wireless
+    modem (the speaker, chat box and NPC block items are plain ItemBlocks); and
+    `pocket.unequipBack()` now removes any registered upgrade, where it used to
+    refuse everything but the wireless modem while `pocket.isEquipped()`
+    reported ids 1-6 as equipped. Neither affects a ComputerCraft-only world:
+    the items and the NBT involved were always produced by this mod's own
+    recipes, upstream CC: Tweaked allows both, and a save whose upgrade id is no
+    longer registered still refuses rather than losing the upgrade. No upstream
+    code is involved.
+
+  - the pocket computer upgrade registry, ported from CC: Tweaked 1.120.2:
+      * dan200.computercraft.api.pocket.IPocketUpgrade
+      * dan200.computercraft.api.pocket.IPocketAccess
+      * the three callbacks ItemPocketComputer makes where it used to test this
+        mod's own upgrade classes: createServerComputer's peripheral creation,
+        onUpdate's per-tick update, and getItemStackDisplayName's adjective
+      * ComputerCraftAPI.registerPocketUpgrade and the registry behind it in
+        shared/pocket/PocketUpgrades, which the six built-in upgrades are now
+        registered into
+    The 1.7.10 port keeps the upstream shape -- createPeripheral/update,
+    getUpgradeData/getUpgradeItem for installing and removing, and an access
+    object carrying the stack, the holder and upgrade-owned NBT -- with three
+    deliberate divergences: getUpgradeID returns an int to match ITurtleUpgrade
+    and the ids already in saved items, registration is code-driven because
+    1.7.10 has no data-pack registry for upstream's PocketUpgradeSerialiser, and
+    IPocketAccess has neither colour nor light because a 1.7.10 pocket computer
+    has no colour and its only light is the modem's on/off flag. Upstream's
+    onRightClick hook is not ported: it exists to suppress the pocket GUI, which
+    this version opens on both sides without a packet of its own.
+
   - the turtle refuel handler registry, ported from CC: Tweaked 1.120.2:
       * dan200.computercraft.api.turtle.TurtleRefuelHandler
       * dan200.computercraft.impl.TurtleRefuelHandlers

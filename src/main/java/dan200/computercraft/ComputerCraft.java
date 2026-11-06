@@ -43,6 +43,7 @@ import dan200.computercraft.api.media.IMediaProvider;
 import dan200.computercraft.api.peripheral.IPeripheral;
 import dan200.computercraft.api.peripheral.IPeripheralProvider;
 import dan200.computercraft.api.permissions.ITurtlePermissionProvider;
+import dan200.computercraft.api.pocket.IPocketUpgrade;
 import dan200.computercraft.api.redstone.IBundledRedstoneProvider;
 import dan200.computercraft.api.turtle.ITurtleUpgrade;
 import dan200.computercraft.api.turtle.TurtleRefuelHandler;
@@ -73,6 +74,7 @@ import dan200.computercraft.shared.peripheral.modem.BlockWiredModemFull;
 import dan200.computercraft.shared.peripheral.printer.TilePrinter;
 import dan200.computercraft.shared.peripheral.redstone.BlockRedstoneRelay;
 import dan200.computercraft.shared.peripheral.speaker.BlockSpeaker;
+import dan200.computercraft.shared.pocket.PocketUpgrades;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import dan200.computercraft.shared.proxy.ICCTurtleProxy;
 import dan200.computercraft.shared.proxy.IComputerCraftProxy;
@@ -757,6 +759,24 @@ public class ComputerCraft {
     public static void registerRefuelHandler(TurtleRefuelHandler handler) {
         if (handler != null) {
             TurtleRefuelHandlers.register(handler);
+        }
+    }
+
+    /**
+     * Registers a pocket computer upgrade, called by {@code ComputerCraftAPI.registerPocketUpgrade} on behalf of other
+     * mods.
+     *
+     * <p>
+     * Package-visible to the API only by convention: {@code ComputerCraftAPI} reaches it reflectively, the way it
+     * reaches every other registration hook in this 1.75-shaped API.
+     * </p>
+     *
+     * @param upgrade the upgrade to add; ignored if {@code null}
+     * @throws IllegalArgumentException if the upgrade's id is reserved or already taken
+     */
+    public static void registerPocketUpgrade(IPocketUpgrade upgrade) {
+        if (upgrade != null) {
+            PocketUpgrades.register(upgrade);
         }
     }
 

@@ -65,6 +65,23 @@ computers on a cable.
    `true` and replaced the id with ComputerCraft's own, orphaning whatever peripheral id 7 had
    attached — and `unequipBack()` could not give it back. Ids 1–6 behave as they always did.
 
+## The pocket upgrade registry (seam, phase 2)
+
+The upgrade set is now a registry (`ComputerCraftAPI.registerPocketUpgrade`) with the six built-ins
+registered into it, rather than six hard-coded ids and a `switch`. Staged checks 3–6 above are the
+behavioural ones; two more are worth a pass because the code they exercise moved:
+
+8. **The wireless modem still follows you and still lights up.** Equip a wireless modem, `rednet.open('back')`
+   and watch the item's light: it is driven from the upgrade's `update` now, not from an `instanceof`
+   branch in `ItemPocketComputer.onUpdate`, and it lives in the computer's user data (so it must survive
+   a re-enter of the pocket computer's GUI).
+9. **A speaker still sounds from where you are.** `speaker.playNote('harp', 1, 1)` from a pocket computer
+   while walking: the note follows the player. The speaker's tick moved with it.
+
+Neither can be a unit test: both read a live `ServerComputer` and a client renderer. What the unit
+tests *can* reach is that an upgrade registered by a mod gets its peripheral attached on side 2, is
+ticked with the holder, and installs/removes through `equipBack`/`unequipBack`.
+
 ## Covered by JVM tests instead
 
 * `PocketAPIEquipGuardTest` (18) — the `upgrade` guard end to end through `callMethod`: ids 1–6 still
@@ -77,6 +94,15 @@ computers on a cable.
   non-upgrade items are rejected, each upgrade builds its own peripheral, the ender modem stays a
   subclass of the modem (existing `instanceof` checks depend on it), and out-of-range NBT values are
   not upgrades.
+* `PocketUpgradeRegistryTest` (9) — the six built-ins are registered and still build their own
+  peripherals, a mod id is accepted and readable, reserved ids (< 7) and duplicate ids are refused
+  without displacing the first registration, and resetting leaves the built-ins alone.
+* `PocketUpgradeDispatchTest` (11) — a mod-registered id is visible in the stack (instead of being
+  clamped to `-1`), its peripheral is attached on side 2, it is ticked with the holder, `equipBack`
+  installs it and stores its data, `unequipBack` gives back its own item, and an unregistered id does
+  none of that. The default `getUpgradeData` matching rule is *not* unit-testable: headless,
+  `ItemStack#getItem()` is null for every stack (Forge fills `Item#delegate` from the FML registry), so
+  the test double matches by stack identity and the real rule is covered in game.
 * `WiredModemTypesTest` (6) — the published type list is `modem` then `peripheral_hub`, the primary
   type matches `getType()`, the peripheral class really implements `IMultiTypePeripheral`, and the
   remote path still has a string form and an array form.
