@@ -251,14 +251,26 @@ function shell.resolveProgram( _sCommand )
 		_sCommand = tAliases[ _sCommand ]
 	end
 
-    -- If the path is a global path, use it directly
+    -- If the path is a global path, use it directly. Like CC:Tweaked, also
+    -- try the .lua extension: `edit startup` saves as startup.lua (see
+    -- edit.default_extension), and the startup loader resolves "/startup",
+    -- so without this fallback a user's startup file would never run.
     local sStartChar = string.sub( _sCommand, 1, 1 )
-    if sStartChar == "/" or sStartChar == "\\" then
+    local bIsGlobalPath = sStartChar == "/" or sStartChar == "\\"
+    if bIsGlobalPath or _sCommand:find( "/" ) or _sCommand:find( "\\" ) then
     	local sPath = fs.combine( "", _sCommand )
     	if fs.exists( sPath ) and not fs.isDir( sPath ) then
 			return sPath
     	end
-		return nil
+    	local sLuaPath = sPath .. ".lua"
+    	if fs.exists( sLuaPath ) and not fs.isDir( sLuaPath ) then
+    		return sLuaPath
+    	end
+    	if bIsGlobalPath then
+			return nil
+    	end
+    	-- A relative path with a slash that does not resolve directly may
+    	-- still be found relative to a PATH entry, so fall through.
     end
 
  	-- Otherwise, look on the path variable
