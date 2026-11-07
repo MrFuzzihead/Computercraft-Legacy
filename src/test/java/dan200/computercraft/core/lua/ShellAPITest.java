@@ -463,10 +463,7 @@ class ShellAPITest {
         ResultCapture cap = new ResultCapture();
         run(buildMachine(cap), "_capture(shell.resolveProgram('/startup'))", "startup.lua");
         assertNotNull(cap.args);
-        assertEquals(
-            "startup.lua",
-            cap.args[0],
-            "resolveProgram must find '/startup.lua' when resolving '/startup'");
+        assertEquals("startup.lua", cap.args[0], "resolveProgram must find '/startup.lua' when resolving '/startup'");
     }
 
     @Test
