@@ -456,6 +456,28 @@ class ShellAPITest {
     }
 
     @Test
+    void resolveProgramFindsLuaExtensionFallbackForAbsolutePath() {
+        // Regression: `edit startup` saves startup.lua (edit.default_extension),
+        // and rom/startup resolves "/startup"; the absolute-path branch must
+        // try the .lua extension too, like the PATH branch does.
+        ResultCapture cap = new ResultCapture();
+        run(buildMachine(cap), "_capture(shell.resolveProgram('/startup'))", "startup.lua");
+        assertNotNull(cap.args);
+        assertEquals(
+            "startup.lua",
+            cap.args[0],
+            "resolveProgram must find '/startup.lua' when resolving '/startup'");
+    }
+
+    @Test
+    void resolveProgramFindsLuaExtensionFallbackForRelativeSlashPath() {
+        ResultCapture cap = new ResultCapture();
+        run(buildMachine(cap), "_capture(shell.resolveProgram('rom/programs/myscript'))", "rom/programs/myscript.lua");
+        assertNotNull(cap.args);
+        assertEquals("rom/programs/myscript.lua", cap.args[0]);
+    }
+
+    @Test
     void resolveProgramReturnsNilForMissingAbsolutePath() {
         ResultCapture cap = new ResultCapture();
         run(buildMachine(cap), "_capture(shell.resolveProgram('/does/not/exist'))");

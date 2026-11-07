@@ -461,6 +461,20 @@ class BiosBatchCHeadlessTest {
     }
 
     @Test
+    void startupLuaExtensionRunsOnBoot() throws Exception {
+        // Regression: `edit startup` saves startup.lua (edit.default_extension),
+        // but the startup loader resolved only the bare "startup" name, so the
+        // program never ran on reboot.
+        Boot boot = bootWith(hdd -> write(
+            new File(hdd, "startup.lua"),
+            "local h = fs.open('/ran.log', 'w') h.write('ran') h.close()\n"));
+
+        assertTrue(
+            new File(boot.hdd, "ran.log").isFile(),
+            "startup.lua must run on boot. Screen:\n" + boot.screen);
+    }
+
+    @Test
     void startupCanBeDisabledWithTheSetting() throws Exception {
         Boot boot = bootWith(hdd -> {
             write(new File(hdd, "startup"), "local h = fs.open('/ran.log', 'w') h.write('ran') h.close()\n");
