@@ -229,6 +229,36 @@ class ShellAPITest {
         sb.append("  m.parse_program = function() return true end\n");
         sb.append("  return m\n");
         sb.append("end\n");
+        // shell requires cc.expect to validate its API arguments. A recording stub lets tests
+        // assert that execute() rejects a non-string argument without loading the real module.
+        sb.append("_expect_failures = {}\n");
+        sb.append("function require(name)\n");
+        sb.append("  if name ~= 'cc.expect' then error('unexpected require: ' .. tostring(name)) end\n");
+        sb.append("  return { expect = function(i, v, ...)\n");
+        sb.append("    local t = type(v)\n");
+        sb.append("    for n = 1, select('#', ...) do\n");
+        sb.append("      if t == select(n, ...) then return v end\n");
+        sb.append("    end\n");
+        sb.append("    local msg = 'bad argument #' .. tostring(i) .. ' (' .. tostring(select(1, ...))\n");
+        sb.append("      .. ' expected, got ' .. t .. ')'\n");
+        sb.append("    _expect_failures[#_expect_failures + 1] = msg\n");
+        sb.append("    error(msg, 2)\n");
+        sb.append("  end }\n");
+        sb.append("end\n");
+        // A multishell stub: shell captures the global at load time, so the tab-title tests need it
+        // defined before the shell source is loaded.
+        sb.append("_multishell_titles = {}\n");
+        sb.append("local _fake_multishell = {}\n");
+        sb.append("function _fake_multishell.getCurrent() return 1 end\n");
+        sb.append("function _fake_multishell.setFocus() end\n");
+        sb.append("function _fake_multishell.launch() return 1 end\n");
+        sb.append("function _fake_multishell.getCount() return 1 end\n");
+        sb.append("function _fake_multishell.getTitle() return '' end\n");
+        sb.append("function _fake_multishell.getFocus() return 1 end\n");
+        sb.append("function _fake_multishell.setTitle(id, title)\n");
+        sb.append("  _multishell_titles[#_multishell_titles + 1] = title\n");
+        sb.append("end\n");
+        sb.append("multishell = _fake_multishell\n");
         sb.append("function fs.exists(p)  return _mock_files[p] == true end\n");
         sb.append("function fs.isDir(p)   return false end\n");
         sb.append("function fs.getName(p) return p:match('[^/]+$') or p end\n");
@@ -295,6 +325,23 @@ class ShellAPITest {
     }
 
     @Test
+    void executeRejectsANonStringArgument() {
+        // Without the expect() guard the number reaches os.run/table.unpack and the caller sees a
+        // confusing failure from somewhere else entirely (CC:Tweaked validates here).
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "local ok, err = pcall(shell.execute, '/rom/programs/prog', 42)\n_capture(ok, tostring(err))",
+            "rom/programs/prog");
+        assertNotNull(cap.args);
+        assertFalse((Boolean) cap.args[0], "a non-string argument must be rejected");
+        assertTrue(
+            String.valueOf(cap.args[1])
+                .contains("string expected, got number"),
+            "the error should name the type, got: " + cap.args[1]);
+    }
+
+    @Test
     void executeReturnsFalseWithReasonWhenProgramNotFound() {
         ResultCapture cap = new ResultCapture();
         run(buildMachine(cap), "local ok, err = shell.execute('__missing__')\n_capture(ok, err)");
@@ -314,9 +361,9 @@ class ShellAPITest {
     @Test
     void executeRunsProgramAtResolvedPath() {
         ResultCapture cap = new ResultCapture();
-        run(buildMachine(cap), "shell.execute('/rom/programs/id')\n_capture(_prog_arg0)", "rom/programs/id");
+        run(buildMachine(cap), "shell.execute('/rom/programs/id')\n_capture(_prog_runs)", "rom/programs/id");
         assertNotNull(cap.args);
-        assertEquals("rom/programs/id", cap.args[0], "leading slash must be stripped by fs.combine");
+        assertEquals(1.0, cap.args[0], "the leading slash must be stripped by fs.combine");
     }
 
     @Test
@@ -560,11 +607,51 @@ class ShellAPITest {
     }
 
     @Test
-    void argZeroIsResolvedProgramPath() {
+    void argZeroIsTheCommandAsTyped() {
         ResultCapture cap = new ResultCapture();
         run(buildMachine(cap), "shell.execute('/rom/programs/prog')\n_capture(_prog_arg0)\n", "rom/programs/prog");
         assertNotNull(cap.args);
-        assertEquals("rom/programs/prog", cap.args[0], "arg[0] must be the resolved program path");
+        assertEquals(
+            "/rom/programs/prog",
+            cap.args[0],
+            "arg[0] must be the command as typed, not the path it resolved to (CC:Tweaked 1.83)");
+    }
+
+    @Test
+    void aliasKeepsItsOwnNameInArgZero() {
+        // A program printing its usage line gets "cp", not "rom/programs/copy": arg[0] is what the
+        // user typed, so the alias is preserved.
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "shell.setAlias('cp', 'copy')\nshell.execute('cp')\n_capture(_prog_arg0)\n",
+            "rom/programs/copy");
+        assertNotNull(cap.args);
+        assertEquals("cp", cap.args[0]);
+    }
+
+    @Test
+    void tabTitleDropsTheLuaExtension() {
+        // `edit startup` saves startup.lua, so the tab bar must read "startup" as it does upstream.
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "shell.execute('/rom/programs/startup.lua')\n_capture(table.concat(_multishell_titles, ','))",
+            "rom/programs/startup.lua");
+        assertNotNull(cap.args);
+        // The shell sets its own title on load, then the running program's, then restores its own.
+        assertEquals("shell,startup,shell", cap.args[0]);
+    }
+
+    @Test
+    void tabTitleKeepsANonLuaExtension() {
+        ResultCapture cap = new ResultCapture();
+        run(
+            buildMachine(cap),
+            "shell.execute('/rom/programs/notes.txt')\n_capture(table.concat(_multishell_titles, ','))",
+            "rom/programs/notes.txt");
+        assertNotNull(cap.args);
+        assertEquals("shell,notes.txt,shell", cap.args[0]);
     }
 
     @Test

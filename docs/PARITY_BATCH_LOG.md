@@ -2158,3 +2158,94 @@ module through a shell env.
 4. **`rom/motd.txt` says "lwjgl3ify clients only".** The Batch D rewrite had removed upstream's
    drag-and-drop line because it was not true; it is now true on the clients that can do it, and the
    tip names the requirement rather than promising it universally.
+
+---
+
+## Batch P — the ROM parity gaps the audit found
+
+`docs/ROM_PARITY_GAPS.md` is the audit; this is the fix. Ten gaps, all in the Lua ROM layer, and the
+one theme running through them is that a behaviour was ported but its *consumer* was not, or a
+module was planned and quietly dropped.
+
+### The three dead settings
+
+`bios.use_multishell`, `lua.warn_against_use_of_local` and `paint.default_extension` were all
+defined in `bios.lua` and all unread. A setting that is advertised in `set`'s completion and does
+nothing is worse than one that does not exist, because it is indistinguishable from a bug in the
+feature it claims to control.
+
+* `bios.lua` now chooses the shell the way upstream does, after `settings.load(".settings")`:
+  `term.isColour() and settings.get("bios.use_multishell", true) ~= false`. The `settings == nil`
+  fallback matters: if the settings API failed to load, the previous behaviour (a shell) is better
+  than a crash.
+* `rom/programs/lua` prints upstream's warning when the input starts with `local`.
+* `paint` appends `paint.default_extension` to a new, extensionless path — the exact block `edit`
+  already had for `edit.default_extension`.
+
+### The module that was planned and never landed
+
+`docs/PARITY_BATCH_LOG.md` (Batch A, line 531) recorded `cc/internal/menu` as needed "for Batch I".
+`edit_runner` arrived; `menu` did not, and both `edit` and `paint` kept hand-rolled bars. That is why
+neither program could be driven by the mouse: clicking the footer did nothing, clicking an item did
+nothing, and numpad Enter confirmed nothing.
+
+The module is now shipped verbatim from upstream and both programs use it. `paint`'s `accessMenu`
+became upstream's `menu_choices` table plus `menu.create`/`draw`/`handle_event`, and it gained the
+`term_resize` handling it never had inside the menu. `edit`'s event loop was restructured to
+upstream's shape — `if current_menu then handleMenuEvent(...) else <normal key handling>` — with the
+local lexer-highlighting and completion code left intact.
+
+### The editor's quality-of-life deltas
+
+The editor was rewritten in Batch I for syntax highlighting, but it kept the 1.75-era input
+handling. Now ported from upstream: four-space indent, backspace removing a whole indent level
+inside leading whitespace, numpad Enter as newline and as menu confirmation, red error status,
+`File is read only` and `Disk is low on space` on open, the reason a save failed, and a paste
+closing the menu instead of being swallowed.
+
+**A latent bug surfaced while porting the colour block:** `edit` assigned `stringColour` without
+declaring it local, so the editor leaked a global on every start. With `bios.strict_globals = true`
+that is a hard error, which means the editor could not be opened at all with that setting on. The
+variable was unused; both it and the equally-unused `commentColour` are gone.
+
+### `arg[0]`, `rename` and `id`
+
+* `shell` passed the *resolved path* as `arg[0]` (CC 1.75 behaviour) instead of the command as typed
+  (CC 1.83). Every program that prints its usage from `arg[0]` — `copy`, `delete`, `mkdir`, `move`,
+  `clear`, `speaker`, `wget` — therefore said `Usage: rom/programs/copy …`. This also explains why
+  `cd`, `edit`, `paint`, `eject` and `alias` were hand-edited during the port to hardcode their own
+  names: they were working around it.
+* `rename` was still the nine-line 1.75 original with no validation. The Java layer refuses the same
+  five cases, but as a thrown `FileSystemException` → red traceback, and `fs.isDriveRoot` has **no**
+  Java guard at all — `fs.move` is copy-then-delete, so renaming a mount root would have tried to
+  delete the drive's storage. Upstream's checks are restored.
+* `id` treated an audio disc as "No disk in drive" and printed `The disk is #nil` for a data source
+  with no floppy ID (an addon mount). Both branches ported.
+
+### Testing
+
+Unit tests are not enough for most of this, because the behaviours are "what a keystroke does to a
+file" and "what the BIOS runs at boot". Two harnesses were added:
+
+* `BiosInputHarness` boots the real BIOS and ROM and can type, press keys, click and read the
+  screen. `EditProgramInputTest` saves a file through the menu and asserts its *contents*
+  (`EditProgramInputTest` found the completion interaction below); `PaintProgramInputTest` checks
+  `paint.default_extension` by looking for the file on disk; `BiosShellSelectionTest` covers the
+  shell choice, the REPL warning and the tab title.
+* `LuaRomTestSupport.runProgram` runs a single ROM program with mocked globals, which is enough for
+  `rename`'s guard messages and `id`'s branches.
+
+`RomProgramCompileTest` now walks the whole ROM and compiles every program and module, so a syntax
+error in `paint` or `id` fails the build instead of waiting for someone to run it in game.
+
+**One thing the harness taught us:** the first version of the indent test typed `x` then Tab and got
+`xpcall(` instead of `x    `. That is correct editor behaviour — Tab accepts the completion of the
+global `xpcall` — but it is a trap for anyone writing these tests, so the tests start from an empty
+line and the fixture says why.
+
+### Deviations
+
+* **`paint`'s unused `save(path)` parameter** still reads `sPath` for the directory and `path` for
+  the file. It is only ever called with `sPath`; left alone rather than churned.
+* **`edit`'s `Print` path** keeps the local structure (a `pcall` around the redirect) but now hides
+  the menu with `current_menu = nil`/restore instead of `bMenu = false`/`true`.

@@ -1,4 +1,3 @@
-
 local sDrive = nil
 local tArgs = { ... }
 if #tArgs > 0 then
@@ -7,24 +6,40 @@ end
 
 if sDrive == nil then
 	print( "This is computer #"..os.getComputerID() )
-	
+
 	local label = os.getComputerLabel()
 	if label then
 		print( "This computer is labelled \""..label.."\"" )
 	end
 
 else
-	local bData = disk.hasData( sDrive )
-	if not bData then
+	-- An audio disc is not a data source, so report the track rather than trying to read it.
+	if disk.hasAudio( sDrive ) then
+		local title = disk.getAudioTitle( sDrive )
+		if title then
+			print( "Has audio track \""..title.."\"" )
+		else
+			print( "Has untitled audio" )
+		end
+		return
+	end
+
+	if not disk.hasData( sDrive ) then
 		print( "No disk in drive "..sDrive )
 		return
 	end
-	
-	print( "The disk is #"..disk.getID( sDrive ) )
+
+	-- disk.getID returns nil for a data source that is not a ComputerCraft floppy, such as a
+	-- mount provided by an addon.
+	local nID = disk.getID( sDrive )
+	if nID then
+		print( "The disk is #"..nID )
+	else
+		print( "Non-disk data source" )
+	end
 
 	local label = disk.getLabel( sDrive )
 	if label then
-		print( "The disk is labelled \""..label.."\"" )
+		print( "Labelled \""..label.."\"" )
 	end
 end
-

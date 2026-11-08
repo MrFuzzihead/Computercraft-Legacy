@@ -94,6 +94,17 @@ while bRunning do
     end
     table.insert(tCommandHistory, input)
 
+    -- "lua.warn_against_use_of_local": a local declared at the prompt is gone by the next prompt,
+    -- which surprises people. Upstream warns rather than refusing the input, because the line is
+    -- still useful when the rest of the statement is the point.
+    if settings.get("lua.warn_against_use_of_local", true) and input:match("^%s*local%s+") then
+        if term.isColour() then
+            term.setTextColour(colours.yellow)
+        end
+        print("To access local variables in later inputs, remove the local keyword.")
+        term.setTextColour(colours.white)
+    end
+
     -- Each input gets its own chunk name, so an error reads `lua[3]:1:` rather than a bare
     -- `lua:1:` and the REPL can tell one input from another.
     local name, offset = "=lua[" .. chunk_idx .. "]", 0

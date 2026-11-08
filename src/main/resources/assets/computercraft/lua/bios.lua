@@ -1166,10 +1166,13 @@ if settings then
 end
 
 -- Run the shell
+-- "bios.use_multishell" lets a colour computer keep the single-tab shell; the setting is only
+-- defined on colour terminals, so settings.get() returning nil here means "not a colour term".
+local bMultishell = term.isColour() and (settings == nil or settings.get( "bios.use_multishell", true ) ~= false)
 local ok, err = pcall( function()
     parallel.waitForAny(
         function()
-            if term.isColour() then
+            if bMultishell then
                 os.run( {}, "rom/programs/advanced/multishell" )
             else
                 os.run( {}, "rom/programs/shell" )
