@@ -1,4 +1,4 @@
-# In-game test packs (Batches A–O)
+# In-game test packs (Batches A–P)
 
 Every script here is self-checking: it prints a `RESULT ...` block and, on a real terminal, repeats
 the verdict as the **last line on screen** (CraftOS has no scrollback). Scripts whose name contains
@@ -27,6 +27,9 @@ now holds **every check**, not just the failures:
 `readlog_manual` with no argument reads `/batch-f-results.txt`.
 
 ## What needs a human
+
+Batch P (`p1_rom_parity` + the manual `p2_editor_manual`) covers the ROM parity fixes; see
+docs/ROM_PARITY_GAPS.md.
 
 Each batch's `README.md` lists the items the scripts cannot assert — custom item names, audible
 speaker output, GTNHLib block properties, `/startup` across a reboot, and so on.

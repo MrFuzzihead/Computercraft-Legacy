@@ -19,26 +19,38 @@
 
 ## Summary
 
-| # | Gap | Area | Impact |
-|---|---|---|---|
-| 1 | `bios.use_multishell` defined but never read | BIOS | Setting has no effect |
-| 2 | `lua.warn_against_use_of_local` defined but never read | Lua REPL | Warning never printed |
-| 3 | `paint.default_extension` defined but never read | `paint` | `paint foo` writes `foo`, not `foo.nfp` |
-| 4 | Multishell tab title keeps `.lua` | `shell` | Cosmetic |
-| 5 | `rename` is the unported 1.75 original | `rename` | Validation lost; errors are tracebacks |
-| 6 | `cc/internal/menu.lua` was never shipped | `edit`, `paint` | No mouse-driven menus |
-| 7 | `arg[0]` is the resolved path, not the command | `shell` | `Usage: rom/programs/copy …` |
-| 8 | `id` does not report audio discs | `id` | Missing output |
-| 9 | Editor QoL deltas (indent, backspace, numpad, status) | `edit` | See the matrix below |
-| 10 | Minor: hashbang depth `8` vs `100`; no `expect()` in `shell.execute` | `shell` | Edge cases only |
+All ten are fixed. The table records what changed and where each behaviour is now checked; the
+per-gap sections below keep the original analysis, which is still the reference for *why* the
+difference existed.
 
-Already fixed (kept here for context): **`startup.lua` never ran on boot** — `shell.resolveProgram`
-only tried the `.lua` fallback on the `PATH` branch, not for absolute paths.
-Fixed in PR #30.
+| # | Gap | Fix | Checked by |
+|---|---|---|---|
+| 1 | `bios.use_multishell` never read | `bios.lua` picks the shell from the setting | `BiosShellSelectionTest`, `batch-p/p1_rom_parity` (manual: reboot) |
+| 2 | `lua.warn_against_use_of_local` never read | `rom/programs/lua` warns on `local` input | `BiosShellSelectionTest` (manual: colour) |
+| 3 | `paint.default_extension` never read | `paint` appends it to a new extensionless path | `PaintProgramInputTest`, `batch-p/p1_rom_parity` |
+| 4 | Tab title keeps `.lua` | `shell` strips it via `programTitle()` | `ShellAPITest`, `BiosShellSelectionTest` |
+| 5 | `rename` unported | Upstream's five guards restored | `RenameProgramTest`, `batch-p/p1_rom_parity` |
+| 6 | `cc/internal/menu.lua` missing | Module shipped; `edit` + `paint` adopt it | `CcInternalMenuTest`, `EditProgramInputTest`, `PaintProgramInputTest` (manual: real mouse, printer) |
+| 7 | `arg[0]` is the resolved path | `shell` passes the command as typed | `ShellAPITest`, `batch-p/p1_rom_parity` |
+| 8 | `id` ignores audio discs | Audio and non-disk branches ported | `IdProgramTest` (manual: a real drive) |
+| 9 | Editor QoL deltas | Indent, backspace dedent, numpad Enter, red errors, open-time status, save reason, paste | `EditProgramInputTest` (manual: colour, real keys) |
+| 10 | Minor shell items | Depth `100`; `expect()` in `shell.execute` | `ShellAPITest`, `RomProgramCompileTest` |
+
+Also fixed earlier, kept here for context: **`startup.lua` never ran on boot** —
+`shell.resolveProgram` only tried the `.lua` fallback on the `PATH` branch, not for absolute paths
+(PR #30).
+
+### Where the remaining manual checks live
+
+[`docs/ingame-tests/batch-p/`](../ingame-tests/batch-p/README.md) — `p1_rom_parity` runs in CI,
+`p2_editor_manual` is the human drill for what no headless test can see: real numpad keys, colour,
+`term_resize`, a printer, a disk drive and reboots.
 
 ---
 
 ## 1. `bios.use_multishell` is dead
+
+**Status:** fixed in `fix/rom-parity-gaps`.
 
 `bios.lua:1120` defines the setting (inside `if term.isColour()`), but the shell launcher
 never reads it:
@@ -78,6 +90,8 @@ file, so no `fs.exists` guard is needed.
 
 ## 2. `lua.warn_against_use_of_local` is dead
 
+**Status:** fixed in `fix/rom-parity-gaps`.
+
 `rom/programs/lua` reads only three settings:
 
 ```
@@ -104,6 +118,8 @@ by the rest of the REPL header.
 
 ## 3. `paint.default_extension` is dead
 
+**Status:** fixed in `fix/rom-parity-gaps`.
+
 `rom/programs/fun/advanced/paint` contains **no** `settings.get` calls at all. Upstream appends
 the extension for a new, extensionless path:
 
@@ -128,6 +144,8 @@ end
 
 ## 4. Multishell tab title keeps the `.lua` extension
 
+**Status:** fixed in `fix/rom-parity-gaps`.
+
 `rom/programs/shell:74` and `:82` set the tab title from the raw file name:
 
 ```lua
@@ -149,6 +167,8 @@ that differs.
 ---
 
 ## 5. `rename` is the unported 1.75 original
+
+**Status:** fixed in `fix/rom-parity-gaps`.
 
 `rom/programs/rename` is nine lines with no validation:
 
@@ -183,6 +203,8 @@ are all available.
 
 ## 6. `cc/internal/menu.lua` was never shipped
 
+**Status:** fixed in `fix/rom-parity-gaps`.
+
 `docs/PARITY_BATCH_LOG.md:531` lists it as planned ("`import` for `cc.pretty`-era programs,
 `menu`/`edit_runner` for Batch I"). `edit_runner` landed; `menu` did not. `rom/modules/main/cc/internal/`
 has no `menu.lua`, and nothing references `cc.internal.menu`.
@@ -208,6 +230,8 @@ Both programs already track an item list and a selected index, so the change is 
 ---
 
 ## 7. `arg[0]` is the resolved path, not the command
+
+**Status:** fixed in `fix/rom-parity-gaps`.
 
 `rom/programs/shell:77` sets:
 
@@ -243,6 +267,8 @@ updating with it.
 
 ## 8. `id` does not report audio discs
 
+**Status:** fixed in `fix/rom-parity-gaps`.
+
 `rom/programs/id` handles only data disks. Upstream (`id.lua:19-30`) also covers:
 
 ```lua
@@ -267,36 +293,46 @@ Local always prints `The disk is #N` (would show `nil` for a non-disk data sourc
 
 ## 9. Editor QoL matrix (`rom/programs/edit` vs `edit.lua`)
 
-Local `edit` is **ahead** of upstream on: common-prefix completion acceptance, menu letter
-hotkeys, Alt-to-open-menu, and it already has the lexer-driven syntax highlighting. What it is
-missing:
+**Status:** fixed in `fix/rom-parity-gaps`.
 
-| QoL | Upstream | Local |
+Local `edit` is **ahead** of upstream on: common-prefix completion acceptance, menu letter
+hotkeys, Alt-to-open-menu, and it already has the lexer-driven syntax highlighting. What it was
+missing — all of it now ported:
+
+| QoL | Upstream | Local (before) |
 |---|---|---|
 | Click the status bar to open the menu | `edit.lua:746-748` | nothing (`edit:856+`) |
 | Click a menu item to pick it | `menu.lua:107-118` | nothing while `bMenu` |
 | Click elsewhere closes the menu | `menu.lua:111` | nothing |
 | Numpad Enter confirms a menu item | `menu.lua:94` | `keys.enter` only |
-| Numpad Enter inserts a newline | `edit.lua:694` | **not handled** (0 occurrences) |
-| Indent width | 4 spaces, `edit.lua:597` | **2 spaces**, `edit:665` |
-| Backspace removes a whole indent level in leading whitespace | `edit.lua:677-681` | one character, `edit:778-796` |
-| Errors drawn in red | `set_status(text, ok)` + `errorColour` | single yellow status, `edit:379` |
-| `File is read only` on open | `edit.lua:74-75` | status still says "Press Ctrl…" |
+| Numpad Enter inserts a newline | `edit.lua:694` | not handled |
+| Indent width | 4 spaces, `edit.lua:597` | 2 spaces (`edit:665`) |
+| Backspace removes a whole indent level in leading whitespace | `edit.lua:677-681` | one character (`edit:778-796`) |
+| Errors drawn in red | `set_status(text, ok)` + `errorColour` | single yellow status (`edit:379`) |
+| `File is read only` on open | `edit.lua:74-75` | status still said "Press Ctrl…" |
 | `Disk is low on space` on open (`fs.getFreeSpace(sPath) < 1024`) | `edit.lua:76-77` | no check |
 | Save failure shows the reason | `"Error saving: " .. fileerr` | `"Error saving to " .. path` |
-| Paste while the menu is open | closes menu, then pastes, `edit.lua:722-727` | silently dropped, `edit:848` |
-| Usage message | `arg[0]` (`edit`/`paint`) | hardcoded `"edit"` |
+| Paste while the menu is open | closes menu, then pastes, `edit.lua:722-727` | silently dropped (`edit:848`) |
+| Usage message | `arg[0]` | hardcoded `"edit"` |
 
-`paint` has the same menu gap plus no `default_extension` (gap 3); its `accessMenu` pulls
-`os.pullEvent("key")` only, and has no `term_resize` handling inside the menu.
+`paint` had the same menu gap plus no `default_extension` (gap 3); its `accessMenu` pulled
+`os.pullEvent("key")` only, and had no `term_resize` handling inside the menu. Both programs now
+drive `cc/internal/menu` and share one footer implementation.
 
-**Highest-value fix:** the two editing-behaviour items — 4-space indent and backspace dedent.
-They change what the user's files look like, and a 2/4-space mismatch makes pasted upstream
-examples look broken. The status-colour and open-time warnings are cheap follow-ups.
+**One latent bug fixed on the way:** `edit` assigned `stringColour` without declaring it local, so
+the editor leaked a global — which under `bios.strict_globals = true` is a hard error at startup, so
+the editor could not be opened with that setting on. The variable was unused; it is gone.
+
+**What is still only manually checkable:** the indent, dedent, numpad-Enter and click paths are
+asserted through the real BIOS (`EditProgramInputTest`), but the *colour* of the status line, the
+action of a real numpad key on a real client, and `term_resize` with the menu open need eyes — see
+[`batch-p`](../ingame-tests/batch-p/README.md).
 
 ---
 
 ## 10. Minor
+
+**Status:** fixed in `fix/rom-parity-gaps`.
 
 * **Hashbang recursion depth.** `shell:79` calls `executeProgram(8, …)`; upstream uses `100`.
   Eight nested `#!` interpreters is unrealistic, so this is cosmetic.
