@@ -43,6 +43,10 @@ local make_package
 -- unmodified; they need the debug library, which this runtime now installs (Cobalt DebugLib).
 local exception = dofile( "rom/modules/main/cc/internal/exception.lua" )
 
+-- Argument checking for the public API surface, as upstream does: shell.execute("prog", 42) should
+-- say "string expected, got number" rather than failing inside tokenise/table.concat later.
+local expect = require "cc.expect".expect
+
 local function createShellEnv( sDir )
 	if not make_package then
 		-- Loaded lazily: nothing here needs it until a program is actually run.
@@ -66,20 +70,33 @@ end
 -- Forward declaration: executeProgram needs tokenise, which is defined below it.
 local executeProgram
 
+-- The title a program shows in a multishell tab: its file name without a trailing ".lua".
+-- The editor writes "<name>.lua" (edit.default_extension), so without this the tab bar would
+-- read "startup.lua" where CC:Tweaked reads "startup".
+local function programTitle( _sPath )
+	local sTitle = fs.getName( _sPath )
+	if string.sub( sTitle, -4 ) == ".lua" then
+		sTitle = string.sub( sTitle, 1, -5 )
+	end
+	return sTitle
+end
+
 local function run( _sCommand, ... )
 	local sPath = shell.resolveProgram( _sCommand )
 	if sPath ~= nil then
 		tProgramStack[#tProgramStack + 1] = sPath
 		if multishell then
-		    multishell.setTitle( multishell.getCurrent(), fs.getName( sPath ) )
+		    multishell.setTitle( multishell.getCurrent(), programTitle( sPath ) )
 		end
 		local tArgs = { ... }
-		tArgs[0] = sPath
-   		local result = executeProgram( 8, sPath, tArgs )
+		-- arg[0] is the command as typed, not the path it resolved to (CC:Tweaked 1.83). Programs
+		-- print it in usage messages, so "copy" reads better than "rom/programs/copy".
+		tArgs[0] = _sCommand
+   		local result = executeProgram( 100, sPath, tArgs )
 		tProgramStack[#tProgramStack] = nil
 		if multishell then
 		    if #tProgramStack > 0 then
-    		    multishell.setTitle( multishell.getCurrent(), fs.getName( tProgramStack[#tProgramStack] ) )
+    		    multishell.setTitle( multishell.getCurrent(), programTitle( tProgramStack[#tProgramStack] ) )
     		else
     		    multishell.setTitle( multishell.getCurrent(), "shell" )
     		end
@@ -200,6 +217,10 @@ end
 
 -- Install shell API
 function shell.execute( _sCommand, ... )
+	expect( 1, _sCommand, "string" )
+	for i = 1, select( "#", ... ) do
+		expect( i + 1, select( i, ... ), "string" )
+	end
 	return run( _sCommand, ... )
 end
 

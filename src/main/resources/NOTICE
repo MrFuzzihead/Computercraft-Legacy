@@ -79,6 +79,11 @@ That backport is substantial, and predates the Minecraft
     event.lua, ported from CC: Tweaked's cc/internal/event.lua (MPL-2.0;
     the file states this in its own header). It is loaded by rom/programs/help
     to discard the char event left behind by a keypress.
+  - the ROM module assets/computercraft/lua/rom/modules/main/cc/internal/
+    menu.lua, ported from CC: Tweaked's cc/internal/menu.lua (CCPL, like the
+    rest of the ROM programs). It is the shared menu bar used by
+    rom/programs/edit and rom/programs/fun/advanced/paint, and is what gives
+    both programs a clickable footer and numpad-Enter confirmation.
   - file transfer (Batch J), ported from CC: Tweaked 1.120.2:
       * dan200.computercraft.core.apis.transfer.TransferredFiles and
         TransferredFile, from cc/core/src/main/java/.../apis/transfer

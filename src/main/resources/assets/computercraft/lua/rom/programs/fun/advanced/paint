@@ -15,11 +15,15 @@ local canvasColour = colours.black
 -- The values stored in the canvas
 local canvas = {}
 
+-- The menu bar. Shared with `edit`, so the footer behaves the same way in both programs:
+-- clicking it opens the menu, clicking an item picks it, and numpad Enter confirms.
+local menu = require "cc.internal.menu"
+
 -- The menu options
 local mChoices = { "Save","Exit" }
 
 -- The message displayed in the footer bar
-local fMessage = "Press Ctrl to access menu"
+local fMessage = "Press Ctrl or click here to access menu"
 
 -------------------------
 -- Initialisation --
@@ -34,7 +38,8 @@ end
 -- Determines if the file exists, and can be edited on this computer
 local tArgs = {...}
 if #tArgs == 0 then
-	print("Usage: paint <path>")
+	local programName = arg[0] or fs.getName(shell.getRunningProgram())
+	print("Usage: " .. programName .. " <path>")
 	return
 end
 local sPath = shell.resolve(tArgs[1])
@@ -42,6 +47,16 @@ local bReadOnly = fs.isReadOnly(sPath)
 if fs.exists(sPath) and fs.isDir(sPath) then
 	print("Cannot edit a directory.")
 	return
+end
+
+-- Create .nfp files by default (paint.default_extension), matching the editor's
+-- edit.default_extension. Only a *new* file with no extension is renamed, so an existing
+-- path is never changed.
+if not fs.exists(sPath) and not string.find(sPath, "%.") then
+	local sExtension = settings.get("paint.default_extension")
+	if sExtension ~= "" and type(sExtension) == "string" then
+		sPath = sPath .. "." .. sExtension
+	end
 end
 
 ---------------
@@ -244,80 +259,54 @@ local function drawCanvas()
 end
 
 --[[
+	Recomputes the screen size and redraws everything.
+]]
+local function termResize()
+	w, h = term.getSize()
+	drawCanvas()
+	drawInterface()
+end
+
+-- The menu's actions. Returning true exits the program.
+local menu_choices = {
+	Save = function()
+		if bReadOnly then
+			fMessage = "Access denied"
+			return false
+		end
+		local success = save(sPath)
+		if success then
+			fMessage = "Saved to "..sPath
+		else
+			fMessage = "Error saving to "..sPath
+		end
+		return false
+	end,
+	Exit = function() return true end,
+}
+
+--[[
 	Draws menu options and handles input from within the menu.
 	returns: true if the program is to be exited; false otherwise
 ]]
 local function accessMenu()
-	-- Selected menu option
-	local selection = 1
-	
+	local current_menu = menu.create(mChoices)
+
 	term.setBackgroundColour(colours.black)
+	menu.draw(current_menu)
+
 	while true do
-		-- Draw the menu
-		term.setCursorPos(1,h)
-		term.clearLine()
-		term.setTextColour(colours.white)
-		for k,v in pairs(mChoices) do
-			if selection==k then 
-				term.setTextColour(colours.yellow)
-				local ox,_ = term.getCursorPos()
-				term.write("["..string.rep(" ",#v).."]")
-				term.setCursorPos(ox+1,h)
-				term.setTextColour(colours.white)
-				term.write(v)
-				term.setCursorPos(term.getCursorPos()+1,h)
-			else
-				term.write(" "..v.." ")
-			end
+		local id, p1, p2, p3 = os.pullEvent()
+		local result = menu.handle_event(current_menu, id, p1, p2, p3)
+		if result == false then
+			return false
+		elseif result ~= nil then
+			return menu_choices[result]()
 		end
-		
-		-- Handle input in the menu
-		local id,key = os.pullEvent("key")
-		if id == "key" then
-			-- S and E are shortcuts
-			if key == keys.s then
-				selection = 1
-				key = keys.enter
-			elseif key == keys.e then
-				selection = 2
-				key = keys.enter
-			end
-		
-			if key == keys.right then
-				-- Move right
-				selection = selection + 1
-				if selection > #mChoices then
-					selection = 1
-				end
-				
-			elseif key == keys.left and selection > 1 then
-				-- Move left
-				selection = selection - 1
-				if selection < 1 then
-					selection = #mChoices
-				end
-				
-			elseif key == keys.enter then
-				-- Select an option
-				if mChoices[selection]=="Save" then 
-					if bReadOnly then 
-						fMessage = "Access Denied"
-						return false
-					end
-					local success = save(sPath)
-					if success then
-						fMessage = "Saved to "..sPath
-					else
-						fMessage = "Error saving to "..sPath
-					end
-					return false
-				elseif mChoices[selection]=="Exit" then 
-					return true
-				end
-			elseif key == keys.leftCtrl or keys == keys.rightCtrl then
-				-- Cancel the menu
-				return false 
-			end
+
+		if id == "term_resize" then
+			termResize()
+			menu.draw(current_menu)
 		end
 	end
 end
@@ -365,6 +354,10 @@ local function handleEvents()
                 canvas[p3][p2] = paintColour
 
 				drawCanvasPixel( p2, p3 )
+			elseif p3 == h and id == "mouse_click" then
+				-- Clicking the footer opens the menu, as it does in edit
+				programActive = not accessMenu()
+				drawInterface()
 			end
 		elseif id=="key" then
 			if p1==keys.leftCtrl or p1==keys.rightCtrl then
@@ -372,10 +365,8 @@ local function handleEvents()
 				drawInterface()
 			end
 		elseif id=="term_resize" then
-		    w,h = term.getSize()
-            drawCanvas()
-            drawInterface()
-        end
+		    termResize()
+		end
 	end
 end
 
