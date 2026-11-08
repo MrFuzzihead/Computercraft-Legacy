@@ -1,5 +1,6 @@
 package dan200.computercraft.core.lua;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayInputStream;
@@ -114,5 +115,46 @@ final class LuaRomTestSupport {
     /** Convenience for {@code run(machine, prelude + "\n" + body)}. */
     static void run(CobaltMachine machine, String prelude, String body) {
         run(machine, prelude + "\n" + body);
+    }
+
+    /**
+     * Runs a ROM program file as a program would be run: the file's chunk executes after
+     * {@code prelude} (which supplies the globals the program expects) and before {@code body}.
+     *
+     * <p>
+     * Wrapping the source in a function means a program's top-level {@code return} ends the
+     * program rather than the test, which is what the shell does when it loads a program.
+     * </p>
+     *
+     * <p>
+     * The chunk is called with the arguments in {@code arg[1..n]}, exactly as the shell passes them,
+     * so a program that begins {@code local tArgs = { ... }} sees its command line. {@code arg[0]}
+     * is left alone so it can stand in for the command as typed.
+     * </p>
+     *
+     * @param resourcePath the classpath path of the ROM file, e.g. {@code rom/programs/rename}
+     * @param prelude      Lua supplying the globals the program uses, including {@code arg}
+     * @param body         Lua assertions, run afterwards
+     * @return the capture written by {@code body}
+     */
+    static Capture runProgram(String resourcePath, String prelude, String body) throws IOException {
+        Capture capture = new Capture();
+        CobaltMachine machine = machine(capture);
+        String source = readResource("/assets/computercraft/lua/" + resourcePath);
+        assertFalse(source.contains("]====]"), resourcePath + " must not contain the test's long-bracket delimiter");
+
+        String chunk = prelude + "\n"
+            + "arg = arg or {}\n"
+            + "do\n"
+            + "  local chunk = assert(loadstring([====[\n"
+            + source
+            + "\n]====], '@"
+            + resourcePath
+            + "'))\n"
+            + "  chunk( table.unpack( arg, 1, #arg ) )\n"
+            + "end\n"
+            + body;
+        run(machine, chunk);
+        return capture;
     }
 }
